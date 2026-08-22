@@ -137,8 +137,10 @@ function renderGuild(g) {
   renderWelcome(g, textChannels);
   renderEmbedSender(g, textChannels);
   renderAnnouncements(g, textChannels);
+  renderGiveaways(g, textChannels);
   renderCommands(g);
   renderFilters(g);
+  renderAutoRoles(g);
 }
 
 /* --- welcome --- */
@@ -616,6 +618,108 @@ $("#btn-fr-add").addEventListener("click", async (e) => {
   await withGuild("filters/add", { trigger, response, match: $("#fr-match").value }, btn);
   $("#fr-trigger").value = "";
   $("#fr-response").value = "";
+});
+
+/* --- auto-join roles --- */
+
+function renderAutoRoles(g) {
+  const human = $("#ar-human");
+  const bot = $("#ar-bot");
+  fillSelect(human, g.roles, human.value || g.autoRoles.humanRoleId, "No roles available", true);
+  fillSelect(bot, g.roles, bot.value || g.autoRoles.botRoleId, "No roles available", true);
+  $("#ar-status").textContent =
+    g.autoRoles.humanRoleId || g.autoRoles.botRoleId
+      ? "Auto-roles are active for new members."
+      : "Auto-roles are off — pick at least one role and save.";
+}
+
+$("#btn-ar-save").addEventListener("click", (e) => {
+  withGuild(
+    "autoroles/save",
+    {
+      humanRoleId: $("#ar-human").value || null,
+      botRoleId: $("#ar-bot").value || null
+    },
+    e.currentTarget
+  );
+});
+
+$("#btn-ar-disable").addEventListener("click", async (e) => {
+  if (!confirm("Stop assigning auto-roles to new members?")) return;
+  await withGuild("autoroles/disable", {}, e.currentTarget);
+});
+
+/* --- giveaways --- */
+
+function renderGiveaways(g, textChannels) {
+  fillSelect($("#gw-channel"), textChannels, $("#gw-channel").value || null, "No text channels", false);
+
+  const list = $("#gw-list");
+  list.innerHTML = "";
+  if (!g.giveaways.length) {
+    list.innerHTML = `<span class="muted small">No giveaways yet.</span>`;
+    return;
+  }
+
+  for (const gw of g.giveaways) {
+    const chName = g.channels.find((c) => c.id === gw.channelId)?.name ?? "(deleted)";
+    const row = document.createElement("div");
+    row.className = "ann-item";
+
+    const info = document.createElement("div");
+    info.className = "grow";
+    const head = document.createElement("div");
+    head.className = "ann-head";
+    head.innerHTML =
+      `<span class="dc-mention">#${escapeHtml(chName)}</span> <strong>${escapeHtml(gw.title)}</strong>` +
+      ` <span class="muted small">#${gw.id} · ${gw.winners} winner(s) · ${gw.entries} entries</span>`;
+    const body = document.createElement("div");
+    body.className = "small muted";
+    body.textContent = gw.ended
+      ? `Ended — winner(s): ${gw.winnerIds.length ? gw.winnerIds.join(", ") : "none"}`
+      : `Ends ${fmtWhen(gw.endsAt)}`;
+    info.append(head, body);
+
+    const btnEnd = document.createElement("button");
+    btnEnd.className = "btn danger small";
+    btnEnd.textContent = "End now";
+    btnEnd.addEventListener("click", (e) => withGuild("giveaways/end", { id: gw.id }, e.currentTarget));
+
+    const btnReroll = document.createElement("button");
+    btnReroll.className = "btn small";
+    btnReroll.textContent = "Reroll";
+    btnReroll.addEventListener("click", (e) => withGuild("giveaways/reroll", { id: gw.id }, e.currentTarget));
+
+    if (!gw.ended) row.append(info, btnEnd);
+    else row.append(info, btnReroll);
+    list.appendChild(row);
+  }
+}
+
+$("#btn-gw-create").addEventListener("click", async (e) => {
+  const btn = e.currentTarget;
+  const title = $("#gw-title").value.trim();
+  const description = $("#gw-description").value.trim();
+  const minutes = Number($("#gw-minutes").value);
+  const winners = Number($("#gw-winners").value);
+  if (!title || !description) return toast("Fill in title and description first.", true);
+  if (!Number.isFinite(minutes) || minutes < 1) return toast("Duration must be at least 1 minute.", true);
+
+  await withGuild(
+    "giveaways/create",
+    {
+      channelId: $("#gw-channel").value || null,
+      title,
+      description,
+      link: $("#gw-link").value.trim(),
+      code: $("#gw-code").value.trim(),
+      minutes,
+      winners
+    },
+    btn
+  );
+  $("#gw-title").value = "";
+  $("#gw-description").value = "";
 });
 
 function fillSelect(sel, items, selected, emptyLabel, optional) {

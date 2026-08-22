@@ -1,6 +1,7 @@
 import { statsConfig, refreshStats } from "../utils/stats.js";
 import { getData } from "../utils/db.js";
 import { runDue } from "../utils/announcements.js";
+import { runDue as runDueGiveaways } from "../utils/giveaways.js";
 import { startPanel } from "../panel/server.js";
 
 export default {
@@ -24,6 +25,7 @@ export default {
 
     setInterval(() => {
       runDue(client).catch((err) => console.error("[announcements] scheduler:", err));
+      runDueGiveaways(client).catch((err) => console.error("[giveaways] scheduler:", err));
     }, 30_000);
   }
 };

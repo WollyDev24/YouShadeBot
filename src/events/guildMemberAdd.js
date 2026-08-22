@@ -1,10 +1,13 @@
 import { getWelcome, sendWelcome, buildContext } from "../utils/welcome.js";
+import { applyAutoRoles } from "../utils/autoroles.js";
 
 export default {
   name: "guildMemberAdd",
   async execute(client, member) {
     const guild = member.guild;
     if (!guild) return;
+
+    await applyAutoRoles(member);
 
     const cfg = getWelcome(guild.id);
     if (!cfg.enabled || !cfg.channelId || !cfg.message) return;

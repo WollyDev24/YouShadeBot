@@ -12,6 +12,14 @@ import { getTickets, saveType, deleteType, buildSinglePanel, buildCombinedPanel 
 import { getWelcome, sanitize as sanitizeWelcome, sendWelcome, buildContext } from "../utils/welcome.js";
 import { upcoming as upcomingAnnouncements, scheduleAnnouncement, cancelAnnouncement, postAnnouncement } from "../utils/announcements.js";
 import { getRules as getFilterRules, addRule as addFilterRule, removeRule as removeFilterRule } from "../utils/autores.js";
+import { getAutoRoles as getGuildAutoRoles, setAutoRoles as setGuildAutoRoles, disableAutoRoles as disableGuildAutoRoles } from "../utils/autoroles.js";
+import {
+  createGiveaway,
+  postGiveawayMessage,
+  getGiveaways,
+  endGiveaway,
+  rerollGiveaway
+} from "../utils/giveaways.js";
 import { registerCommands } from "../utils/register.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -84,6 +92,17 @@ async function guildPayload(client, guild) {
     welcome: { ...getWelcome(guild.id) },
     announcements: upcomingAnnouncements(guild.id),
     filters: getFilterRules(guild.id),
+    autoRoles: getGuildAutoRoles(guild.id),
+    giveaways: getGiveaways(guild.id).map((g) => ({
+      id: g.id,
+      channelId: g.channelId,
+      title: g.title,
+      endsAt: g.endsAt,
+      winners: g.winners,
+      entries: g.entries.length,
+      ended: g.ended,
+      winnerIds: g.winnerIds
+    })),
     disabledCommands: data.commands?.[guild.id]?.disabled ?? [],
     availableCommands: [...client.commands.keys()].sort(),
     channels,
@@ -519,6 +538,89 @@ export function startPanel(client) {
     if (!removed) return res.status(400).json({ error: "Rule not found." });
 
     return res.json({ ok: true, payload: await guildPayload(client, guild) });
+  });
+
+  app.post("/api/guilds/:id/autoroles/save", requireAuth, async (req, res) => {
+    const guild = client.guilds.cache.get(req.params.id);
+    if (!guild) return res.status(404).json({ error: "guild not found" });
+
+    const body = req.body ?? {};
+    try {
+      const cfg = setGuildAutoRoles(guild, {
+        humanRoleId: body.humanRoleId || null,
+        botRoleId: body.botRoleId || null
+      });
+      return res.json({ ok: true, autoRoles: cfg, payload: await guildPayload(client, guild) });
+    } catch (err) {
+      return res.status(400).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/guilds/:id/autoroles/disable", requireAuth, async (req, res) => {
+    const guild = client.guilds.cache.get(req.params.id);
+    if (!guild) return res.status(404).json({ error: "guild not found" });
+
+    disableGuildAutoRoles(guild.id);
+    return res.json({ ok: true, payload: await guildPayload(client, guild) });
+  });
+
+  app.post("/api/guilds/:id/giveaways/create", requireAuth, async (req, res) => {
+    const guild = client.guilds.cache.get(req.params.id);
+    if (!guild) return res.status(404).json({ error: "guild not found" });
+
+    const body = req.body ?? {};
+    const channel = guild.channels.cache.get(body.channelId);
+    if (!channel || !channel.isTextBased())
+      return res.status(400).json({ error: "Pick a valid text channel." });
+    if (!String(body.title ?? "").trim()) return res.status(400).json({ error: "Title cannot be empty." });
+    if (!String(body.description ?? "").trim())
+      return res.status(400).json({ error: "Description cannot be empty." });
+    const minutes = Number(body.minutes);
+    if (!Number.isFinite(minutes) || minutes < 1)
+      return res.status(400).json({ error: "Duration must be at least 1 minute." });
+    const winners = Number(body.winners);
+    if (!Number.isFinite(winners) || winners < 1 || winners > 20)
+      return res.status(400).json({ error: "Winners must be between 1 and 20." });
+
+    const gw = createGiveaway(guild.id, {
+      channelId: body.channelId,
+      title: body.title,
+      description: body.description,
+      link: String(body.link ?? "").trim(),
+      code: body.code,
+      winners,
+      endsAt: Date.now() + minutes * 60_000,
+      hostName: "Dashboard"
+    });
+
+    try {
+      await postGiveawayMessage(channel, guild.id, gw);
+    } catch (err) {
+      return res.status(500).json({ error: `Couldn't post: ${err.message}` });
+    }
+    return res.json({ ok: true, savedId: gw.id, payload: await guildPayload(client, guild) });
+  });
+
+  app.post("/api/guilds/:id/giveaways/end", requireAuth, async (req, res) => {
+    const guild = client.guilds.cache.get(req.params.id);
+    if (!guild) return res.status(404).json({ error: "guild not found" });
+    try {
+      await endGiveaway(client, guild.id, Number(req.body?.id));
+      return res.json({ ok: true, payload: await guildPayload(client, guild) });
+    } catch (err) {
+      return res.status(400).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/guilds/:id/giveaways/reroll", requireAuth, async (req, res) => {
+    const guild = client.guilds.cache.get(req.params.id);
+    if (!guild) return res.status(404).json({ error: "guild not found" });
+    try {
+      await rerollGiveaway(client, guild.id, Number(req.body?.id));
+      return res.json({ ok: true, payload: await guildPayload(client, guild) });
+    } catch (err) {
+      return res.status(400).json({ error: err.message });
+    }
   });
 
   app.use(express.static(PUBLIC));

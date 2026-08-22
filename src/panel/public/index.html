@@ -246,6 +246,55 @@
           <div id="an-list" class="ann-list"></div>
         </section>
 
+        <section class="card" data-tab="messaging">
+          <h3>Giveaways</h3>
+          <p class="muted small">
+            Posts a giveaway with a join button. When time runs out, winners are drawn,
+            announced in the channel and DM'd the code (if set). Reroll from the list below
+            or with <code>/giveaway reroll</code>.
+          </p>
+
+          <div class="field-row">
+            <label for="gw-channel">Channel</label>
+            <select id="gw-channel"></select>
+          </div>
+
+          <div class="field-row col">
+            <label for="gw-title">Title</label>
+            <input type="text" id="gw-title" maxlength="200" placeholder="e.g. 1 Month Nitro" />
+          </div>
+
+          <div class="field-row col">
+            <label for="gw-description">Description</label>
+            <textarea id="gw-description" rows="2" maxlength="1500" placeholder="What is it, rules, how it works…"></textarea>
+          </div>
+
+          <div class="field-row">
+            <div class="field-row col grow">
+              <label for="gw-link">Link to content (optional)</label>
+              <input type="text" id="gw-link" maxlength="500" placeholder="https://…" />
+            </div>
+          </div>
+
+          <div class="field-row">
+            <div class="field-row col grow">
+              <label for="gw-code">Code for winners (optional, sent by DM)</label>
+              <input type="text" id="gw-code" maxlength="100" placeholder="e.g. NITRO-2026-XKCD" />
+            </div>
+          </div>
+
+          <div class="field-row">
+            <label for="gw-minutes">Duration (minutes)</label>
+            <input type="number" id="gw-minutes" min="1" max="43200" value="60" />
+            <label for="gw-winners">Winners</label>
+            <input type="number" id="gw-winners" min="1" max="20" value="1" />
+            <button id="btn-gw-create" class="btn primary">Create giveaway</button>
+          </div>
+
+          <h4 class="preview-title">Running &amp; ended</h4>
+          <div id="gw-list" class="ann-list"></div>
+        </section>
+
         <section class="card" data-tab="moderation">
           <h3>Commands</h3>
           <p class="muted small">
@@ -256,6 +305,29 @@
             <button id="btn-cmd-save" class="btn primary">Save command toggles</button>
           </div>
           <p id="cmd-status" class="hint"></p>
+        </section>
+
+        <section class="card" data-tab="moderation">
+          <h3>Auto-join roles</h3>
+          <p class="muted small">
+            New members instantly get a role — a different one for real people and bots.
+          </p>
+
+          <div class="field-row">
+            <label for="ar-human">Role for humans</label>
+            <select id="ar-human"></select>
+          </div>
+
+          <div class="field-row">
+            <label for="ar-bot">Role for bots</label>
+            <select id="ar-bot"></select>
+          </div>
+
+          <div class="field-row">
+            <button id="btn-ar-save" class="btn primary">Save auto-roles</button>
+            <button id="btn-ar-disable" class="btn danger">Disable auto-roles</button>
+          </div>
+          <p id="ar-status" class="hint"></p>
         </section>
 
         <section class="card" data-tab="messaging">

@@ -14,7 +14,9 @@ const DEFAULTS = {
   welcome: {},
   announcements: {},
   commands: {},
-  autores: {}
+  autores: {},
+  autoroles: {},
+  giveaways: {}
 };
 
 let store;

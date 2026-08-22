@@ -1,5 +1,6 @@
-import { MessageFlags } from "../lib/discord.js";
+import { MessageFlags, ActionRowBuilder, ButtonBuilder, ButtonStyle } from "../lib/discord.js";
 import { routeButton } from "../utils/tickets.js";
+import { getGiveaway, toggleEntry } from "../utils/giveaways.js";
 import { getData } from "../utils/db.js";
 
 function friendlyError(err) {
@@ -51,6 +52,34 @@ export default {
       } catch (err) {
         console.error("[error] ticket button:", err);
         await safeEphemeral(interaction, "Something went wrong with that button.");
+      }
+      return;
+    }
+
+    if (interaction.isButton() && interaction.customId?.startsWith("gw_join:")) {
+      const [, guildId, idStr] = interaction.customId.split(":");
+      const gw = getGiveaway(guildId, Number(idStr));
+      if (!gw || gw.ended) {
+        return safeEphemeral(interaction, "This giveaway has ended.");
+      }
+      const result = toggleEntry(guildId, gw.id, interaction.user.id);
+      if (!result) return safeEphemeral(interaction, "This giveaway has ended.");
+
+      const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`gw_join:${guildId}:${gw.id}`)
+          .setLabel(`Join (${result.count})`)
+          .setStyle(ButtonStyle.Primary)
+      );
+      try {
+        await interaction.update({ components: [row] });
+        await interaction.followUp({
+          content: result.joined ? "You're in — good luck!" : "You left the giveaway.",
+          flags: MessageFlags.Ephemeral
+        });
+      } catch (err) {
+        console.error("[error] giveaway button:", err);
+        await safeEphemeral(interaction, "Couldn't update your entry — try again.");
       }
     }
   }
