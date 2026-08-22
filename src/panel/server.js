@@ -11,6 +11,7 @@ import { setupStats, disableStats, refreshStats, statsConfig } from "../utils/st
 import { getTickets, saveType, deleteType, buildSinglePanel, buildCombinedPanel } from "../utils/tickets.js";
 import { getWelcome, sanitize as sanitizeWelcome, sendWelcome, buildContext } from "../utils/welcome.js";
 import { upcoming as upcomingAnnouncements, scheduleAnnouncement, cancelAnnouncement, postAnnouncement } from "../utils/announcements.js";
+import { getRules as getFilterRules, addRule as addFilterRule, removeRule as removeFilterRule } from "../utils/autores.js";
 import { registerCommands } from "../utils/register.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -82,6 +83,7 @@ async function guildPayload(client, guild) {
     },
     welcome: { ...getWelcome(guild.id) },
     announcements: upcomingAnnouncements(guild.id),
+    filters: getFilterRules(guild.id),
     disabledCommands: data.commands?.[guild.id]?.disabled ?? [],
     availableCommands: [...client.commands.keys()].sort(),
     channels,
@@ -488,6 +490,33 @@ export function startPanel(client) {
     if (!data.commands[guild.id]) data.commands[guild.id] = {};
     data.commands[guild.id].disabled = disabled;
     save();
+
+    return res.json({ ok: true, payload: await guildPayload(client, guild) });
+  });
+
+  app.post("/api/guilds/:id/filters/add", requireAuth, async (req, res) => {
+    const guild = client.guilds.cache.get(req.params.id);
+    if (!guild) return res.status(404).json({ error: "guild not found" });
+
+    const trigger = String(req.body?.trigger ?? "").trim();
+    const response = String(req.body?.response ?? "").trim();
+    const match = req.body?.match === "exact" ? "exact" : "contains";
+
+    if (!trigger) return res.status(400).json({ error: "Trigger cannot be empty." });
+    if (!response) return res.status(400).json({ error: "Response cannot be empty." });
+    if (getFilterRules(guild.id).length >= 25)
+      return res.status(400).json({ error: "Limit reached — 25 rules per server." });
+
+    const rule = addFilterRule(guild.id, { trigger, response, match });
+    return res.json({ ok: true, savedId: rule.id, payload: await guildPayload(client, guild) });
+  });
+
+  app.post("/api/guilds/:id/filters/remove", requireAuth, async (req, res) => {
+    const guild = client.guilds.cache.get(req.params.id);
+    if (!guild) return res.status(404).json({ error: "guild not found" });
+
+    const removed = removeFilterRule(guild.id, Number(req.body?.id));
+    if (!removed) return res.status(400).json({ error: "Rule not found." });
 
     return res.json({ ok: true, payload: await guildPayload(client, guild) });
   });

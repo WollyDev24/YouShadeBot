@@ -48,7 +48,14 @@
           </div>
         </header>
 
-        <section class="card">
+        <nav id="tabs" class="tabs">
+          <button type="button" class="tab" data-tab="channels">Channels &amp; Stats</button>
+          <button type="button" class="tab" data-tab="messaging">Messaging</button>
+          <button type="button" class="tab" data-tab="tickets">Tickets</button>
+          <button type="button" class="tab" data-tab="moderation">Moderation</button>
+        </nav>
+
+        <section class="card" data-tab="channels">
           <h3>Temporary Channels</h3>
           <p class="muted small">
             Users who join the trigger voice channel get their own private temporary voice channel.
@@ -62,7 +69,7 @@
           <button id="btn-temp-disable" class="btn danger">Disable temporary channels</button>
         </section>
 
-        <section class="card">
+        <section class="card" data-tab="channels">
           <h3>Server Stats</h3>
           <p class="muted small">
             Voice channels showing live member / bot / online / in-voice numbers, updated every 5 minutes.
@@ -75,7 +82,7 @@
           <p id="stats-status" class="hint"></p>
         </section>
 
-        <section class="card">
+        <section class="card" data-tab="messaging">
           <h3>Welcome messages</h3>
           <p class="muted small">
             Greets new members in a channel of your choice. Variables: <code>{user}</code>
@@ -136,7 +143,7 @@
           </div>
         </section>
 
-        <section class="card">
+        <section class="card" data-tab="tickets">
           <h3>Tickets</h3>
           <p class="muted small">
             Create one panel per purpose (Support, Reports, Appeals&#8230;). Each type gets its own category,
@@ -158,7 +165,7 @@
           </div>
         </section>
 
-        <section class="card">
+        <section class="card" data-tab="messaging">
           <h3>Embed sender</h3>
           <p class="muted small">
             Send a normal message or a styled embed to any text channel.
@@ -215,7 +222,7 @@
           </div>
         </section>
 
-        <section class="card">
+        <section class="card" data-tab="messaging">
           <h3>Scheduled announcements</h3>
           <p class="muted small">
             Queue messages or embeds to be posted automatically at a set time. Uses the same
@@ -239,7 +246,7 @@
           <div id="an-list" class="ann-list"></div>
         </section>
 
-        <section class="card">
+        <section class="card" data-tab="moderation">
           <h3>Commands</h3>
           <p class="muted small">
             Disable slash commands you don't want available on this server.
@@ -249,6 +256,37 @@
             <button id="btn-cmd-save" class="btn primary">Save command toggles</button>
           </div>
           <p id="cmd-status" class="hint"></p>
+        </section>
+
+        <section class="card" data-tab="messaging">
+          <h3>Auto-responses</h3>
+          <p class="muted small">
+            When a message matches a trigger, the bot replies automatically.
+            Placeholders: <code>{user}</code> <code>{username}</code> <code>{server}</code>.
+            Also available in Discord via <code>/filter</code>. 15s cooldown per rule and channel.
+          </p>
+
+          <div class="field-row col">
+            <label for="fr-trigger">Trigger</label>
+            <input type="text" id="fr-trigger" maxlength="100" placeholder='e.g. hello' />
+          </div>
+
+          <div class="field-row col">
+            <label for="fr-response">Response</label>
+            <textarea id="fr-response" rows="2" maxlength="1000" placeholder="Hey {username}, welcome!"></textarea>
+          </div>
+
+          <div class="field-row">
+            <label for="fr-match">Match</label>
+            <select id="fr-match">
+              <option value="contains">Contains — anywhere in the message</option>
+              <option value="exact">Exact — the whole message</option>
+            </select>
+            <button id="btn-fr-add" class="btn primary">Add rule</button>
+          </div>
+
+          <h4 class="preview-title">Rules</h4>
+          <div id="fr-list" class="ann-list"></div>
         </section>
       </div>
     </main>

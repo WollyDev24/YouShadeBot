@@ -1,6 +1,9 @@
 import { getGuildCounting, incrementCount, resetCount, upsertStatus } from "../utils/counting.js";
+import { findMatch, renderResponse } from "../utils/autores.js";
 
 const MILESTONES = new Set([69, 100, 200, 300, 400, 500, 1000, 1500, 2000]);
+const replyCooldowns = new Map();
+const COOLDOWN_MS = 15_000;
 
 function extractNumber(content) {
   const m = content.trim().match(/^(\d{1,9})/);
@@ -20,6 +23,19 @@ export default {
     if (message.author.bot) return;
     const guild = message.guild;
     if (!guild) return;
+
+    const rule = findMatch(guild.id, message.content);
+    let replied = false;
+    if (rule) {
+      const key = `${guild.id}:${rule.id}:${message.channel.id}`;
+      const last = replyCooldowns.get(key) ?? 0;
+      if (Date.now() - last > COOLDOWN_MS) {
+        replyCooldowns.set(key, Date.now());
+        replied = true;
+        message.reply({ content: renderResponse(rule, message), allowedMentions: { repliedUser: true } }).catch(() => {});
+      }
+      if (replied && message.channel.id === getGuildCounting(guild.id).channelId) return;
+    }
 
     const cfg = getGuildCounting(guild.id);
     if (!cfg.channelId || message.channel.id !== cfg.channelId) return;

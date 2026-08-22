@@ -13,7 +13,8 @@ const DEFAULTS = {
   tickets: {},
   welcome: {},
   announcements: {},
-  commands: {}
+  commands: {},
+  autores: {}
 };
 
 let store;

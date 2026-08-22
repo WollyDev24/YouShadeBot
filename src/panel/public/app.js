@@ -138,12 +138,12 @@ function renderGuild(g) {
   renderEmbedSender(g, textChannels);
   renderAnnouncements(g, textChannels);
   renderCommands(g);
+  renderFilters(g);
 }
 
 /* --- welcome --- */
 
 const wcEls = {};
-
 function currentGuild() {
   return guilds.find((g) => g.id === selectedGuildId);
 }
@@ -227,21 +227,34 @@ function renderWelcome(g, textChannels) {
     wcEls.embedDesc = $("#wc-prev-desc");
 
     for (const el of Object.values(wcEls)) {
-      el.addEventListener("input", updateWcPreview);
-      el.addEventListener("change", updateWcPreview);
+      el.addEventListener("input", () => { wcEls.dirty = true; updateWcPreview(); });
+      el.addEventListener("change", () => { wcEls.dirty = true; updateWcPreview(); });
     }
 
-    $("#btn-wc-save").addEventListener("click", () => withGuild("welcome/save", collectWelcome()));
-    $("#btn-wc-test").addEventListener("click", () => withGuild("welcome/test", collectWelcome()));
+    $("#btn-wc-save").addEventListener("click", async (e) => {
+      const r = await withGuild("welcome/save", collectWelcome(), e.currentTarget);
+      if (r) wcEls.dirty = false;
+    });
+    $("#btn-wc-test").addEventListener("click", (e) =>
+      withGuild("welcome/test", collectWelcome(), e.currentTarget)
+    );
   }
 
-  wcEls.enabled.checked = g.welcome.enabled;
-  fillSelect(wcEls.channel, textChannels, g.welcome.channelId, "No text channels", false);
-  wcEls.message.value = g.welcome.message;
-  wcEls.mode.value = g.welcome.mode || "text";
-  wcEls.mixText.value = g.welcome.mixText ?? "";
-  wcEls.title.value = g.welcome.title;
-  wcEls.color.value = g.welcome.embedColor || "#5865f2";
+  const fresh = wcEls.guildId !== g.id;
+  wcEls.guildId = g.id;
+
+  if (fresh || !wcEls.dirty) {
+    wcEls.enabled.checked = g.welcome.enabled;
+    fillSelect(wcEls.channel, textChannels, g.welcome.channelId, "No text channels", false);
+    wcEls.message.value = g.welcome.message;
+    wcEls.mode.value = g.welcome.mode || "text";
+    wcEls.mixText.value = g.welcome.mixText ?? "";
+    wcEls.title.value = g.welcome.title;
+    wcEls.color.value = g.welcome.embedColor || "#5865f2";
+    wcEls.dirty = false;
+  } else {
+    fillSelect(wcEls.channel, textChannels, wcEls.channel.value || null, "No text channels", false);
+  }
 
   updateWcPreview();
 }
@@ -360,17 +373,17 @@ function buildTypeCard(g, t) {
     panelChannelId: panelSel.value || null
   });
 
-  const save = async () => withGuild("tickets/types/save", collect());
-  btnSave.addEventListener("click", save);
+  const save = async (btn) => withGuild("tickets/types/save", collect(), btn);
+  btnSave.addEventListener("click", (e) => save(e.currentTarget));
 
-  btnPost.addEventListener("click", async () => {
-    const res = await withGuild("tickets/types/save", collect());
-    await withGuild("tickets/post", { typeId: res?.savedId ?? t.id });
+  btnPost.addEventListener("click", async (e) => {
+    const r = await withGuild("tickets/types/save", collect(), e.currentTarget);
+    if (r) await withGuild("tickets/post", { typeId: r.savedId ?? t.id });
   });
 
-  btnDelete.addEventListener("click", async () => {
+  btnDelete.addEventListener("click", async (e) => {
     if (!confirm(`Delete the "${t.name}" ticket type?`)) return;
-    await withGuild("tickets/types/delete", { id: t.id });
+    await withGuild("tickets/types/delete", { id: t.id }, e.currentTarget);
   });
 
   return card;
@@ -433,8 +446,8 @@ function renderEmbedSender(g, textChannels) {
       el.addEventListener("change", updateEsPreview);
     }
 
-    $("#btn-es-send").addEventListener("click", async () => {
-      await withGuild("embeds/send", collectEmbedSender());
+    $("#btn-es-send").addEventListener("click", (e) => {
+      withGuild("embeds/send", collectEmbedSender(), e.currentTarget);
     });
   }
 
@@ -497,27 +510,33 @@ function renderAnnouncements(g, textChannels) {
   }
 }
 
-$("#btn-an-schedule").addEventListener("click", async () => {
+$("#btn-an-schedule").addEventListener("click", async (e) => {
+  const btn = e.currentTarget;
   const when = $("#an-when").value;
   if (!when) return toast("Pick a date and time first.", true);
   const at = new Date(when).getTime();
   if (!Number.isFinite(at) || at <= Date.now()) return toast("That time is in the past.", true);
 
-  await withGuild("announcements/schedule", {
-    ...collectEmbedSender(),
-    channelId: $("#an-channel").value || null,
-    at
-  });
+  await withGuild(
+    "announcements/schedule",
+    {
+      ...collectEmbedSender(),
+      channelId: $("#an-channel").value || null,
+      at
+    },
+    btn
+  );
 });
 
 /* --- command toggles --- */
 
 function renderCommands(g) {
   const grid = $("#cmd-grid");
-  if (!grid.dataset.built || grid.dataset.guildId !== g.id) {
+  if (grid.dataset.guildId !== g.id) {
     grid.innerHTML = "";
     grid.dataset.built = "1";
     grid.dataset.guildId = g.id;
+    grid.dataset.dirty = "";
     for (const name of g.availableCommands) {
       const label = document.createElement("label");
       label.className = "check";
@@ -525,26 +544,78 @@ function renderCommands(g) {
       const cb = document.createElement("input");
       cb.type = "checkbox";
       cb.value = name;
+      cb.addEventListener("change", () => {
+        grid.dataset.dirty = "1";
+        label.classList.toggle("off", !cb.checked);
+      });
       label.append(cb, ` /${name}`);
       grid.appendChild(label);
     }
   }
 
-  for (const label of grid.querySelectorAll("label.check")) {
-    const cb = label.querySelector("input");
-    cb.checked = !g.disabledCommands.includes(cb.value);
-    label.classList.toggle("off", !cb.checked);
-    cb.onchange = () => label.classList.toggle("off", !cb.checked);
+  if (!grid.dataset.dirty) {
+    for (const label of grid.querySelectorAll("label.check")) {
+      const cb = label.querySelector("input");
+      cb.checked = !g.disabledCommands.includes(cb.value);
+      label.classList.toggle("off", !cb.checked);
+    }
   }
 
-  $("#cmd-status").textContent = g.disabledCommands.length
-    ? `${g.disabledCommands.length} command(s) disabled.`
-    : "All commands enabled.";
+  $("#cmd-status").textContent = grid.dataset.dirty
+    ? "Unsaved changes — click Save."
+    : g.disabledCommands.length
+      ? `${g.disabledCommands.length} command(s) disabled.`
+      : "All commands enabled.";
 }
 
-$("#btn-cmd-save").addEventListener("click", () => {
+$("#btn-cmd-save").addEventListener("click", async (e) => {
   const disabled = [...document.querySelectorAll("#cmd-grid input:not(:checked)")].map((cb) => cb.value);
-  withGuild("commands/toggles", { disabled });
+  const r = await withGuild("commands/toggles", { disabled }, e.currentTarget);
+  if (r) $("#cmd-grid").dataset.dirty = "";
+});
+
+/* --- auto-response filters --- */
+
+function renderFilters(g) {
+  const list = $("#fr-list");
+  list.innerHTML = "";
+  if (!g.filters.length) {
+    list.innerHTML = `<span class="muted small">No rules yet.</span>`;
+    return;
+  }
+
+  for (const r of g.filters) {
+    const row = document.createElement("div");
+    row.className = "ann-item";
+
+    const info = document.createElement("div");
+    info.className = "grow";
+    const head = document.createElement("div");
+    head.className = "ann-head";
+    head.innerHTML = `<code>${escapeHtml(r.trigger)}</code> <span class="muted small">#${r.id} · ${r.match}</span>`;
+    const body = document.createElement("div");
+    body.className = "small";
+    body.textContent = r.response;
+    info.append(head, body);
+
+    const btnDelete = document.createElement("button");
+    btnDelete.className = "btn danger small";
+    btnDelete.textContent = "Remove";
+    btnDelete.addEventListener("click", () => withGuild("filters/remove", { id: r.id }));
+
+    row.append(info, btnDelete);
+    list.appendChild(row);
+  }
+}
+
+$("#btn-fr-add").addEventListener("click", async (e) => {
+  const btn = e.currentTarget;
+  const trigger = $("#fr-trigger").value.trim();
+  const response = $("#fr-response").value.trim();
+  if (!trigger || !response) return toast("Fill in trigger and response first.", true);
+  await withGuild("filters/add", { trigger, response, match: $("#fr-match").value }, btn);
+  $("#fr-trigger").value = "";
+  $("#fr-response").value = "";
 });
 
 function fillSelect(sel, items, selected, emptyLabel, optional) {
@@ -575,8 +646,13 @@ function fillSelect(sel, items, selected, emptyLabel, optional) {
 
 /* --- actions --- */
 
-async function withGuild(action, body = {}) {
+async function withGuild(action, body = {}, btn = null) {
   if (!selectedGuildId) return;
+  const origLabel = btn ? btn.textContent : null;
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "Working…";
+  }
   let payload;
   try {
     payload = await api(`/api/guilds/${selectedGuildId}/${action}`, {
@@ -586,6 +662,11 @@ async function withGuild(action, body = {}) {
   } catch (err) {
     toast(err.message, true);
     return payload;
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = origLabel;
+    }
   }
   if (payload.payload) {
     const idx = guilds.findIndex((g) => g.id === selectedGuildId);
@@ -617,35 +698,66 @@ $("#btn-logout").addEventListener("click", async () => {
   showLogin(true);
 });
 
-$("#btn-temp-setup").addEventListener("click", () =>
-  withGuild("temp/setup", { channelId: $("#temp-channel").value })
+$("#btn-temp-setup").addEventListener("click", (e) =>
+  withGuild("temp/setup", { channelId: $("#temp-channel").value }, e.currentTarget)
 );
 
-$("#btn-temp-disable").addEventListener("click", () => withGuild("temp/disable"));
-$("#btn-stats-setup").addEventListener("click", () => withGuild("stats/setup"));
-$("#btn-stats-refresh").addEventListener("click", () => withGuild("stats/refresh"));
-$("#btn-stats-disable").addEventListener("click", () => withGuild("stats/disable"));
-
-$("#btn-tk-add").addEventListener("click", async () => {
-  await withGuild("tickets/types/save", { name: "New Panel" });
+$("#btn-temp-disable").addEventListener("click", async (e) => {
+  if (!confirm("Disable temporary channels? Existing temp channels will be left to expire on their own.")) return;
+  await withGuild("temp/disable", {}, e.currentTarget);
+});
+$("#btn-stats-setup").addEventListener("click", (e) => withGuild("stats/setup", {}, e.currentTarget));
+$("#btn-stats-refresh").addEventListener("click", (e) => withGuild("stats/refresh", {}, e.currentTarget));
+$("#btn-stats-disable").addEventListener("click", async (e) => {
+  if (!confirm("Remove the stats voice channels and stop updating them?")) return;
+  await withGuild("stats/disable", {}, e.currentTarget);
 });
 
-$("#btn-tk-post-combined").addEventListener("click", () => {
+$("#btn-tk-add").addEventListener("click", (e) =>
+  withGuild("tickets/types/save", { name: "New Panel" }, e.currentTarget)
+);
+
+$("#btn-tk-post-combined").addEventListener("click", (e) => {
   const ids = [...document.querySelectorAll("#tk-combined-box input:checked")].map((cb) => cb.value);
   withGuild("tickets/post-combined", {
     channelId: $("#tk-combined-channel").value || null,
     typeIds: ids
-  });
+  }, e.currentTarget);
 });
 
-$("#btn-commands").addEventListener("click", async () => {
+$("#btn-commands").addEventListener("click", async (e) => {
+  const btn = e.currentTarget;
+  btn.disabled = true;
+  const orig = btn.textContent;
+  btn.textContent = "Registering…";
   try {
     await api("/api/commands/register", { method: "POST", body: {} });
     toast("Commands re-registered");
   } catch (err) {
     toast(err.message, true);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = orig;
   }
 });
+
+/* --- tabs --- */
+
+const TABS = ["channels", "messaging", "tickets", "moderation"];
+
+function applyTab(name) {
+  if (!TABS.includes(name)) name = TABS[0];
+  try { localStorage.setItem("ys_tab", name); } catch {}
+  document.querySelectorAll("#tabs .tab").forEach((t) => t.classList.toggle("active", t.dataset.tab === name));
+  document.querySelectorAll("#guild-view section.card[data-tab]").forEach((card) => {
+    card.classList.toggle("hidden", card.dataset.tab !== name);
+  });
+}
+
+document.querySelectorAll("#tabs .tab").forEach((btn) =>
+  btn.addEventListener("click", () => applyTab(btn.dataset.tab))
+);
+applyTab((() => { try { return localStorage.getItem("ys_tab"); } catch { return null; } })());
 
 async function refreshAll() {
   await Promise.all([loadStatus(), loadGuilds()]);

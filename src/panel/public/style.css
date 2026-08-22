@@ -142,6 +142,69 @@ body {
 .guild-icon { width: 64px; height: 64px; border-radius: 14px; }
 .guild-header h2 { margin: 0; }
 
+/* Tabs */
+.tabs {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  gap: 6px;
+  padding: 12px 0;
+  background: var(--bg);
+  overflow-x: auto;
+}
+.tab {
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--muted);
+  padding: 8px 16px;
+  border-radius: 999px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s;
+}
+.tab:hover { background: #1e2230; color: var(--text); }
+.tab.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+@media (max-width: 900px) {
+  .app { grid-template-columns: 1fr; }
+  .sidebar {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    max-height: none;
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+    padding: 12px 14px;
+  }
+  .brand { display: flex; align-items: baseline; gap: 8px; }
+  .status-box { margin: 0; flex: 1 1 auto; min-width: 220px; }
+  .sidebar-title { display: none; }
+  .guild-list {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    flex: 1 1 100%;
+    margin: 0;
+    padding-bottom: 4px;
+  }
+  .guild-item { border: 1px solid var(--border); border-radius: 999px; padding-right: 14px; white-space: nowrap; }
+  .guild-item.selected { border-color: var(--accent); }
+  #btn-commands, #btn-logout { width: auto; margin: 0; }
+  .main { max-height: none; padding: 16px 14px; overflow: visible; }
+  .tabs { top: 0; }
+  .guild-icon { width: 44px; height: 44px; border-radius: 10px; }
+}
+
 .field-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
 .field-row label { font-size: 0.9rem; color: var(--muted); min-width: 140px; }
 .field-row select {
