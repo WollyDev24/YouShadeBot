@@ -330,6 +330,26 @@
           <p id="ar-status" class="hint"></p>
         </section>
 
+        <section class="card" data-tab="moderation">
+          <h3>Auto-update</h3>
+          <p class="muted small">
+            Every hour the bot checks GitHub for new commits. If there are any it pulls them,
+            installs dependencies if needed and restarts itself. Updates are announced in the
+            logging channel below.
+          </p>
+
+          <div class="field-row">
+            <label for="up-channel">Logging channel</label>
+            <select id="up-channel"></select>
+            <button id="btn-up-save" class="btn primary">Save</button>
+          </div>
+
+          <div class="field-row">
+            <button id="btn-up-check" class="btn">Check for updates now</button>
+          </div>
+          <p id="up-status" class="hint"></p>
+        </section>
+
         <section class="card" data-tab="messaging">
           <h3>Auto-responses</h3>
           <p class="muted small">

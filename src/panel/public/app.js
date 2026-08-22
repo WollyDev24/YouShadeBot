@@ -141,6 +141,7 @@ function renderGuild(g) {
   renderCommands(g);
   renderFilters(g);
   renderAutoRoles(g);
+  renderUpdates(g, textChannels);
 }
 
 /* --- welcome --- */
@@ -647,6 +648,52 @@ $("#btn-ar-save").addEventListener("click", (e) => {
 $("#btn-ar-disable").addEventListener("click", async (e) => {
   if (!confirm("Stop assigning auto-roles to new members?")) return;
   await withGuild("autoroles/disable", {}, e.currentTarget);
+});
+
+/* --- auto-update --- */
+
+function renderUpdates(g, textChannels) {
+  const sel = $("#up-channel");
+  fillSelect(sel, textChannels, sel.value || g.logChannelId, "No text channels", true);
+
+  const chName = g.channels.find((c) => c.id === g.logChannelId)?.name;
+  $("#up-status").textContent = chName
+    ? `Updates and restarts are announced in #${chName}.`
+    : "No logging channel set — updates happen silently.";
+}
+
+$("#btn-up-save").addEventListener("click", (e) =>
+  withGuild("logging/save", { channelId: $("#up-channel").value || null }, e.currentTarget)
+);
+
+$("#btn-up-check").addEventListener("click", async (e) => {
+  const btn = e.currentTarget;
+  btn.disabled = true;
+  btn.textContent = "Checking…";
+  try {
+    const r = await api("/api/update/check", { method: "POST", body: {} });
+    if (r.status === "up-to-date") {
+      toast(`Already on the latest commit (${r.sha})`);
+      $("#up-status").textContent = `Checked just now — up to date (${r.sha}).`;
+    } else if (r.status === "updating") {
+      $("#up-status").textContent = `Update found (${r.commits} new commit(s)) — bot is restarting, page will reconnect shortly.`;
+      setTimeout(loadStatus, 20_000);
+    } else if (r.status === "dirty") {
+      toast("Local file changes detected — auto-update skipped.", true);
+    } else if (r.status === "diverged") {
+      toast("Local history diverged from origin — manual fix needed.", true);
+    } else if (r.status === "busy") {
+      toast("An update check is already running.", true);
+    } else {
+      toast(r.error || "Update check failed.", true);
+    }
+  } catch (err) {
+    toast(err.message, true);
+    setTimeout(loadStatus, 20_000);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Check for updates now";
+  }
 });
 
 /* --- giveaways --- */

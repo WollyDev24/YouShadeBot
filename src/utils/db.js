@@ -16,7 +16,8 @@ const DEFAULTS = {
   commands: {},
   autores: {},
   autoroles: {},
-  giveaways: {}
+  giveaways: {},
+  logs: {}
 };
 
 let store;

@@ -20,6 +20,7 @@ import {
   endGiveaway,
   rerollGiveaway
 } from "../utils/giveaways.js";
+import { getLogChannel, setLogChannel, checkForUpdates } from "../utils/updater.js";
 import { registerCommands } from "../utils/register.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -104,6 +105,7 @@ async function guildPayload(client, guild) {
       winnerIds: g.winnerIds
     })),
     disabledCommands: data.commands?.[guild.id]?.disabled ?? [],
+    logChannelId: getLogChannel(guild.id),
     availableCommands: [...client.commands.keys()].sort(),
     channels,
     categories,
@@ -621,6 +623,25 @@ export function startPanel(client) {
     } catch (err) {
       return res.status(400).json({ error: err.message });
     }
+  });
+
+  app.post("/api/guilds/:id/logging/save", requireAuth, async (req, res) => {
+    const guild = client.guilds.cache.get(req.params.id);
+    if (!guild) return res.status(404).json({ error: "guild not found" });
+
+    const channelId = req.body?.channelId;
+    if (channelId) {
+      const ch = guild.channels.cache.get(channelId);
+      if (!ch || !ch.isTextBased())
+        return res.status(400).json({ error: "Pick a valid text channel." });
+    }
+    setLogChannel(guild.id, channelId || null);
+    return res.json({ ok: true, payload: await guildPayload(client, guild) });
+  });
+
+  app.post("/api/update/check", requireAuth, async (req, res) => {
+    const result = await checkForUpdates(client);
+    return res.json(result);
   });
 
   app.use(express.static(PUBLIC));
