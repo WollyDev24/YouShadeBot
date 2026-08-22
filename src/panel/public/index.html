@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>YouShade Bot Panel</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <div id="login-screen" class="login hidden">
+    <form id="login-form" class="card login-card">
+      <h1>YouShade Bot Panel</h1>
+      <p class="muted">Local management dashboard</p>
+      <input type="password" id="password" placeholder="Panel password" autocomplete="current-password" required />
+      <button type="submit" class="btn primary">Sign in</button>
+      <p id="login-error" class="error hidden"></p>
+    </form>
+  </div>
+
+  <div id="app" class="app hidden">
+    <aside class="sidebar">
+      <div class="brand">
+        <h1>YouShade</h1>
+        <span class="muted">Bot Panel</span>
+      </div>
+      <div id="status-box" class="status-box">
+        <div class="status-line"><span class="dot" id="status-dot"></span><span id="status-text">—</span></div>
+        <div class="muted small" id="status-meta"></div>
+      </div>
+      <h2 class="sidebar-title">Servers</h2>
+      <ul id="guild-list" class="guild-list"></ul>
+      <button id="btn-commands" class="btn ghost full">Re-register commands</button>
+      <button id="btn-logout" class="btn ghost full">Log out</button>
+    </aside>
+
+    <main class="main">
+      <div id="empty-state" class="empty hidden">
+        <h2>Select a server</h2>
+        <p class="muted">Pick a server on the left to manage its channels.</p>
+      </div>
+
+      <div id="guild-view" class="guild-view hidden">
+        <header class="guild-header">
+          <img id="guild-icon" class="guild-icon" alt="" />
+          <div>
+            <h2 id="guild-name"></h2>
+            <p class="muted small" id="guild-meta"></p>
+          </div>
+        </header>
+
+        <section class="card">
+          <h3>Temporary Channels</h3>
+          <p class="muted small">
+            Users who join the trigger voice channel get their own private temporary voice channel.
+          </p>
+          <div class="field-row">
+            <label for="temp-channel">Trigger channel</label>
+            <select id="temp-channel"></select>
+            <button id="btn-temp-setup" class="btn primary">Enable</button>
+          </div>
+          <p id="temp-status" class="hint"></p>
+          <button id="btn-temp-disable" class="btn danger">Disable temporary channels</button>
+        </section>
+
+        <section class="card">
+          <h3>Server Stats</h3>
+          <p class="muted small">
+            Voice channels showing live member / bot / online / in-voice numbers, updated every 5 minutes.
+          </p>
+          <div class="field-row">
+            <button id="btn-stats-setup" class="btn primary">Create stats channels</button>
+            <button id="btn-stats-refresh" class="btn">Refresh now</button>
+            <button id="btn-stats-disable" class="btn danger">Remove stats channels</button>
+          </div>
+          <p id="stats-status" class="hint"></p>
+        </section>
+
+        <section class="card">
+          <h3>Welcome messages</h3>
+          <p class="muted small">
+            Greets new members in a channel of your choice. Variables: <code>{user}</code>
+            <code>{username}</code> <code>{server}</code> <code>{memberCount}</code>
+          </p>
+
+          <div class="field-row">
+            <label class="check"><input type="checkbox" id="wc-enabled" /> enabled</label>
+            <label for="wc-channel">Channel</label>
+            <select id="wc-channel"></select>
+          </div>
+
+          <div class="field-row col">
+            <label for="wc-message">Message</label>
+            <textarea id="wc-message" rows="3" maxlength="1000"></textarea>
+          </div>
+
+          <div class="field-row">
+            <label for="wc-mode">Mode</label>
+            <select id="wc-mode">
+              <option value="text">Normal text</option>
+              <option value="embed">Embed</option>
+              <option value="mix">Mix (text + embed)</option>
+            </select>
+          </div>
+
+          <div class="field-row col" id="wc-mix-row" hidden>
+            <label for="wc-mix-text">Plain text (sent above the embed)</label>
+            <textarea id="wc-mix-text" rows="2" maxlength="500"></textarea>
+          </div>
+
+          <div class="field-row" id="wc-embed-row">
+            <input type="text" id="wc-title" placeholder="Embed title (optional)" maxlength="256" />
+            <input type="color" id="wc-color" value="#5865f2" title="Embed color" />
+          </div>
+
+          <div class="field-row">
+            <button id="btn-wc-save" class="btn primary">Save</button>
+            <button id="btn-wc-test" class="btn">Send test to channel</button>
+          </div>
+
+          <h4 class="preview-title">Live preview</h4>
+          <div class="dc-preview">
+            <div class="dc-msg">
+              <div class="dc-avatar"></div>
+              <div class="dc-body">
+                <div class="dc-head">
+                  <span class="dc-name">TestUser</span>
+                  <span class="dc-time">today at 12:00</span>
+                </div>
+                <div id="wc-prev-content" class="dc-content"></div>
+                <div id="wc-prev-embed" class="dc-embed" hidden>
+                  <div id="wc-prev-title" class="dc-embed-title"></div>
+                  <div id="wc-prev-desc" class="dc-embed-desc"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="card">
+          <h3>Tickets</h3>
+          <p class="muted small">
+            Create one panel per purpose (Support, Reports, Appeals&#8230;). Each type gets its own category,
+            staff role and log channel. Closed tickets can be moved to a separate category instead of deleted.
+          </p>
+          <p id="tk-status" class="hint"></p>
+          <div id="tk-types"></div>
+          <button id="btn-tk-add" class="btn">+ Add ticket type</button>
+
+          <div class="subcard">
+            <h4>Combined panel</h4>
+            <p class="muted small">Posts one message with a button for every selected type.</p>
+            <div class="field-row">
+              <label for="tk-combined-channel">Channel</label>
+              <select id="tk-combined-channel"></select>
+              <button id="btn-tk-post-combined" class="btn primary">Post combined panel</button>
+            </div>
+            <div id="tk-combined-box"></div>
+          </div>
+        </section>
+
+        <section class="card">
+          <h3>Embed sender</h3>
+          <p class="muted small">
+            Send a normal message or a styled embed to any text channel.
+          </p>
+
+          <div class="field-row">
+            <label for="es-channel">Channel</label>
+            <select id="es-channel"></select>
+            <label for="es-mode">Mode</label>
+            <select id="es-mode">
+              <option value="text">Normal text</option>
+              <option value="embed">Embed</option>
+            </select>
+          </div>
+
+          <div class="field-row col" id="es-title-row" hidden>
+            <label for="es-title">Title</label>
+            <input type="text" id="es-title" maxlength="256" />
+          </div>
+
+          <div class="field-row col">
+            <label for="es-message">Message</label>
+            <textarea id="es-message" rows="4" maxlength="2000"></textarea>
+          </div>
+
+          <div class="field-row" id="es-style-row" hidden>
+            <div class="field-row col grow">
+              <label for="es-footer">Footer</label>
+              <input type="text" id="es-footer" maxlength="2048" />
+            </div>
+            <input type="color" id="es-color" value="#5865f2" title="Embed color" />
+          </div>
+
+          <div class="field-row">
+            <button id="btn-es-send" class="btn primary">Send now</button>
+          </div>
+
+          <h4 class="preview-title">Live preview</h4>
+          <div class="dc-preview">
+            <div class="dc-msg">
+              <div class="dc-avatar"></div>
+              <div class="dc-body">
+                <div class="dc-head">
+                  <span class="dc-name">YouShade Bot</span>
+                  <span class="dc-time">today at 12:00</span>
+                </div>
+                <div id="es-prev-content" class="dc-content"></div>
+                <div id="es-prev-embed" class="dc-embed" hidden>
+                  <div id="es-prev-title" class="dc-embed-title"></div>
+                  <div id="es-prev-desc" class="dc-embed-desc"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="card">
+          <h3>Scheduled announcements</h3>
+          <p class="muted small">
+            Queue messages or embeds to be posted automatically at a set time. Uses the same
+            content as the embed sender above.
+          </p>
+
+          <div class="field-row col" id="an-fields">
+            <label for="an-channel">Channel</label>
+            <select id="an-channel"></select>
+            <label for="an-when">When</label>
+            <input type="datetime-local" id="an-when" />
+          </div>
+
+          <div class="field-row">
+            <button id="btn-an-schedule" class="btn primary">Schedule announcement</button>
+          </div>
+
+          <p class="muted small hint-label">Uses the embed sender fields above as content.</p>
+
+          <h4 class="preview-title">Upcoming</h4>
+          <div id="an-list" class="ann-list"></div>
+        </section>
+
+        <section class="card">
+          <h3>Commands</h3>
+          <p class="muted small">
+            Disable slash commands you don't want available on this server.
+          </p>
+          <div id="cmd-grid" class="check-grid"></div>
+          <div class="field-row">
+            <button id="btn-cmd-save" class="btn primary">Save command toggles</button>
+          </div>
+          <p id="cmd-status" class="hint"></p>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+  <script src="/app.js"></script>
+</body>
+</html>

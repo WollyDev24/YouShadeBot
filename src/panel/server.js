@@ -1,0 +1,502 @@
+import express from "express";
+import cookieParser from "cookie-parser";
+import path from "node:path";
+import crypto from "node:crypto";
+import { fileURLToPath } from "node:url";
+import { ChannelType, EmbedBuilder } from "../lib/discord.js";
+import { getData, save } from "../utils/db.js";
+import { getGuildTemp } from "../utils/temp.js";
+import { setupStats, disableStats, refreshStats, statsConfig } from "../utils/stats.js";
+import { getTickets, saveType, deleteType, buildSinglePanel, buildCombinedPanel } from "../utils/tickets.js";
+import { getWelcome, sanitize as sanitizeWelcome, sendWelcome, buildContext } from "../utils/welcome.js";
+import { upcoming as upcomingAnnouncements, scheduleAnnouncement, cancelAnnouncement, postAnnouncement } from "../utils/announcements.js";
+import { registerCommands } from "../utils/register.js";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const PUBLIC = path.join(__dirname, "public");
+
+function authPassword() {
+  const pw = process.env.PANEL_PASSWORD || "admin";
+  return crypto.createHash("sha256").update(pw).digest("hex");
+}
+
+async function guildPayload(client, guild) {
+  const temp = getGuildTemp(guild.id).trigger ?? null;
+  const stats = statsConfig(guild.id);
+
+  let triggerName = null;
+  if (temp) triggerName = guild.channels.cache.get(temp)?.name ?? null;
+
+  const channels = guild.channels.cache
+    .filter((c) => c.type === 0 || c.type === 2)
+    .map((c) => ({
+      id: c.id,
+      name: c.name,
+      type: c.type,
+      parent: c.parentId
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  const categories = guild.channels.cache
+    .filter((c) => c.type === ChannelType.GuildCategory)
+    .map((c) => ({ id: c.id, name: c.name }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  const roles = guild.roles.cache
+    .filter((r) => !r.managed && r.id !== guild.roles.everyone.id && r.editable)
+    .sort((a, b) => b.rawPosition - a.rawPosition)
+    .map((r) => ({ id: r.id, name: r.name }));
+
+  const tickets = getTickets(guild.id);
+  const data = getData();
+
+  return {
+    id: guild.id,
+    name: guild.name,
+    icon: guild.iconURL({ size: 128 }),
+    memberCount: guild.memberCount,
+    temp: {
+      enabled: Boolean(temp),
+      triggerId: temp,
+      triggerName
+    },
+    stats: {
+      enabled: stats.enabled,
+      channels: stats.channels,
+      categoryId: stats.categoryId
+    },
+    tickets: {
+      openCount: Object.keys(tickets.open).length,
+      types: Object.values(tickets.types).map((t) => ({
+        id: t.id,
+        name: t.name,
+        enabled: t.enabled,
+        categoryId: t.categoryId,
+        closedCategoryId: t.closedCategoryId,
+        staffRoleId: t.staffRoleId,
+        logChannelId: t.logChannelId,
+        panelChannelId: t.panelChannelId
+      })),
+      combinedChannelId: tickets.combinedChannelId
+    },
+    welcome: { ...getWelcome(guild.id) },
+    announcements: upcomingAnnouncements(guild.id),
+    disabledCommands: data.commands?.[guild.id]?.disabled ?? [],
+    availableCommands: [...client.commands.keys()].sort(),
+    channels,
+    categories,
+    roles
+  };
+}
+
+export function startPanel(client) {
+  const app = express();
+  app.use(express.json());
+  app.use(cookieParser());
+
+  const AUTH_COOKIE = "ys_panel";
+
+  const requireAuth = (req, res, next) => {
+    if (req.cookies?.[AUTH_COOKIE] === authPassword()) return next();
+    return res.status(401).json({ error: "unauthorized" });
+  };
+
+  app.post("/api/login", (req, res) => {
+    const { password } = req.body ?? {};
+    if (crypto.createHash("sha256").update(String(password)).digest("hex") !== authPassword()) {
+      return res.status(401).json({ error: "wrong password" });
+    }
+    res.cookie(AUTH_COOKIE, authPassword(), {
+      httpOnly: true,
+      sameSite: "strict",
+      maxAge: 7 * 24 * 60 * 60 * 1000
+    });
+    return res.json({ ok: true });
+  });
+
+  app.post("/api/logout", (req, res) => {
+    res.clearCookie(AUTH_COOKIE);
+    return res.json({ ok: true });
+  });
+
+  app.get("/api/status", requireAuth, async (req, res) => {
+    if (!client.user) return res.json({ online: false });
+    const guilds = client.guilds.cache;
+    return res.json({
+      online: true,
+      tag: client.user.tag,
+      id: client.user.id,
+      ping: Math.round(client.ws.ping),
+      uptime: Math.floor(process.uptime()),
+      guildCount: guilds.size,
+      totalMembers: guilds.reduce((n, g) => n + g.memberCount, 0)
+    });
+  });
+
+  app.get("/api/guilds", requireAuth, async (req, res) => {
+    const guilds = client.guilds.cache;
+    if (!guilds.size) return res.json([]);
+    const out = [];
+    for (const guild of guilds.values()) {
+      out.push(await guildPayload(client, guild));
+    }
+    return res.json(out.sort((a, b) => a.name.localeCompare(b.name)));
+  });
+
+  app.get("/api/guilds/:id", requireAuth, async (req, res) => {
+    const guild = client.guilds.cache.get(req.params.id);
+    if (!guild) return res.status(404).json({ error: "guild not found" });
+    return res.json(await guildPayload(client, guild));
+  });
+
+  app.post("/api/guilds/:id/temp/setup", requireAuth, async (req, res) => {
+    const guild = client.guilds.cache.get(req.params.id);
+    if (!guild) return res.status(404).json({ error: "guild not found" });
+    const { channelId } = req.body ?? {};
+    const ch = guild.channels.cache.get(channelId);
+    if (!ch || ch.type !== 2)
+      return res.status(400).json({ error: "not a valid voice channel" });
+
+    const data = getData();
+    data.temp[guild.id] = data.temp[guild.id] ?? { trigger: null, channels: {} };
+    data.temp[guild.id].trigger = channelId;
+    save();
+    return res.json({ ok: true, payload: await guildPayload(client, guild) });
+  });
+
+  app.post("/api/guilds/:id/temp/disable", requireAuth, async (req, res) => {
+    const guild = client.guilds.cache.get(req.params.id);
+    if (!guild) return res.status(404).json({ error: "guild not found" });
+    const data = getData();
+    data.temp[guild.id] = { trigger: null, channels: {} };
+    save();
+    return res.json({ ok: true, payload: await guildPayload(client, guild) });
+  });
+
+  app.post("/api/guilds/:id/stats/setup", requireAuth, async (req, res) => {
+    const guild = client.guilds.cache.get(req.params.id);
+    if (!guild) return res.status(404).json({ error: "guild not found" });
+    try {
+      await setupStats(guild);
+      await refreshStats(guild);
+      return res.json({ ok: true, payload: await guildPayload(client, guild) });
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/guilds/:id/stats/refresh", requireAuth, async (req, res) => {
+    const guild = client.guilds.cache.get(req.params.id);
+    if (!guild) return res.status(404).json({ error: "guild not found" });
+    await refreshStats(guild);
+    return res.json({ ok: true });
+  });
+
+  app.post("/api/guilds/:id/stats/disable", requireAuth, async (req, res) => {
+    const guild = client.guilds.cache.get(req.params.id);
+    if (!guild) return res.status(404).json({ error: "guild not found" });
+    await disableStats(guild);
+    return res.json({ ok: true, payload: await guildPayload(client, guild) });
+  });
+
+  app.post("/api/commands/register", requireAuth, async (req, res) => {
+    try {
+      await registerCommands(client);
+      return res.json({ ok: true });
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/guilds/:id/tickets/types/save", requireAuth, async (req, res) => {
+    const guild = client.guilds.cache.get(req.params.id);
+    if (!guild) return res.status(404).json({ error: "guild not found" });
+
+    const body = req.body ?? {};
+    const chan = (v) => (v && guild.channels.cache.has(v) ? v : null);
+    const role = (v) => (v && guild.roles.cache.has(v) ? v : null);
+
+    const type = saveType(guild.id, {
+      id: body.id ?? null,
+      name: String(body.name ?? "New Panel").slice(0, 80) || "New Panel",
+      enabled: Boolean(body.enabled),
+      categoryId: chan(body.categoryId),
+      closedCategoryId: chan(body.closedCategoryId),
+      staffRoleId: role(body.staffRoleId),
+      logChannelId: chan(body.logChannelId),
+      panelChannelId: chan(body.panelChannelId)
+    });
+
+    return res.json({
+      ok: true,
+      savedId: type.id,
+      payload: await guildPayload(client, guild)
+    });
+  });
+
+  app.post("/api/guilds/:id/tickets/types/delete", requireAuth, async (req, res) => {
+    const guild = client.guilds.cache.get(req.params.id);
+    if (!guild) return res.status(404).json({ error: "guild not found" });
+
+    const { id } = req.body ?? {};
+    const removed = deleteType(guild.id, id);
+
+    if (removed?.panelMessageId && removed.panelChannelId) {
+      const panel = guild.channels.cache.get(removed.panelChannelId);
+      const old = panel ? await panel.messages.fetch(removed.panelMessageId).catch(() => null) : null;
+      if (old) await old.delete().catch(() => {});
+    }
+
+    return res.json({ ok: true, payload: await guildPayload(client, guild) });
+  });
+
+  app.post("/api/guilds/:id/tickets/post", requireAuth, async (req, res) => {
+    const guild = client.guilds.cache.get(req.params.id);
+    if (!guild) return res.status(404).json({ error: "guild not found" });
+
+    const cfg = getTickets(guild.id);
+    const type = cfg.types[req.body?.typeId];
+    if (!type) return res.status(400).json({ error: "Unknown ticket type." });
+    if (!type.panelChannelId)
+      return res.status(400).json({ error: "Pick a panel channel for this ticket type first." });
+
+    try {
+      const panel = guild.channels.cache.get(type.panelChannelId);
+      if (!panel) return res.status(400).json({ error: "Panel channel no longer exists." });
+
+      if (type.panelMessageId) {
+        const old = await panel.messages.fetch(type.panelMessageId).catch(() => null);
+        if (old) await old.delete().catch(() => {});
+      }
+
+      const msg = await panel.send(buildSinglePanel(type));
+      type.panelMessageId = msg.id;
+      save();
+      return res.json({ ok: true, payload: await guildPayload(client, guild) });
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/guilds/:id/tickets/post-combined", requireAuth, async (req, res) => {
+    const guild = client.guilds.cache.get(req.params.id);
+    if (!guild) return res.status(404).json({ error: "guild not found" });
+
+    const cfg = getTickets(guild.id);
+    const channelId = req.body?.channelId;
+    const typeIds = Array.isArray(req.body?.typeIds) ? req.body.typeIds : [];
+
+    if (!channelId || !guild.channels.cache.has(channelId))
+      return res.status(400).json({ error: "Pick a channel for the combined panel." });
+
+    const types = typeIds.map((id) => cfg.types[id]).filter((t) => t && t.enabled);
+    if (!types.length)
+      return res.status(400).json({ error: "Enable at least one ticket type first." });
+    if (types.length > 25) types.length = 25;
+
+    try {
+      const panel = guild.channels.cache.get(channelId);
+
+      if (cfg.combinedMessageId && cfg.combinedChannelId) {
+        const oldCh = guild.channels.cache.get(cfg.combinedChannelId);
+        const old =
+          oldCh && oldCh.id !== channelId
+            ? await oldCh.messages.fetch(cfg.combinedMessageId).catch(() => null)
+            : await panel.messages.fetch(cfg.combinedMessageId).catch(() => null);
+        if (old) await old.delete().catch(() => {});
+      }
+
+      const msg = await panel.send(buildCombinedPanel(types));
+      cfg.combinedMessageId = msg.id;
+      cfg.combinedChannelId = channelId;
+      save();
+      return res.json({ ok: true, payload: await guildPayload(client, guild) });
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/guilds/:id/tickets/disable", requireAuth, async (req, res) => {
+    const guild = client.guilds.cache.get(req.params.id);
+    if (!guild) return res.status(404).json({ error: "guild not found" });
+
+    const cfg = getTickets(guild.id);
+
+    for (const type of Object.values(cfg.types)) {
+      type.enabled = false;
+      if (type.panelMessageId && type.panelChannelId) {
+        const panel = guild.channels.cache.get(type.panelChannelId);
+        const old = panel ? await panel.messages.fetch(type.panelMessageId).catch(() => null) : null;
+        if (old) await old.delete().catch(() => {});
+      }
+      type.panelMessageId = null;
+    }
+
+    if (cfg.combinedMessageId && cfg.combinedChannelId) {
+      const ch = guild.channels.cache.get(cfg.combinedChannelId);
+      const old = ch ? await ch.messages.fetch(cfg.combinedMessageId).catch(() => null) : null;
+      if (old) await old.delete().catch(() => {});
+    }
+    cfg.combinedMessageId = null;
+    cfg.combinedChannelId = null;
+    save();
+
+    const openCount = Object.keys(cfg.open).length;
+    return res.json({
+      ok: true,
+      note: openCount ? `${openCount} open ticket channel(s) left untouched.` : undefined,
+      payload: await guildPayload(client, guild)
+    });
+  });
+
+  app.post("/api/guilds/:id/welcome/save", requireAuth, async (req, res) => {
+    const guild = client.guilds.cache.get(req.params.id);
+    if (!guild) return res.status(404).json({ error: "guild not found" });
+    const cfg = sanitizeWelcome(req.body ?? {}, guild);
+    return res.json({ ok: true, payload: await guildPayload(client, guild) });
+  });
+
+  app.post("/api/guilds/:id/welcome/test", requireAuth, async (req, res) => {
+    const guild = client.guilds.cache.get(req.params.id);
+    if (!guild) return res.status(404).json({ error: "guild not found" });
+
+    let cfg;
+    try {
+      cfg = sanitizeWelcome(req.body ?? {}, guild);
+    } catch (err) {
+      return res.status(400).json({ error: err.message });
+    }
+
+    if (!cfg.channelId) return res.status(400).json({ error: "Pick a welcome channel first." });
+    const channel = guild.channels.cache.get(cfg.channelId);
+
+    try {
+      const ctx = buildContext({
+        id: client.user.id,
+        displayName: "TestUser",
+        guild
+      });
+      await sendWelcome(channel, cfg, ctx);
+      return res.json({ ok: true, payload: await guildPayload(client, guild) });
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/guilds/:id/embeds/send", requireAuth, async (req, res) => {
+    const guild = client.guilds.cache.get(req.params.id);
+    if (!guild) return res.status(404).json({ error: "guild not found" });
+
+    const body = req.body ?? {};
+    const channel = guild.channels.cache.get(body.channelId);
+    if (!channel || !channel.isTextBased())
+      return res.status(400).json({ error: "Pick a valid text channel." });
+
+    const message = String(body.message ?? "").trim();
+    if (!message) return res.status(400).json({ error: "Message cannot be empty." });
+
+    try {
+      if (body.mode === "embed") {
+        let color = parseInt(String(body.color ?? "#5865F2").replace("#", ""), 16);
+        if (Number.isNaN(color)) color = 0x5865f2;
+        const embed = new EmbedBuilder().setColor(color).setDescription(message);
+        const title = String(body.title ?? "").trim();
+        const footer = String(body.footer ?? "").trim();
+        if (title) embed.setTitle(title.slice(0, 256));
+        if (footer) embed.setFooter({ text: footer.slice(0, 2048) });
+        await channel.send({ embeds: [embed] });
+      } else {
+        await channel.send({ content: message.slice(0, 2000) });
+      }
+      return res.json({ ok: true, payload: await guildPayload(client, guild) });
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/guilds/:id/announcements/schedule", requireAuth, async (req, res) => {
+    const guild = client.guilds.cache.get(req.params.id);
+    if (!guild) return res.status(404).json({ error: "guild not found" });
+
+    const body = req.body ?? {};
+    const channel = guild.channels.cache.get(body.channelId);
+    if (!channel || !channel.isTextBased())
+      return res.status(400).json({ error: "Pick a valid text channel." });
+
+    const message = String(body.message ?? "").trim();
+    if (!message) return res.status(400).json({ error: "Message cannot be empty." });
+
+    const at = Number(body.at);
+    if (!Number.isFinite(at) || at <= Date.now())
+      return res.status(400).json({ error: "Pick a time in the future." });
+
+    const item = scheduleAnnouncement(guild.id, {
+      channelId: body.channelId,
+      mode: body.mode,
+      message,
+      title: String(body.title ?? "").trim(),
+      color: body.color,
+      footer: String(body.footer ?? "").trim(),
+      at
+    });
+
+    return res.json({
+      ok: true,
+      savedId: item.id,
+      payload: await guildPayload(client, guild)
+    });
+  });
+
+  app.post("/api/guilds/:id/announcements/send-now", requireAuth, async (req, res) => {
+    const guild = client.guilds.cache.get(req.params.id);
+    if (!guild) return res.status(404).json({ error: "guild not found" });
+
+    const annId = req.body?.id;
+    const map = upcomingAnnouncements(guild.id);
+    const ann = map.find((a) => a.id === annId);
+    if (!ann) return res.status(400).json({ error: "Announcement not found." });
+
+    try {
+      await postAnnouncement(client, guild.id, ann);
+      cancelAnnouncement(guild.id, annId);
+      return res.json({ ok: true, payload: await guildPayload(client, guild) });
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/guilds/:id/announcements/delete", requireAuth, async (req, res) => {
+    const guild = client.guilds.cache.get(req.params.id);
+    if (!guild) return res.status(404).json({ error: "guild not found" });
+
+    const removed = cancelAnnouncement(guild.id, req.body?.id);
+    if (!removed) return res.status(400).json({ error: "Announcement not found." });
+
+    return res.json({ ok: true, payload: await guildPayload(client, guild) });
+  });
+
+  app.post("/api/guilds/:id/commands/toggles", requireAuth, async (req, res) => {
+    const guild = client.guilds.cache.get(req.params.id);
+    if (!guild) return res.status(404).json({ error: "guild not found" });
+
+    const disabled = Array.isArray(req.body?.disabled)
+      ? [...new Set(req.body.disabled.map((n) => String(n)))]
+      : [];
+
+    const data = getData();
+    if (!data.commands[guild.id]) data.commands[guild.id] = {};
+    data.commands[guild.id].disabled = disabled;
+    save();
+
+    return res.json({ ok: true, payload: await guildPayload(client, guild) });
+  });
+
+  app.use(express.static(PUBLIC));
+
+  const port = Number(process.env.PANEL_PORT || 3000);
+  const host = process.env.PANEL_HOST || "127.0.0.1";
+  const server = app.listen(port, host, () => {
+    console.log(`[panel] dashboard running at http://${host}:${port}`);
+  });
+  return server;
+}
