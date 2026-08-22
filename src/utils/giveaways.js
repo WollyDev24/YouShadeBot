@@ -106,11 +106,12 @@ function joinRow(guildId, gw, disabled = false) {
   );
 }
 
+export function renderMessage(guildId, gw) {
+  return { embeds: [buildEmbed(gw)], components: [joinRow(guildId, gw)] };
+}
+
 export async function postGiveawayMessage(channel, guildId, gw) {
-  const msg = await channel.send({
-    embeds: [buildEmbed(gw)],
-    components: [joinRow(guildId, gw)]
-  });
+  const msg = await channel.send(renderMessage(guildId, gw));
   gw.messageId = msg.id;
   save();
   return msg;
