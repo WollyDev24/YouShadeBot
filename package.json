@@ -6,7 +6,8 @@
   "type": "module",
   "scripts": {
     "start": "node src/index.js",
-    "dev": "node --watch src/index.js"
+    "dev": "node --watch src/index.js",
+    "setup": "node scripts/setup.mjs"
   },
   "license": "MIT",
   "dependencies": {
