@@ -1,6 +1,6 @@
 {
   "name": "youshade-bot",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Discord management bot: temporary channels, channel stats and moderation",
   "main": "src/index.js",
   "type": "module",
