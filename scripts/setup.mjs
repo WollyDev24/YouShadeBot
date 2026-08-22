@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import fs from "node:fs";
 import path from "node:path";
+import os from "node:os";
 import crypto from "node:crypto";
 import readline from "node:readline/promises";
 import { fileURLToPath } from "node:url";
@@ -151,9 +152,9 @@ async function main() {
 
     while (true) {
       values.PANEL_HOST =
-        (await ask(`Panel host (Enter = ${existing.PANEL_HOST || "127.0.0.1"}): `)).trim() ||
+        (await ask(`Panel host (Enter = 0.0.0.0 = reachable on your local network): `)).trim() ||
         existing.PANEL_HOST ||
-        "127.0.0.1";
+        "0.0.0.0";
       break;
     }
 
@@ -205,6 +206,13 @@ async function main() {
   console.log(`  PANEL_HOST     ${values.PANEL_HOST}`);
   console.log(`  PANEL_PORT     ${values.PANEL_PORT}`);
   console.log(`\nDashboard will be at http://${values.PANEL_HOST}:${values.PANEL_PORT}`);
+  if (values.PANEL_HOST === "0.0.0.0" || values.PANEL_HOST === "::") {
+    for (const ni of Object.values(os.networkInterfaces()).flat()) {
+      if (ni?.family === "IPv4" && !ni.internal) {
+        console.log(`From other devices on your network: http://${ni.address}:${values.PANEL_PORT}`);
+      }
+    }
+  }
   console.log("Start the bot with: npm start");
 }
 

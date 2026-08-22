@@ -1,6 +1,7 @@
 import express from "express";
 import cookieParser from "cookie-parser";
 import path from "node:path";
+import os from "node:os";
 import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { ChannelType, EmbedBuilder } from "../lib/discord.js";
@@ -494,9 +495,16 @@ export function startPanel(client) {
   app.use(express.static(PUBLIC));
 
   const port = Number(process.env.PANEL_PORT || 3000);
-  const host = process.env.PANEL_HOST || "127.0.0.1";
+  const host = process.env.PANEL_HOST || "0.0.0.0";
   const server = app.listen(port, host, () => {
     console.log(`[panel] dashboard running at http://${host}:${port}`);
+    if (host === "0.0.0.0" || host === "::") {
+      for (const ni of Object.values(os.networkInterfaces()).flat()) {
+        if (ni?.family === "IPv4" && !ni.internal) {
+          console.log(`[panel] on your local network: http://${ni.address}:${port}`);
+        }
+      }
+    }
   });
   return server;
 }
