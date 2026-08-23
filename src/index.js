@@ -30,4 +30,19 @@ await loadCommands(client);
 await loadEvents(client);
 await registerCommands(client);
 
-client.login(TOKEN);
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const MAX_LOGIN_ATTEMPTS = 5;
+for (let attempt = 1; attempt <= MAX_LOGIN_ATTEMPTS; attempt++) {
+  try {
+    await client.login(TOKEN);
+    break;
+  } catch (err) {
+    if (/invalid token/i.test(err.message)) {
+      console.error("[login] token is invalid — check .env");
+      process.exit(1);
+    }
+    console.error(`[login] attempt ${attempt}/${MAX_LOGIN_ATTEMPTS} failed: ${err.message}`);
+    if (attempt === MAX_LOGIN_ATTEMPTS) process.exit(1);
+    await sleep(5000 * attempt);
+  }
+}

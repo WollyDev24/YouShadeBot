@@ -86,7 +86,7 @@ export async function checkForUpdates(client) {
       ["-c", `sleep 3; cd '${ROOT}' && setsid nohup npm start >> bot.log 2>&1`],
       { detached: true, stdio: "ignore" }
     ).unref();
-    setTimeout(() => process.exit(0), 1500);
+    setTimeout(() => process.exit(0), 3000);
 
     return { status: "updating", commits: count };
   } catch (err) {

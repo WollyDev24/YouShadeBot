@@ -71,6 +71,25 @@ export function buildContext(member) {
 
 const HEX = /^#[0-9a-f]{6}$/i;
 
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const PERMANENT_ERRORS = new Set(["10003", "50001", "50013"]);
+
+async function withRetry(fn, attempts = 3) {
+  let lastErr;
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+      if (attempt === attempts || PERMANENT_ERRORS.has(String(err.code))) throw err;
+      console.warn(`[welcome] send failed (attempt ${attempt}/${attempts}): ${err.message} — retrying…`);
+      await sleep(1000 * attempt);
+    }
+  }
+  throw lastErr;
+}
+
 export function sanitize(input = {}, guild) {
   const cfg = getWelcome(guild.id);
 
@@ -93,19 +112,21 @@ export function sanitize(input = {}, guild) {
 
 export async function sendWelcome(channel, cfg, ctx) {
   const text = renderTemplate(cfg.message, ctx);
+  const payload = {};
 
   if (cfg.mode === "text") {
-    return channel.send({ content: text });
+    payload.content = text;
+  } else {
+    const embed = new EmbedBuilder().setColor(parseInt((cfg.embedColor || "#5865f2").slice(1), 16));
+    if (cfg.title) embed.setTitle(renderTemplate(cfg.title, ctx).slice(0, 256));
+    embed.setDescription(text);
+    payload.embeds = [embed];
+
+    if (cfg.mode === "mix") {
+      const plain = renderTemplate(cfg.mixText || "", ctx);
+      payload.content = plain || undefined;
+    }
   }
 
-  const embed = new EmbedBuilder().setColor(parseInt((cfg.embedColor || "#5865f2").slice(1), 16));
-  if (cfg.title) embed.setTitle(renderTemplate(cfg.title, ctx).slice(0, 256));
-  embed.setDescription(text);
-
-  if (cfg.mode === "mix") {
-    const plain = renderTemplate(cfg.mixText || "", ctx);
-    return channel.send({ content: plain || undefined, embeds: [embed] });
-  }
-
-  return channel.send({ embeds: [embed] });
+  return withRetry(() => channel.send(payload));
 }
