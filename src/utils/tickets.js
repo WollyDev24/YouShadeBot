@@ -82,11 +82,13 @@ export function deleteType(guildId, id) {
 /* ---------- panels ---------- */
 
 function typeButton(type) {
-  return new ButtonBuilder()
+  const button = new ButtonBuilder()
     .setCustomId(`yst_open:${type.id}`)
     .setLabel(type.name.slice(0, 80))
     .setEmoji("\uD83D\uDCAC")
     .setStyle(ButtonStyle.Primary);
+  if (!type.enabled) button.setDisabled(true);
+  return button;
 }
 
 export function buildSinglePanel(type) {
@@ -104,11 +106,13 @@ export function buildCombinedPanel(types) {
     .setColor(0x5865f2)
     .setTitle("\uD83D\uDCDD Support Tickets")
     .setDescription(
-      `Pick what you need help with below.\nEach ticket is private — only you and the staff team can see it.`
+      `Pick what you need help with below.\nEach ticket is private — only you and the staff team can see it.` +
+        (types.some((t) => !t.enabled) ? "\n\nGreyed-out options are currently disabled." : "")
     );
   const rows = [];
-  for (let i = 0; i < Math.min(types.length, 25); i += 5) {
-    rows.push(new ActionRowBuilder().addComponents(...types.slice(i, i + 5).map(typeButton)));
+  const list = types.slice(0, 25);
+  for (let i = 0; i < list.length; i += 5) {
+    rows.push(new ActionRowBuilder().addComponents(...list.slice(i, i + 5).map(typeButton)));
   }
   return { embeds: [embed], components: rows };
 }

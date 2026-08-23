@@ -243,7 +243,7 @@ export function startPanel(client) {
     const type = saveType(guild.id, {
       id: body.id ?? null,
       name: String(body.name ?? "New Panel").slice(0, 80) || "New Panel",
-      enabled: Boolean(body.enabled),
+      enabled: body.enabled === undefined ? true : Boolean(body.enabled),
       categoryId: chan(body.categoryId),
       closedCategoryId: chan(body.closedCategoryId),
       staffRoleId: role(body.staffRoleId),
@@ -313,7 +313,7 @@ export function startPanel(client) {
     if (!channelId || !guild.channels.cache.has(channelId))
       return res.status(400).json({ error: "Pick a channel for the combined panel." });
 
-    const types = typeIds.map((id) => cfg.types[id]).filter((t) => t && t.enabled);
+    const types = typeIds.map((id) => cfg.types[id]).filter(Boolean);
     if (!types.length)
       return res.status(400).json({ error: "Enable at least one ticket type first." });
     if (types.length > 25) types.length = 25;

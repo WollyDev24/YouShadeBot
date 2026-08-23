@@ -284,8 +284,8 @@ function renderTickets(g, textChannels) {
     const cb = document.createElement("input");
     cb.type = "checkbox";
     cb.value = t.id;
-    cb.checked = t.enabled;
-    label.append(cb, ` ${t.name}`);
+    cb.checked = true;
+    label.append(cb, ` ${t.name}${t.enabled ? "" : " (disabled)"}`);
     box.appendChild(label);
   }
 }
