@@ -142,6 +142,7 @@ function renderGuild(g) {
   renderFilters(g);
   renderAutoRoles(g);
   renderUpdates(g, textChannels);
+  renderStarboard(g, textChannels);
 }
 
 /* --- welcome --- */
@@ -694,6 +695,40 @@ $("#btn-up-check").addEventListener("click", async (e) => {
     btn.disabled = false;
     btn.textContent = "Check for updates now";
   }
+});
+
+/* --- starboard --- */
+
+function renderStarboard(g, textChannels) {
+  const sel = $("#sb-channel");
+  fillSelect(sel, textChannels, sel.value || g.starboard.channelId, "No text channels", true);
+
+  const thresholdInput = $("#sb-threshold");
+  const fresh = sel.dataset.guildId !== g.id;
+  sel.dataset.guildId = g.id;
+  if (fresh && !sel.value) thresholdInput.value = g.starboard.threshold ?? 3;
+
+  $("#sb-status").textContent = g.starboard.enabled
+    ? `Starboard is on — ${g.starboard.threshold}+ ⭐ reposts to the selected channel.`
+    : g.starboard.channelId
+      ? `Starboard is disabled — last channel was #${g.channels.find((c) => c.id === g.starboard.channelId)?.name ?? "(deleted)"}.`
+      : "Starboard is off — pick a channel and save.";
+}
+
+$("#btn-sb-save").addEventListener("click", (e) =>
+  withGuild(
+    "starboard/save",
+    {
+      channelId: $("#sb-channel").value || null,
+      threshold: Number($("#sb-threshold").value)
+    },
+    e.currentTarget
+  )
+);
+
+$("#btn-sb-disable").addEventListener("click", async (e) => {
+  if (!confirm("Disable the starboard? Existing board posts are kept.")) return;
+  await withGuild("starboard/disable", {}, e.currentTarget);
 });
 
 /* --- giveaways --- */

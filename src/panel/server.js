@@ -21,6 +21,7 @@ import {
   rerollGiveaway
 } from "../utils/giveaways.js";
 import { getLogChannel, setLogChannel, checkForUpdates } from "../utils/updater.js";
+import { getStarboardConfig, setStarboard, disableStarboard } from "../utils/starboard.js";
 import { registerCommands } from "../utils/register.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -106,6 +107,10 @@ async function guildPayload(client, guild) {
     })),
     disabledCommands: data.commands?.[guild.id]?.disabled ?? [],
     logChannelId: getLogChannel(guild.id),
+    starboard: (() => {
+      const s = getStarboardConfig(guild.id);
+      return { enabled: s.enabled, channelId: s.channelId, threshold: s.threshold };
+    })(),
     availableCommands: [...client.commands.keys()].sort(),
     channels,
     categories,
@@ -636,6 +641,32 @@ export function startPanel(client) {
         return res.status(400).json({ error: "Pick a valid text channel." });
     }
     setLogChannel(guild.id, channelId || null);
+    return res.json({ ok: true, payload: await guildPayload(client, guild) });
+  });
+
+  app.post("/api/guilds/:id/starboard/save", requireAuth, async (req, res) => {
+    const guild = client.guilds.cache.get(req.params.id);
+    if (!guild) return res.status(404).json({ error: "guild not found" });
+
+    const channelId = req.body?.channelId;
+    if (channelId) {
+      const ch = guild.channels.cache.get(channelId);
+      if (!ch || !ch.isTextBased())
+        return res.status(400).json({ error: "Pick a valid text channel." });
+    }
+    const threshold = Number(req.body?.threshold);
+    if (Number.isFinite(threshold) && threshold < 1)
+      return res.status(400).json({ error: "Threshold must be at least 1." });
+
+    const cfg = setStarboard(guild.id, { channelId: channelId || null, threshold });
+    if (!cfg.channelId) return res.status(400).json({ error: "Pick a channel first." });
+    return res.json({ ok: true, payload: await guildPayload(client, guild) });
+  });
+
+  app.post("/api/guilds/:id/starboard/disable", requireAuth, async (req, res) => {
+    const guild = client.guilds.cache.get(req.params.id);
+    if (!guild) return res.status(404).json({ error: "guild not found" });
+    disableStarboard(guild.id);
     return res.json({ ok: true, payload: await guildPayload(client, guild) });
   });
 
