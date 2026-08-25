@@ -8,54 +8,52 @@ function rng(min, max) {
 
 const GIFS = {
   marry_yes: [
-    "https://media.tenor.com/nQxYKfNKM-0AAAAM/wedding-rings.gif",
-    "https://media.tenor.com/pMbGhfCTUj8AAAAM/rings-wedding.gif",
-    "https://media.tenor.com/iXvHMqhMB-8AAAAM/get-married-wedding.gif"
+    "https://media.giphy.com/media/l0MYt5jPR6QX5pnqM/giphy.gif",
+    "https://media.giphy.com/media/3ohhwxmNcPvwyRqYKI/giphy.gif",
+    "https://media.giphy.com/media/XkzDebnXFTbHO/giphy.gif"
   ],
   marry_no: [
-    "https://media.tenor.com/WKiKE7yB1bYAAAAM/sad-walking-away.gif",
-    "https://media.tenor.com/M3aWmJWEy-YAAAAM/no-nope.gif",
-    "https://media.tenor.com/JCpovA2J6LsAAAAM/oh-no-really.gif"
+    "https://media.giphy.com/media/3o7TKFmcX1aW4pv3FC/giphy.gif",
+    "https://media.giphy.com/media/10JhviFuU2gWD6/giphy.gif",
+    "https://media.giphy.com/media/l0HlBO7eyXzSZkJri/giphy.gif"
   ],
   marry_mutual: [
-    "https://media.tenor.com/nQxYKfNKM-0AAAAM/wedding-rings.gif",
-    "https://media.tenor.com/MHn3Zk0Wq-0AAAAM/love-hearts.gif",
-    "https://media.tenor.com/6F-7gD-s0nQAAAAM/engagement-proposal.gif"
+    "https://media.giphy.com/media/l0HlIsKwA9xQxvS00/giphy.gif",
+    "https://media.giphy.com/media/3oEjI6SIIHBdRxXI40/giphy.gif",
+    "https://media.giphy.com/media/JUvSjMi1usMk0/giphy.gif"
   ],
   kiss: [
-    "https://media.tenor.com/5yaGwqxM0T0AAAAM/kiss-love.gif",
-    "https://media.tenor.com/1KJPpWmMKcgAAAAM/kissing-kiss.gif",
-    "https://media.tenor.com/5yaGwqxM0T0AAAAM/kiss.gif",
-    "https://media.tenor.com/Mj1kzbH1hn0AAAAM/kiss-heart.gif"
+    "https://media.giphy.com/media/l0MYGb1LuZ3n7dRnO/giphy.gif",
+    "https://media.giphy.com/media/AYaorNT5eOGBo/giphy.gif",
+    "https://media.giphy.com/media/WaI2vVzIa3LGU/giphy.gif"
   ],
   slap: [
-    "https://media.tenor.com/M5HgEhrtsGcAAAAM/slap.gif",
-    "https://media.tenor.com/VIXxELDOnmsAAAAM/slap-in-the-face.gif",
-    "https://media.tenor.com/e8kMYZqLnhgAAAAM/slap-hit.gif"
+    "https://media.giphy.com/media/l0MYyBWacS04pDqic/giphy.gif",
+    "https://media.giphy.com/media/11s7VY5aGTPtV6/giphy.gif",
+    "https://media.giphy.com/media/l378bu8bJWzvXbKsE/giphy.gif"
   ],
   fight: [
-    "https://media.tenor.com/Vt4bQ5M7gLwAAAAM/fight-brawl.gif",
-    "https://media.tenor.com/jFHuMEUjWmsAAAAM/fight-punch.gif",
-    "https://media.tenor.com/uPlfVNDnb2kAAAAM/fight-punching.gif"
+    "https://media.giphy.com/media/l0HlBO7eyXzSZkJri/giphy.gif",
+    "https://media.giphy.com/media/3oEjI6SIIHBdRxXI40/giphy.gif",
+    "https://media.giphy.com/media/l4FGI2HnlKMvKwfG0/giphy.gif"
   ],
   hug: [
-    "https://media.tenor.com/JF0c9j9x8qgAAAAM/hug-cuddle.gif",
-    "https://media.tenor.com/rAY1pG4cUx0AAAAM/hug-hugging.gif",
-    "https://media.tenor.com/qNjUF80_Vq4AAAAM/hug-cute.gif"
+    "https://media.giphy.com/media/l378bpHYLrBycrq1a/giphy.gif",
+    "https://media.giphy.com/media/l0Hlx1b4KB0dRr20E/giphy.gif",
+    "https://media.giphy.com/media/VbW9vSG9BxAei/giphy.gif"
   ],
   pat: [
-    "https://media.tenor.com/QFe_LzgV4N0AAAAM/pat-pat-pat.gif",
-    "https://media.tenor.com/9wC4YEeI8-0AAAAM/pat-head-pat.gif",
-    "https://media.tenor.com/fggXFMOIyYcAAAAM/pat-pet.gif"
+    "https://media.giphy.com/media/JIX9t2j0ZTN9S/giphy.gif",
+    "https://media.giphy.com/media/l0MYGb1LuZ3n7dRnO/giphy.gif",
+    "https://media.giphy.com/media/3ohhwxkT9dQi0M5FM4/giphy.gif"
   ]
 };
 
-function gif(category) {
-  return pick(GIFS[category]);
-}
-
-function reply(interaction, color, description, gifCategory) {
-  const embed = new EmbedBuilder().setColor(color).setDescription(description).setImage(gif(gifCategory));
+async function reply(interaction, color, description, gifCategory) {
+  const embed = new EmbedBuilder().setColor(color).setDescription(description);
+  try {
+    embed.setImage(pick(GIFS[gifCategory]));
+  } catch {}
   return interaction.reply({ embeds: [embed] });
 }
 
@@ -146,9 +144,9 @@ export default {
         const roll = Math.random();
         const fmt = (s) => s.replace(/\{a\}/g, a).replace(/\{b\}/g, b);
 
-        if (roll < 0.33) return reply(interaction, 0x57f287, fmt(pick(MARRY_YES)), "marry_yes");
-        if (roll < 0.66) return reply(interaction, 0x57f287, fmt(pick(MARRY_MUTUAL)), "marry_mutual");
-        return reply(interaction, 0xed4245, fmt(pick(MARRY_NO)), "marry_no");
+        if (roll < 0.33) return await reply(interaction, 0x57f287, fmt(pick(MARRY_YES)), "marry_yes");
+        if (roll < 0.66) return await reply(interaction, 0x57f287, fmt(pick(MARRY_MUTUAL)), "marry_mutual");
+        return await reply(interaction, 0xed4245, fmt(pick(MARRY_NO)), "marry_no");
       }
 
       case "kiss": {
@@ -161,7 +159,7 @@ export default {
           "{a} gave {b} a surprise kiss! {b} was not expecting that.",
           "A gentle kiss between {a} and {b}. How romantic!"
         ]).replace(/\{a\}/g, a).replace(/\{b\}/g, b);
-        return reply(interaction, 0xeb459e, text, "kiss");
+        return await reply(interaction, 0xeb459e, text, "kiss");
       }
 
       case "slap": {
@@ -174,7 +172,7 @@ export default {
           "{b} got slapped by {a}. No one saw that coming.",
           "{a} slapped {b}! Everyone in the room went silent."
         ]).replace(/\{a\}/g, a).replace(/\{b\}/g, b);
-        return reply(interaction, 0xed4245, text, "slap");
+        return await reply(interaction, 0xed4245, text, "slap");
       }
 
       case "fight": {
@@ -202,14 +200,14 @@ export default {
         ];
 
         if (aRoll === bRoll) {
-          return reply(interaction, 0xfee75c, `It's a tie! ${a} and ${b} both dealt ${aRoll} damage. ${bystander} declared it a draw.`, "fight");
+          return await reply(interaction, 0xfee75c, `It's a tie! ${a} and ${b} both dealt ${aRoll} damage. ${bystander} declared it a draw.`, "fight");
         }
 
         const winner = aRoll > bRoll ? a : b;
         const loser = aRoll > bRoll ? b : a;
         const color = aRoll > bRoll ? 0x57f287 : 0xed4245;
         const text = fmt(pick(FIGHT).replace(/\{w\}/g, winner).replace(/\{loser\}/g, loser));
-        return reply(interaction, color, text, "fight");
+        return await reply(interaction, color, text, "fight");
       }
 
       case "hug": {
@@ -222,7 +220,7 @@ export default {
           `${a} surprise-hugged ${b}! No escape!`,
           `A group hug? No, just ${a} hugging ${b} very enthusiastically.`
         ]);
-        return reply(interaction, 0x57f287, text, "hug");
+        return await reply(interaction, 0x57f287, text, "hug");
       }
 
       case "pat": {
@@ -235,7 +233,7 @@ export default {
           `${a} patted ${b} so much they started purring.`,
           `${a} gave ${b} exactly 3 pats. That's the perfect number.`
         ]);
-        return reply(interaction, 0xfee75c, text, "pat");
+        return await reply(interaction, 0xfee75c, text, "pat");
       }
     }
   }
