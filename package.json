@@ -5,7 +5,7 @@
   "main": "src/index.js",
   "type": "module",
   "scripts": {
-    "start": "node scripts/start.mjs",
+    "start": "bash scripts/start.sh",
     "dev": "node --watch src/index.js",
     "setup": "node scripts/setup.mjs"
   },
