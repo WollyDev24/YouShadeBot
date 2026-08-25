@@ -1,7 +1,21 @@
 import "dotenv/config";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { Client, Collection, GatewayIntentBits } from "./lib/discord.js";
 import { loadCommands, loadEvents } from "./utils/handlers.js";
 import { registerCommands } from "./utils/register.js";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const PID_FILE = path.join(__dirname, "..", "bot.pid");
+
+function cleanup() {
+  try { fs.unlinkSync(PID_FILE); } catch {}
+  process.exit(0);
+}
+
+process.on("SIGINT", cleanup);
+process.on("SIGTERM", cleanup);
 
 const client = new Client({
   intents: [
