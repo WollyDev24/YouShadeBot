@@ -919,7 +919,7 @@ function createEmojiPicker() {
   emojiPickerEl = picker;
 
   document.addEventListener("click", (e) => {
-    if (!picker.contains(e.target) && !e.target.classList.contains("emoji-picker-btn")) {
+    if (!picker.contains(e.target) && !e.target.classList.contains("emoji-picker-btn") && !e.target.classList.contains("emoji-trigger")) {
       picker.classList.add("hidden");
       emojiPickerTarget = null;
     }
