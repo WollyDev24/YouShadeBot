@@ -11,11 +11,14 @@ const {
   EmbedBuilder,
   GatewayIntentBits,
   MessageFlags,
+  ModalBuilder,
   PermissionFlagsBits,
   PermissionsBitField,
   REST,
   Routes,
-  SlashCommandBuilder
+  SlashCommandBuilder,
+  TextInputBuilder,
+  TextInputStyle
 } = discord;
 
 export {
@@ -29,11 +32,14 @@ export {
   EmbedBuilder,
   GatewayIntentBits,
   MessageFlags,
+  ModalBuilder,
   PermissionFlagsBits,
   PermissionsBitField,
   REST,
   Routes,
-  SlashCommandBuilder
+  SlashCommandBuilder,
+  TextInputBuilder,
+  TextInputStyle
 };
 
 export default discord;
