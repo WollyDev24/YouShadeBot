@@ -3,6 +3,19 @@ import { getData, save } from "./db.js";
 
 export const DEFAULT_STAR = "⭐";
 
+function emojiName(emoji) {
+  const m = String(emoji).match(/^<a?:\w+:(\d+)>$/);
+  return m ? m[1] : String(emoji);
+}
+
+function emojisMatch(reactionEmoji, configEmoji) {
+  if (reactionEmoji.name === configEmoji) return true;
+  if (reactionEmoji.id && configEmoji.startsWith("<")) {
+    return reactionEmoji.id === emojiName(configEmoji);
+  }
+  return false;
+}
+
 export function getStarboardConfig(guildId) {
   const data = getData();
   let cfg = data.starboard[guildId];
@@ -90,7 +103,7 @@ export async function handleStarChange(reaction) {
     const cfg = getStarboardConfig(message.guild.id);
     if (!cfg.enabled || !cfg.channelId) return;
 
-    if (reaction.emoji.name !== cfg.emoji) return;
+    if (!emojisMatch(reaction.emoji, cfg.emoji)) return;
     if (message.channel.id === cfg.channelId) return;
     if (message.author?.bot) return;
 

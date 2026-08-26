@@ -117,6 +117,7 @@ async function guildPayload(client, guild) {
       return { channelId: c.channelId, emojis: { ...c.emojis } };
     })(),
     availableCommands: [...client.commands.keys()].sort(),
+    customEmojis: guild.emojis.cache.map((e) => ({ id: e.id, name: e.name, animated: e.animated })),
     channels,
     categories,
     roles

@@ -144,6 +144,7 @@ function renderGuild(g) {
   renderUpdates(g, textChannels);
   renderStarboard(g, textChannels);
   renderCountingEmojis(g);
+  populateCustomEmojis(g);
 }
 
 /* --- welcome --- */
@@ -862,6 +863,145 @@ function fillSelect(sel, items, selected, emptyLabel, optional) {
   }
   if (selected && items.some((i) => i.id === selected)) sel.value = selected;
   else if (optional) sel.value = "";
+}
+
+/* --- emoji picker --- */
+
+const COMMON_EMOJIS = [
+  "⭐", "❤️", "🔥", "👍", "👎", "✅", "❌", "🎉", "😂", "😍",
+  "🥳", "💯", "🚀", "💀", "👀", "🙌", "💪", "🫡", "⚡", "🏆"
+];
+
+let emojiPickerTarget = null;
+let emojiPickerEl = null;
+
+function createEmojiPicker() {
+  if (emojiPickerEl) return emojiPickerEl;
+  const picker = document.createElement("div");
+  picker.className = "emoji-picker hidden";
+  picker.id = "emoji-picker";
+
+  const search = document.createElement("input");
+  search.type = "text";
+  search.placeholder = "Search emoji…";
+  search.className = "emoji-picker-search";
+  search.addEventListener("input", () => filterEmojiPicker(search.value));
+  picker.appendChild(search);
+
+  const sectionCommon = document.createElement("div");
+  sectionCommon.className = "emoji-picker-section";
+  const labelCommon = document.createElement("div");
+  labelCommon.className = "emoji-picker-label";
+  labelCommon.textContent = "Common";
+  sectionCommon.appendChild(labelCommon);
+  const gridCommon = document.createElement("div");
+  gridCommon.className = "emoji-picker-grid";
+  gridCommon.id = "ep-common";
+  for (const e of COMMON_EMOJIS) {
+    gridCommon.appendChild(makeEmojiBtn(e));
+  }
+  sectionCommon.appendChild(gridCommon);
+  picker.appendChild(sectionCommon);
+
+  const sectionCustom = document.createElement("div");
+  sectionCustom.className = "emoji-picker-section";
+  const labelCustom = document.createElement("div");
+  labelCustom.className = "emoji-picker-label";
+  labelCustom.textContent = "Server";
+  sectionCustom.appendChild(labelCustom);
+  const gridCustom = document.createElement("div");
+  gridCustom.className = "emoji-picker-grid";
+  gridCustom.id = "ep-custom";
+  sectionCustom.appendChild(gridCustom);
+  picker.appendChild(sectionCustom);
+
+  document.body.appendChild(picker);
+  emojiPickerEl = picker;
+
+  document.addEventListener("click", (e) => {
+    if (!picker.contains(e.target) && !e.target.classList.contains("emoji-picker-btn")) {
+      picker.classList.add("hidden");
+      emojiPickerTarget = null;
+    }
+  });
+
+  return picker;
+}
+
+function makeEmojiBtn(emoji) {
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "emoji-picker-btn";
+  btn.dataset.emoji = emoji;
+  if (emoji.startsWith("<")) {
+    const m = emoji.match(/^<a?:(\w+):(\d+)>$/);
+    if (m) {
+      const img = document.createElement("img");
+      img.src = `https://cdn.discordapp.com/emojis/${m[2]}.webp?size=32`;
+      img.alt = m[1];
+      img.width = 24;
+      img.height = 24;
+      btn.appendChild(img);
+    }
+  } else {
+    btn.textContent = emoji;
+  }
+  btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (emojiPickerTarget) {
+      emojiPickerTarget.value = emoji;
+      emojiPickerTarget.dispatchEvent(new Event("input"));
+    }
+    createEmojiPicker().classList.add("hidden");
+    emojiPickerTarget = null;
+  });
+  return btn;
+}
+
+function populateCustomEmojis(guild) {
+  const grid = document.getElementById("ep-custom");
+  if (!grid) return;
+  grid.innerHTML = "";
+  const emojis = guild.customEmojis ?? [];
+  if (!emojis.length) {
+    const span = document.createElement("span");
+    span.className = "muted small";
+    span.textContent = "No custom emojis in this server";
+    grid.appendChild(span);
+    return;
+  }
+  for (const e of emojis) {
+    const tag = e.animated ? "a" : "";
+    grid.appendChild(makeEmojiBtn(`<${tag}:${e.name}:${e.id}>`));
+  }
+}
+
+function filterEmojiPicker(query) {
+  const q = query.toLowerCase().trim();
+  const common = document.getElementById("ep-common");
+  const custom = document.getElementById("ep-custom");
+  if (common) {
+    for (const btn of common.children) {
+      btn.style.display = !q || btn.dataset.emoji.includes(q) ? "" : "none";
+    }
+  }
+  if (custom) {
+    for (const btn of custom.children) {
+      btn.style.display = !q || btn.dataset.emoji.toLowerCase().includes(q) || (btn.querySelector("img")?.alt ?? "").toLowerCase().includes(q) ? "" : "none";
+    }
+  }
+}
+
+function openEmojiPicker(target) {
+  const picker = createEmojiPicker();
+  emojiPickerTarget = target;
+  const rect = target.getBoundingClientRect();
+  picker.style.top = `${rect.bottom + 4}px`;
+  picker.style.left = `${rect.left}px`;
+  picker.classList.remove("hidden");
+  picker.querySelector("input").value = "";
+  filterEmojiPicker("");
+  picker.querySelector("input").focus();
 }
 
 /* --- actions --- */
