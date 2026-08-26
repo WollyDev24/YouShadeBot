@@ -40,6 +40,9 @@ async function guildPayload(client, guild) {
   let triggerName = null;
   if (temp) triggerName = guild.channels.cache.get(temp)?.name ?? null;
 
+  const customEmojis = (await guild.emojis.fetch().catch(() => guild.emojis.cache))
+    .map((e) => ({ id: e.id, name: e.name, animated: e.animated }));
+
   const channels = guild.channels.cache
     .filter((c) => c.type === 0 || c.type === 2)
     .map((c) => ({
@@ -117,7 +120,7 @@ async function guildPayload(client, guild) {
       return { channelId: c.channelId, emojis: { ...c.emojis } };
     })(),
     availableCommands: [...client.commands.keys()].sort(),
-    customEmojis: guild.emojis.cache.map((e) => ({ id: e.id, name: e.name, animated: e.animated })),
+    customEmojis,
     channels,
     categories,
     roles

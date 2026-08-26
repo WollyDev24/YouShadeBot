@@ -995,6 +995,25 @@ function filterEmojiPicker(query) {
 function openEmojiPicker(target) {
   const picker = createEmojiPicker();
   emojiPickerTarget = target;
+  const g = currentGuild();
+  if (g) {
+    const grid = document.getElementById("ep-custom");
+    if (grid) {
+      grid.innerHTML = "";
+      const emojis = g.customEmojis ?? [];
+      if (!emojis.length) {
+        const span = document.createElement("span");
+        span.className = "muted small";
+        span.textContent = "No custom emojis in this server";
+        grid.appendChild(span);
+      } else {
+        for (const e of emojis) {
+          const tag = e.animated ? "a" : "";
+          grid.appendChild(makeEmojiBtn(`<${tag}:${e.name}:${e.id}>`));
+        }
+      }
+    }
+  }
   const rect = target.getBoundingClientRect();
   picker.style.top = `${rect.bottom + 4}px`;
   picker.style.left = `${rect.left}px`;
