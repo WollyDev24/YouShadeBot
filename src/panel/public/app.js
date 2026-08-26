@@ -1004,12 +1004,10 @@ function openEmojiPicker(target) {
   picker.querySelector("input").focus();
 }
 
-document.addEventListener("DOMContentLoaded", () => {
-  document.querySelectorAll(".emoji-trigger").forEach((btn) => {
-    const targetId = btn.dataset.target;
-    const input = targetId && document.getElementById(targetId);
-    if (input) btn.addEventListener("click", () => openEmojiPicker(input));
-  });
+document.querySelectorAll(".emoji-trigger").forEach((btn) => {
+  const targetId = btn.dataset.target;
+  const input = targetId && document.getElementById(targetId);
+  if (input) btn.addEventListener("click", () => openEmojiPicker(input));
 });
 
 /* --- actions --- */
