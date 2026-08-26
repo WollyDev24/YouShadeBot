@@ -141,6 +141,7 @@ function renderGuild(g) {
   renderCommands(g);
   renderFilters(g);
   renderAutoRoles(g);
+  renderPanelRole(g);
   renderUpdates(g, textChannels);
   renderStarboard(g, textChannels);
   renderCountingEmojis(g);
@@ -652,6 +653,20 @@ $("#btn-ar-disable").addEventListener("click", async (e) => {
   if (!confirm("Stop assigning auto-roles to new members?")) return;
   await withGuild("autoroles/disable", {}, e.currentTarget);
 });
+
+/* --- discord panel role --- */
+
+function renderPanelRole(g) {
+  const sel = $("#pn-role");
+  fillSelect(sel, g.roles, g.panelRoleId, "No roles available", true);
+  $("#pn-status").textContent = g.panelRoleId
+    ? `Panel restricted to members with the <@&${g.panelRoleId}> role (plus Manage Server).`
+    : "Panel is open to anyone with **Manage Server** permission.";
+}
+
+$("#btn-pn-save").addEventListener("click", (e) =>
+  withGuild("panel/role", { roleId: $("#pn-role").value || null }, e.currentTarget)
+);
 
 /* --- auto-update --- */
 

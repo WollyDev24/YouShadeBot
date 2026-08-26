@@ -334,6 +334,21 @@
         </section>
 
         <section class="card" data-tab="moderation">
+          <h3>Discord Panel</h3>
+          <p class="muted small">
+            The <code>/panel</code> command opens an interactive management menu inside Discord.
+            Only members with the role below (or Manage Server) can use it.
+          </p>
+
+          <div class="field-row">
+            <label for="pn-role">Panel role</label>
+            <select id="pn-role"></select>
+            <button id="btn-pn-save" class="btn primary">Save</button>
+          </div>
+          <p id="pn-status" class="hint"></p>
+        </section>
+
+        <section class="card" data-tab="moderation">
           <h3>Auto-update</h3>
           <p class="muted small">
             Every hour the bot checks GitHub for new commits. If there are any it pulls them,

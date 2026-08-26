@@ -18,7 +18,8 @@ const DEFAULTS = {
   autoroles: {},
   giveaways: {},
   logs: {},
-  starboard: {}
+  starboard: {},
+  panel: {}
 };
 
 let store;

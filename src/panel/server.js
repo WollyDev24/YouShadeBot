@@ -23,6 +23,7 @@ import {
 } from "../utils/giveaways.js";
 import { getLogChannel, setLogChannel, checkForUpdates } from "../utils/updater.js";
 import { getStarboardConfig, setStarboard, disableStarboard } from "../utils/starboard.js";
+import { getPanelConfig, setPanelRole } from "../utils/panel.js";
 import { registerCommands } from "../utils/register.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -119,6 +120,7 @@ async function guildPayload(client, guild) {
       const c = getGuildCounting(guild.id);
       return { channelId: c.channelId, emojis: { ...c.emojis } };
     })(),
+    panelRoleId: getPanelConfig(guild.id).roleId,
     availableCommands: [...client.commands.keys()].sort(),
     customEmojis,
     channels,
@@ -690,6 +692,18 @@ export function startPanel(client) {
     if (body.sixtyNine) cfg.emojis.sixtyNine = String(body.sixtyNine).slice(0, 32);
     if (body.milestone) cfg.emojis.milestone = String(body.milestone).slice(0, 32);
     commitCounting(guild.id);
+    return res.json({ ok: true, payload: await guildPayload(client, guild) });
+  });
+
+  app.post("/api/guilds/:id/panel/role", requireAuth, async (req, res) => {
+    const guild = client.guilds.cache.get(req.params.id);
+    if (!guild) return res.status(404).json({ error: "guild not found" });
+
+    const roleId = req.body?.roleId || null;
+    if (roleId && !guild.roles.cache.has(roleId))
+      return res.status(400).json({ error: "Role not found." });
+
+    setPanelRole(guild.id, roleId);
     return res.json({ ok: true, payload: await guildPayload(client, guild) });
   });
 
