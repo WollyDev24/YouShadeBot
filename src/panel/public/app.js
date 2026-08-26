@@ -1005,10 +1005,11 @@ function openEmojiPicker(target) {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
-  $("#sb-emoji-pick")?.addEventListener("click", () => openEmojiPicker($("#sb-emoji")));
-  $("#ct-correct-pick")?.addEventListener("click", () => openEmojiPicker($("#ct-correct")));
-  $("#ct-milestone-pick")?.addEventListener("click", () => openEmojiPicker($("#ct-milestone")));
-  $("#ct-69-pick")?.addEventListener("click", () => openEmojiPicker($("#ct-69")));
+  document.querySelectorAll(".emoji-trigger").forEach((btn) => {
+    const targetId = btn.dataset.target;
+    const input = targetId && document.getElementById(targetId);
+    if (input) btn.addEventListener("click", () => openEmojiPicker(input));
+  });
 });
 
 /* --- actions --- */
