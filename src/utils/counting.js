@@ -1,5 +1,11 @@
 import { getData, save } from "./db.js";
 
+export const DEFAULT_COUNTING_EMOJIS = {
+  correct: "\u2705",
+  sixtyNine: "\uD83D\uDD25",
+  milestone: "\uD83C\uDF89"
+};
+
 export function getGuildCounting(guildId) {
   const data = getData();
   if (!data.counting[guildId])
@@ -11,9 +17,18 @@ export function getGuildCounting(guildId) {
       strict: false,
       chill: false,
       statusMessageId: null,
-      totals: {}
+      totals: {},
+      emojis: { ...DEFAULT_COUNTING_EMOJIS }
     };
-  return data.counting[guildId];
+  const cfg = data.counting[guildId];
+  if (!cfg.emojis || typeof cfg.emojis !== "object") {
+    cfg.emojis = { ...DEFAULT_COUNTING_EMOJIS };
+  } else {
+    if (!cfg.emojis.correct) cfg.emojis.correct = DEFAULT_COUNTING_EMOJIS.correct;
+    if (!cfg.emojis.sixtyNine) cfg.emojis.sixtyNine = DEFAULT_COUNTING_EMOJIS.sixtyNine;
+    if (!cfg.emojis.milestone) cfg.emojis.milestone = DEFAULT_COUNTING_EMOJIS.milestone;
+  }
+  return cfg;
 }
 
 export function commit(guildId) {

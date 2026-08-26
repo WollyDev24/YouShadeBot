@@ -11,6 +11,7 @@ import { setupStats, disableStats, refreshStats, statsConfig } from "../utils/st
 import { getTickets, saveType, deleteType, buildSinglePanel, buildCombinedPanel } from "../utils/tickets.js";
 import { getWelcome, sanitize as sanitizeWelcome, sendWelcome, buildContext } from "../utils/welcome.js";
 import { upcoming as upcomingAnnouncements, scheduleAnnouncement, cancelAnnouncement, postAnnouncement } from "../utils/announcements.js";
+import { getGuildCounting, commit as commitCounting } from "../utils/counting.js";
 import { getRules as getFilterRules, addRule as addFilterRule, removeRule as removeFilterRule } from "../utils/autores.js";
 import { getAutoRoles as getGuildAutoRoles, setAutoRoles as setGuildAutoRoles, disableAutoRoles as disableGuildAutoRoles } from "../utils/autoroles.js";
 import {
@@ -109,7 +110,11 @@ async function guildPayload(client, guild) {
     logChannelId: getLogChannel(guild.id),
     starboard: (() => {
       const s = getStarboardConfig(guild.id);
-      return { enabled: s.enabled, channelId: s.channelId, threshold: s.threshold };
+      return { enabled: s.enabled, channelId: s.channelId, threshold: s.threshold, emoji: s.emoji };
+    })(),
+    counting: (() => {
+      const c = getGuildCounting(guild.id);
+      return { channelId: c.channelId, emojis: { ...c.emojis } };
     })(),
     availableCommands: [...client.commands.keys()].sort(),
     channels,
@@ -657,8 +662,9 @@ export function startPanel(client) {
     const threshold = Number(req.body?.threshold);
     if (Number.isFinite(threshold) && threshold < 1)
       return res.status(400).json({ error: "Threshold must be at least 1." });
+    const emoji = req.body?.emoji;
 
-    const cfg = setStarboard(guild.id, { channelId: channelId || null, threshold });
+    const cfg = setStarboard(guild.id, { channelId: channelId || null, threshold, emoji });
     if (!cfg.channelId) return res.status(400).json({ error: "Pick a channel first." });
     return res.json({ ok: true, payload: await guildPayload(client, guild) });
   });
@@ -667,6 +673,19 @@ export function startPanel(client) {
     const guild = client.guilds.cache.get(req.params.id);
     if (!guild) return res.status(404).json({ error: "guild not found" });
     disableStarboard(guild.id);
+    return res.json({ ok: true, payload: await guildPayload(client, guild) });
+  });
+
+  app.post("/api/guilds/:id/counting/emojis", requireAuth, async (req, res) => {
+    const guild = client.guilds.cache.get(req.params.id);
+    if (!guild) return res.status(404).json({ error: "guild not found" });
+
+    const cfg = getGuildCounting(guild.id);
+    const body = req.body ?? {};
+    if (body.correct) cfg.emojis.correct = String(body.correct).slice(0, 32);
+    if (body.sixtyNine) cfg.emojis.sixtyNine = String(body.sixtyNine).slice(0, 32);
+    if (body.milestone) cfg.emojis.milestone = String(body.milestone).slice(0, 32);
+    commitCounting(guild.id);
     return res.json({ ok: true, payload: await guildPayload(client, guild) });
   });
 

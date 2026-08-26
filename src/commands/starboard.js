@@ -1,10 +1,10 @@
 import { SlashCommandBuilder, PermissionFlagsBits, MessageFlags } from "../lib/discord.js";
-import { getStarboardConfig, setStarboard, disableStarboard } from "../utils/starboard.js";
+import { getStarboardConfig, setStarboard, disableStarboard, DEFAULT_STAR } from "../utils/starboard.js";
 
 export default {
   data: new SlashCommandBuilder()
     .setName("starboard")
-    .setDescription("Highlight messages that collect enough ⭐ reactions")
+    .setDescription("Highlight messages that collect enough reactions")
     .addSubcommand((s) =>
       s
         .setName("set")
@@ -15,9 +15,15 @@ export default {
         .addIntegerOption((o) =>
           o
             .setName("threshold")
-            .setDescription("How many ⭐ a message needs (default 3)")
+            .setDescription("How many reactions a message needs (default 3)")
             .setMinValue(1)
             .setMaxValue(50)
+        )
+        .addStringOption((o) =>
+          o
+            .setName("emoji")
+            .setDescription(`Custom emoji to track (default: ${DEFAULT_STAR})`)
+            .setMaxLength(32)
         )
     )
     .addSubcommand((s) => s.setName("info").setDescription("Show the current starboard settings"))
@@ -39,9 +45,10 @@ export default {
         });
       }
       const threshold = interaction.options.getInteger("threshold");
-      const cfg = setStarboard(guild.id, { channelId: channel.id, threshold });
+      const emoji = interaction.options.getString("emoji");
+      const cfg = setStarboard(guild.id, { channelId: channel.id, threshold, emoji });
       return interaction.reply({
-        content: `Starboard is on — messages with ${cfg.threshold}+ ⭐ (self-stars don't count) will be reposted in ${channel}.`,
+        content: `Starboard is on — messages with ${cfg.threshold}+ ${cfg.emoji} (self-reactions don't count) will be reposted in ${channel}.`,
         flags: MessageFlags.Ephemeral
       });
     }
@@ -72,7 +79,8 @@ export default {
       content:
         `**Starboard** — ${cfg.enabled ? "enabled" : "disabled"}\n` +
         `Channel: <#${cfg.channelId}>\n` +
-        `Threshold: ${cfg.threshold} ⭐\n` +
+        `Emoji: ${cfg.emoji}\n` +
+        `Threshold: ${cfg.threshold}\n` +
         `Messages on the board: ${Object.keys(cfg.entries).length}`,
       flags: MessageFlags.Ephemeral
     });

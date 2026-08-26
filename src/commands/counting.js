@@ -1,5 +1,5 @@
 import { SlashCommandBuilder, ChannelType, PermissionsBitField, MessageFlags, EmbedBuilder } from "../lib/discord.js";
-import { getGuildCounting, topCounters, commit, upsertStatus } from "../utils/counting.js";
+import { getGuildCounting, topCounters, commit, upsertStatus, DEFAULT_COUNTING_EMOJIS } from "../utils/counting.js";
 
 export default {
   data: new SlashCommandBuilder()
@@ -18,6 +18,24 @@ export default {
         )
         .addBooleanOption((o) =>
           o.setName("strict").setDescription("Strict mode: any non-number message breaks the count")
+        )
+        .addStringOption((o) =>
+          o
+            .setName("correct_emoji")
+            .setDescription(`Emoji for correct counts (default: ${DEFAULT_COUNTING_EMOJIS.correct})`)
+            .setMaxLength(32)
+        )
+        .addStringOption((o) =>
+          o
+            .setName("milestone_emoji")
+            .setDescription(`Emoji for milestones (default: ${DEFAULT_COUNTING_EMOJIS.milestone})`)
+            .setMaxLength(32)
+        )
+        .addStringOption((o) =>
+          o
+            .setName("sixty_nine_emoji")
+            .setDescription(`Emoji for 69 (default: ${DEFAULT_COUNTING_EMOJIS.sixtyNine})`)
+            .setMaxLength(32)
         )
     )
     .addSubcommand((s) => s.setName("disable").setDescription("Disable the counting game"))
@@ -54,12 +72,18 @@ export default {
       }
       const channel = interaction.options.getChannel("channel");
       const strict = interaction.options.getBoolean("strict") ?? cfg.strict;
+      const correctEmoji = interaction.options.getString("correct_emoji");
+      const milestoneEmoji = interaction.options.getString("milestone_emoji");
+      const sixtyNineEmoji = interaction.options.getString("sixty_nine_emoji");
 
       cfg.channelId = channel.id;
       cfg.strict = strict;
       cfg.current = 0;
       cfg.lastUserId = null;
       cfg.statusMessageId = null;
+      if (correctEmoji) cfg.emojis.correct = correctEmoji;
+      if (milestoneEmoji) cfg.emojis.milestone = milestoneEmoji;
+      if (sixtyNineEmoji) cfg.emojis.sixtyNine = sixtyNineEmoji;
       commit(guild.id);
 
       upsertStatus(guild.id, channel);
@@ -133,7 +157,12 @@ export default {
           { name: "Current", value: String(cfg.current), inline: true },
           { name: "Next", value: String(cfg.current + 1), inline: true },
           { name: "Best streak", value: String(cfg.best), inline: true },
-          { name: "Mode", value: mode, inline: true }
+          { name: "Mode", value: mode, inline: true },
+          {
+            name: "Emojis",
+            value: `Correct: ${cfg.emojis.correct} · 69: ${cfg.emojis.sixtyNine} · Milestone: ${cfg.emojis.milestone}`,
+            inline: false
+          }
         );
       return interaction.reply({ embeds: [embed] });
     }

@@ -1,25 +1,27 @@
 import { EmbedBuilder } from "../lib/discord.js";
 import { getData, save } from "./db.js";
 
-const STAR = "⭐";
+export const DEFAULT_STAR = "⭐";
 
 export function getStarboardConfig(guildId) {
   const data = getData();
   let cfg = data.starboard[guildId];
   if (!cfg || typeof cfg !== "object" || !cfg.entries) {
-    cfg = { enabled: false, channelId: null, threshold: 3, entries: cfg?.entries ?? {} };
+    cfg = { enabled: false, channelId: null, threshold: 3, emoji: DEFAULT_STAR, entries: cfg?.entries ?? {} };
     if (cfg.channelId === undefined) cfg.channelId = null;
     if (!cfg.threshold) cfg.threshold = 3;
+    if (!cfg.emoji) cfg.emoji = DEFAULT_STAR;
     data.starboard[guildId] = cfg;
     save();
   }
   return cfg;
 }
 
-export function setStarboard(guildId, { channelId, threshold }) {
+export function setStarboard(guildId, { channelId, threshold, emoji }) {
   const cfg = getStarboardConfig(guildId);
   const t = Number(threshold ?? cfg.threshold);
   cfg.threshold = Number.isFinite(t) && t >= 1 ? Math.min(Math.floor(t), 50) : cfg.threshold;
+  if (emoji !== undefined) cfg.emoji = String(emoji).slice(0, 32) || DEFAULT_STAR;
   if (channelId) {
     cfg.channelId = String(channelId);
     cfg.enabled = true;
@@ -47,7 +49,7 @@ async function countStars(reaction, message) {
   return stars;
 }
 
-function buildBoardEmbed(message, stars) {
+function buildBoardEmbed(message, stars, emoji) {
   const embed = new EmbedBuilder()
     .setColor(0xf1c40f)
     .setAuthor({
@@ -55,7 +57,7 @@ function buildBoardEmbed(message, stars) {
       iconURL: message.author.displayAvatarURL({ size: 64 })
     })
     .setDescription(message.content?.slice(0, 4000) || "*no text content*")
-    .setFooter({ text: `${STAR} ${stars} · in #${message.channel.name}` })
+    .setFooter({ text: `${emoji} ${stars} · in #${message.channel.name}` })
     .setTimestamp(message.createdTimestamp);
 
   const image = message.attachments.find((a) => a.contentType?.startsWith("image/"));
@@ -78,7 +80,6 @@ function buildBoardEmbed(message, stars) {
 
 export async function handleStarChange(reaction) {
   try {
-    if (reaction.emoji.name !== STAR) return;
     if (reaction.partial) reaction = await reaction.fetch().catch(() => null);
     if (!reaction) return;
 
@@ -88,6 +89,8 @@ export async function handleStarChange(reaction) {
 
     const cfg = getStarboardConfig(message.guild.id);
     if (!cfg.enabled || !cfg.channelId) return;
+
+    if (reaction.emoji.name !== cfg.emoji) return;
     if (message.channel.id === cfg.channelId) return;
     if (message.author?.bot) return;
 
@@ -110,7 +113,7 @@ export async function handleStarChange(reaction) {
     if (!boardChannel?.isTextBased()) return;
 
     if (!entry) {
-      const sent = await boardChannel.send({ embeds: [buildBoardEmbed(message, stars)] }).catch(() => null);
+      const sent = await boardChannel.send({ embeds: [buildBoardEmbed(message, stars, cfg.emoji)] }).catch(() => null);
       if (!sent) return;
       cfg.entries[message.id] = { boardMessageId: sent.id, channelId: message.channel.id };
       save();
@@ -123,7 +126,7 @@ export async function handleStarChange(reaction) {
 
     const boardMessage = await boardChannel.messages.fetch(entry.boardMessageId).catch(() => null);
     if (boardMessage) {
-      await boardMessage.edit({ embeds: [buildBoardEmbed(message, stars)] }).catch(() => {});
+      await boardMessage.edit({ embeds: [buildBoardEmbed(message, stars, cfg.emoji)] }).catch(() => {});
     }
   } catch (err) {
     console.error("[starboard]", err.message);

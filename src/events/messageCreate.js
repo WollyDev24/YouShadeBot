@@ -45,10 +45,10 @@ export default {
 
     if (num !== null && num === expected && message.author.id !== cfg.lastUserId) {
       incrementCount(guild.id, message.author.id);
-      message.react("\u2705").catch(() => {});
+      message.react(cfg.emojis.correct).catch(() => {});
       const c = getGuildCounting(guild.id);
       if (MILESTONES.has(c.current)) {
-        message.react(c.current === 69 ? "\uD83D\uDD25" : "\uD83C\uDF89").catch(() => {});
+        message.react(c.current === 69 ? c.emojis.sixtyNine : c.emojis.milestone).catch(() => {});
       }
       upsertStatus(guild.id, message.channel);
       return;

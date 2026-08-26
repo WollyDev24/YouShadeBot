@@ -143,6 +143,7 @@ function renderGuild(g) {
   renderAutoRoles(g);
   renderUpdates(g, textChannels);
   renderStarboard(g, textChannels);
+  renderCountingEmojis(g);
 }
 
 /* --- welcome --- */
@@ -704,12 +705,16 @@ function renderStarboard(g, textChannels) {
   fillSelect(sel, textChannels, sel.value || g.starboard.channelId, "No text channels", true);
 
   const thresholdInput = $("#sb-threshold");
+  const emojiInput = $("#sb-emoji");
   const fresh = sel.dataset.guildId !== g.id;
   sel.dataset.guildId = g.id;
-  if (fresh && !sel.value) thresholdInput.value = g.starboard.threshold ?? 3;
+  if (fresh && !sel.value) {
+    thresholdInput.value = g.starboard.threshold ?? 3;
+    emojiInput.value = g.starboard.emoji ?? "⭐";
+  }
 
   $("#sb-status").textContent = g.starboard.enabled
-    ? `Starboard is on — ${g.starboard.threshold}+ ⭐ reposts to the selected channel.`
+    ? `Starboard is on — ${g.starboard.threshold}+ ${g.starboard.emoji} reposts to the selected channel.`
     : g.starboard.channelId
       ? `Starboard is disabled — last channel was #${g.channels.find((c) => c.id === g.starboard.channelId)?.name ?? "(deleted)"}.`
       : "Starboard is off — pick a channel and save.";
@@ -720,7 +725,8 @@ $("#btn-sb-save").addEventListener("click", (e) =>
     "starboard/save",
     {
       channelId: $("#sb-channel").value || null,
-      threshold: Number($("#sb-threshold").value)
+      threshold: Number($("#sb-threshold").value),
+      emoji: $("#sb-emoji").value.trim() || "⭐"
     },
     e.currentTarget
   )
@@ -730,6 +736,34 @@ $("#btn-sb-disable").addEventListener("click", async (e) => {
   if (!confirm("Disable the starboard? Existing board posts are kept.")) return;
   await withGuild("starboard/disable", {}, e.currentTarget);
 });
+
+/* --- counting emojis --- */
+
+function renderCountingEmojis(g) {
+  const fresh = $("#ct-correct").dataset.guildId !== g.id;
+  $("#ct-correct").dataset.guildId = g.id;
+  if (fresh) {
+    $("#ct-correct").value = g.counting.emojis.correct ?? "✅";
+    $("#ct-milestone").value = g.counting.emojis.milestone ?? "🎉";
+    $("#ct-69").value = g.counting.emojis.sixtyNine ?? "🔥";
+  }
+
+  $("#ct-status").textContent = g.counting.channelId
+    ? `Counting game active in <#${g.counting.channelId}>.`
+    : "No counting channel set up yet — use /counting setup in Discord first.";
+}
+
+$("#btn-ct-save").addEventListener("click", (e) =>
+  withGuild(
+    "counting/emojis",
+    {
+      correct: $("#ct-correct").value.trim() || "✅",
+      milestone: $("#ct-milestone").value.trim() || "🎉",
+      sixtyNine: $("#ct-69").value.trim() || "🔥"
+    },
+    e.currentTarget
+  )
+);
 
 /* --- giveaways --- */
 

@@ -386,15 +386,17 @@
         <section class="card" data-tab="messaging">
           <h3>Starboard</h3>
           <p class="muted small">
-            When a message collects enough ⭐ reactions, it gets reposted to the starboard channel.
-            Self-stars and bots don't count; the board updates live as stars come and go.
+            When a message collects enough reactions, it gets reposted to the starboard channel.
+            Self-reactions and bots don't count; the board updates live as reactions come and go.
           </p>
 
           <div class="field-row">
             <label for="sb-channel">Board channel</label>
             <select id="sb-channel"></select>
-            <label for="sb-threshold">Stars needed</label>
+            <label for="sb-threshold">Reactions needed</label>
             <input type="number" id="sb-threshold" min="1" max="50" value="3" />
+            <label for="sb-emoji">Emoji</label>
+            <input type="text" id="sb-emoji" maxlength="32" value="⭐" style="width:60px" />
           </div>
 
           <div class="field-row">
@@ -402,6 +404,28 @@
             <button id="btn-sb-disable" class="btn danger">Disable starboard</button>
           </div>
           <p id="sb-status" class="hint"></p>
+        </section>
+
+        <section class="card" data-tab="messaging">
+          <h3>Counting Game Emojis</h3>
+          <p class="muted small">
+            Customize the emojis the bot reacts with during the counting game.
+            Set up the counting channel first with <code>/counting setup</code>.
+          </p>
+
+          <div class="field-row">
+            <label for="ct-correct">Correct count</label>
+            <input type="text" id="ct-correct" maxlength="32" value="✅" style="width:60px" />
+            <label for="ct-milestone">Milestone</label>
+            <input type="text" id="ct-milestone" maxlength="32" value="🎉" style="width:60px" />
+            <label for="ct-69">69</label>
+            <input type="text" id="ct-69" maxlength="32" value="🔥" style="width:60px" />
+          </div>
+
+          <div class="field-row">
+            <button id="btn-ct-save" class="btn primary">Save emojis</button>
+          </div>
+          <p id="ct-status" class="hint"></p>
         </section>
 
       </div>
