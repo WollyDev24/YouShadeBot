@@ -1004,6 +1004,11 @@ function openEmojiPicker(target) {
   picker.querySelector("input").focus();
 }
 
+$("#sb-emoji-pick")?.addEventListener("click", () => openEmojiPicker($("#sb-emoji")));
+$("#ct-correct-pick")?.addEventListener("click", () => openEmojiPicker($("#ct-correct")));
+$("#ct-milestone-pick")?.addEventListener("click", () => openEmojiPicker($("#ct-milestone")));
+$("#ct-69-pick")?.addEventListener("click", () => openEmojiPicker($("#ct-69")));
+
 /* --- actions --- */
 
 async function withGuild(action, body = {}, btn = null) {
