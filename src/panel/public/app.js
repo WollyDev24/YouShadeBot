@@ -1015,8 +1015,14 @@ function openEmojiPicker(target) {
     }
   }
   const rect = target.getBoundingClientRect();
-  picker.style.top = `${rect.bottom + 4}px`;
-  picker.style.left = `${rect.left}px`;
+  const pickerH = 340;
+  const spaceBelow = window.innerHeight - rect.bottom;
+  if (spaceBelow < pickerH) {
+    picker.style.top = `${Math.max(4, rect.top - pickerH - 4)}px`;
+  } else {
+    picker.style.top = `${rect.bottom + 4}px`;
+  }
+  picker.style.left = `${Math.min(rect.left, window.innerWidth - 330)}px`;
   picker.classList.remove("hidden");
   picker.querySelector("input").value = "";
   filterEmojiPicker("");
