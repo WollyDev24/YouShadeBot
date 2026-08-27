@@ -52,6 +52,7 @@
           <button type="button" class="tab" data-tab="channels">Channels &amp; Stats</button>
           <button type="button" class="tab" data-tab="messaging">Messaging</button>
           <button type="button" class="tab" data-tab="tickets">Tickets</button>
+          <button type="button" class="tab" data-tab="automod">Automod</button>
           <button type="button" class="tab" data-tab="moderation">Moderation</button>
         </nav>
 
@@ -324,6 +325,116 @@
           <div id="gw-list" class="ann-list"></div>
         </section>
 
+        <section class="card" data-tab="automod">
+          <h3>Automod</h3>
+          <p class="muted small">
+            Automatically moderate messages. Configure filters below, then enable the master toggle.
+          </p>
+          <div class="field-row">
+            <button id="btn-am-toggle" class="btn">Enable automod</button>
+          </div>
+          <p id="am-status" class="hint"></p>
+          <div class="field-row">
+            <label for="am-log-channel">Log channel</label>
+            <select id="am-log-channel"></select>
+            <button id="btn-am-log-save" class="btn primary">Save</button>
+          </div>
+        </section>
+
+        <section class="card" data-tab="automod">
+          <h3>Word Filter</h3>
+          <p class="muted small">Block messages containing specific words. Case-insensitive, whole-word match.</p>
+          <div class="field-row">
+            <label class="check"><input type="checkbox" id="am-word-enabled" /> enabled</label>
+            <label for="am-word-action">Action</label>
+            <select id="am-word-action">
+              <option value="delete">Delete message</option>
+              <option value="warn">Warn user</option>
+              <option value="mute">Mute user</option>
+              <option value="kick">Kick user</option>
+              <option value="ban">Ban user</option>
+            </select>
+          </div>
+          <div class="field-row col">
+            <label for="am-word-input">Add word</label>
+            <div class="field-row">
+              <input type="text" id="am-word-input" maxlength="100" placeholder="badword" />
+              <button id="btn-am-word-add" class="btn primary">Add</button>
+            </div>
+          </div>
+          <div id="am-word-list" class="check-grid"></div>
+          <div class="field-row">
+            <button id="btn-am-word-save" class="btn primary">Save settings</button>
+            <button id="btn-am-word-clear" class="btn danger small">Clear all words</button>
+          </div>
+        </section>
+
+        <section class="card" data-tab="automod">
+          <h3>Spam Detection</h3>
+          <p class="muted small">Detects users sending too many messages in a short window.</p>
+          <div class="field-row">
+            <label class="check"><input type="checkbox" id="am-spam-enabled" /> enabled</label>
+            <label for="am-spam-count">Messages</label>
+            <input type="number" id="am-spam-count" min="2" max="50" value="5" style="width:60px" />
+            <label for="am-spam-window">Window (sec)</label>
+            <input type="number" id="am-spam-window" min="3" max="60" value="10" style="width:60px" />
+            <label for="am-spam-action">Action</label>
+            <select id="am-spam-action">
+              <option value="delete">Delete message</option>
+              <option value="warn">Warn user</option>
+              <option value="mute">Mute user</option>
+              <option value="kick">Kick user</option>
+              <option value="ban">Ban user</option>
+            </select>
+          </div>
+          <button id="btn-am-spam-save" class="btn primary">Save spam settings</button>
+        </section>
+
+        <section class="card" data-tab="automod">
+          <h3>Mass Mention Detection</h3>
+          <p class="muted small">Block messages with too many user/role mentions.</p>
+          <div class="field-row">
+            <label class="check"><input type="checkbox" id="am-mention-enabled" /> enabled</label>
+            <label for="am-mention-threshold">Threshold</label>
+            <input type="number" id="am-mention-threshold" min="2" max="50" value="5" style="width:60px" />
+            <label for="am-mention-action">Action</label>
+            <select id="am-mention-action">
+              <option value="delete">Delete message</option>
+              <option value="warn">Warn user</option>
+              <option value="mute">Mute user</option>
+              <option value="kick">Kick user</option>
+              <option value="ban">Ban user</option>
+            </select>
+          </div>
+          <button id="btn-am-mention-save" class="btn primary">Save</button>
+        </section>
+
+        <section class="card" data-tab="automod">
+          <h3>Invite Link Blocking</h3>
+          <p class="muted small">Block Discord invite links (discord.gg, etc).</p>
+          <div class="field-row">
+            <label class="check"><input type="checkbox" id="am-invite-enabled" /> enabled</label>
+            <label for="am-invite-action">Action</label>
+            <select id="am-invite-action">
+              <option value="delete">Delete message</option>
+              <option value="warn">Warn user</option>
+              <option value="mute">Mute user</option>
+              <option value="kick">Kick user</option>
+              <option value="ban">Ban user</option>
+            </select>
+          </div>
+          <button id="btn-am-invite-save" class="btn primary">Save</button>
+        </section>
+
+        <section class="card" data-tab="automod">
+          <h3>Case History</h3>
+          <p class="muted small">Every automod action is logged here.</p>
+          <div class="field-row">
+            <button id="btn-am-cases-clear" class="btn danger">Clear all cases</button>
+          </div>
+          <div id="am-case-list" class="ann-list"></div>
+        </section>
+
         <section class="card" data-tab="moderation">
           <h3>Commands</h3>
           <p class="muted small">
@@ -372,6 +483,39 @@
             <button id="btn-pn-save" class="btn primary">Save</button>
           </div>
           <p id="pn-status" class="hint"></p>
+        </section>
+
+        <section class="card" data-tab="moderation">
+          <h3>Reaction Roles</h3>
+          <p class="muted small">
+            Post a message, users react to get/lose roles. "Unique" mode: one role per group. "Synced": multiple allowed.
+          </p>
+          <div id="rr-status" class="hint"></div>
+          <div class="field-row">
+            <label for="rr-title">Title</label>
+            <input type="text" id="rr-title" maxlength="100" value="Pick your roles!" style="width:200px" />
+            <label for="rr-color">Color</label>
+            <input type="color" id="rr-color" value="#5865f2" />
+          </div>
+          <div class="field-row col">
+            <label for="rr-description">Description</label>
+            <textarea id="rr-description" rows="2" maxlength="300">React to get a role.</textarea>
+          </div>
+          <div class="field-row">
+            <button id="btn-rr-delete" class="btn danger">Delete reaction role</button>
+          </div>
+          <h4 class="preview-title">Role mappings</h4>
+          <div class="field-row">
+            <label for="rr-emoji">Emoji</label>
+            <input type="text" id="rr-emoji" maxlength="32" style="width:100px" />
+            <button type="button" class="emoji-trigger" data-target="rr-emoji">😀</button>
+            <label for="rr-role">Role</label>
+            <select id="rr-role"></select>
+            <label for="rr-label">Label</label>
+            <input type="text" id="rr-label" maxlength="50" style="width:120px" placeholder="(optional)" />
+            <button id="btn-rr-add-mapping" class="btn primary">Add</button>
+          </div>
+          <div id="rr-mapping-list" class="ann-list"></div>
         </section>
 
         <section class="card" data-tab="moderation">

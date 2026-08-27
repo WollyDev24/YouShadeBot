@@ -40,6 +40,8 @@ import {
   repostSticky
 } from "../utils/sticky.js";
 import { registerCommands } from "../utils/register.js";
+import { getAutomodConfig } from "../utils/automod.js";
+import { getReactionRoles } from "../utils/reactionRoles.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC = path.join(__dirname, "public");
@@ -179,6 +181,36 @@ async function guildPayload(client, guild) {
         authorTag: s.authorTag,
         interval: s.interval,
         messageId: s.messageId
+      }));
+    })(),
+    automod: (() => {
+      const a = getAutomodConfig(guild.id);
+      return {
+        enabled: a.enabled,
+        logChannelId: a.logChannelId,
+        wordFilter: { ...a.wordFilter },
+        spamDetection: { ...a.spamDetection },
+        massMention: { ...a.massMention },
+        inviteBlocking: { ...a.inviteBlocking },
+        caseCount: (a.cases ?? []).length
+      };
+    })(),
+    reactionRoles: (() => {
+      const rrs = getReactionRoles(guild.id);
+      return Object.entries(rrs).map(([messageId, rr]) => ({
+        messageId,
+        channelId: rr.channelId,
+        title: rr.title,
+        description: rr.description,
+        mode: rr.mode,
+        color: rr.color,
+        mappingCount: Object.keys(rr.mappings ?? {}).length,
+        mappings: Object.entries(rr.mappings ?? {}).map(([emoji, m]) => ({
+          emoji,
+          roleId: m.roleId,
+          roleName: guild.roles.cache.get(m.roleId)?.name ?? "(deleted)",
+          label: m.label
+        }))
       }));
     })(),
     panelRoleId: getPanelConfig(guild.id).roleId,
@@ -883,6 +915,170 @@ export function startPanel(client) {
     } catch (err) {
       return res.status(500).json({ error: err.message });
     }
+  });
+
+  app.post("/api/guilds/:id/automod/toggle", requireAuth, async (req, res) => {
+    const guild = client.guilds.cache.get(req.params.id);
+    if (!guild) return res.status(404).json({ error: "guild not found" });
+    const { getAutomodConfig: gac } = await import("../utils/automod.js");
+    const { saveKey } = await import("../utils/db.js");
+    const cfg = gac(guild.id);
+    cfg.enabled = !cfg.enabled;
+    saveKey("automod");
+    return res.json({ ok: true, payload: await guildPayload(client, guild) });
+  });
+
+  app.post("/api/guilds/:id/automod/feature", requireAuth, async (req, res) => {
+    const guild = client.guilds.cache.get(req.params.id);
+    if (!guild) return res.status(404).json({ error: "guild not found" });
+    const { getAutomodConfig: gac } = await import("../utils/automod.js");
+    const { saveKey } = await import("../utils/db.js");
+    const cfg = gac(guild.id);
+    const body = req.body ?? {};
+    const feature = body.feature;
+    if (!["wordFilter", "spamDetection", "massMention", "inviteBlocking"].includes(feature))
+      return res.status(400).json({ error: "Invalid feature." });
+    cfg[feature].enabled = body.enabled ?? !cfg[feature].enabled;
+    saveKey("automod");
+    return res.json({ ok: true, payload: await guildPayload(client, guild) });
+  });
+
+  app.post("/api/guilds/:id/automod/config", requireAuth, async (req, res) => {
+    const guild = client.guilds.cache.get(req.params.id);
+    if (!guild) return res.status(404).json({ error: "guild not found" });
+    const { getAutomodConfig: gac } = await import("../utils/automod.js");
+    const { saveKey } = await import("../utils/db.js");
+    const cfg = gac(guild.id);
+    const body = req.body ?? {};
+    const feature = body.feature;
+    if (!["wordFilter", "spamDetection", "massMention", "inviteBlocking"].includes(feature))
+      return res.status(400).json({ error: "Invalid feature." });
+    if (body.action) cfg[feature].action = body.action;
+    if (body.muteDuration !== undefined) cfg[feature].muteDuration = Number(body.muteDuration);
+    if (body.messagesPerWindow !== undefined) cfg[feature].messagesPerWindow = Number(body.messagesPerWindow);
+    if (body.windowSeconds !== undefined) cfg[feature].windowSeconds = Number(body.windowSeconds);
+    if (body.threshold !== undefined) cfg[feature].threshold = Number(body.threshold);
+    if (body.logChannelId !== undefined) cfg.logChannelId = body.logChannelId || null;
+    saveKey("automod");
+    return res.json({ ok: true, payload: await guildPayload(client, guild) });
+  });
+
+  app.post("/api/guilds/:id/automod/words/add", requireAuth, async (req, res) => {
+    const guild = client.guilds.cache.get(req.params.id);
+    if (!guild) return res.status(404).json({ error: "guild not found" });
+    const { getAutomodConfig: gac } = await import("../utils/automod.js");
+    const { saveKey } = await import("../utils/db.js");
+    const cfg = gac(guild.id);
+    const word = String(req.body?.word ?? "").trim().toLowerCase();
+    if (!word) return res.status(400).json({ error: "Word cannot be empty." });
+    if (cfg.wordFilter.words.includes(word)) return res.status(400).json({ error: "Word already in list." });
+    if (cfg.wordFilter.words.length >= 200) return res.status(400).json({ error: "Max 200 words." });
+    cfg.wordFilter.words.push(word);
+    saveKey("automod");
+    return res.json({ ok: true, payload: await guildPayload(client, guild) });
+  });
+
+  app.post("/api/guilds/:id/automod/words/remove", requireAuth, async (req, res) => {
+    const guild = client.guilds.cache.get(req.params.id);
+    if (!guild) return res.status(404).json({ error: "guild not found" });
+    const { getAutomodConfig: gac } = await import("../utils/automod.js");
+    const { saveKey } = await import("../utils/db.js");
+    const cfg = gac(guild.id);
+    const word = String(req.body?.word ?? "").trim().toLowerCase();
+    const idx = cfg.wordFilter.words.indexOf(word);
+    if (idx === -1) return res.status(400).json({ error: "Word not found." });
+    cfg.wordFilter.words.splice(idx, 1);
+    saveKey("automod");
+    return res.json({ ok: true, payload: await guildPayload(client, guild) });
+  });
+
+  app.post("/api/guilds/:id/automod/words/clear", requireAuth, async (req, res) => {
+    const guild = client.guilds.cache.get(req.params.id);
+    if (!guild) return res.status(404).json({ error: "guild not found" });
+    const { getAutomodConfig: gac } = await import("../utils/automod.js");
+    const { saveKey } = await import("../utils/db.js");
+    const cfg = gac(guild.id);
+    cfg.wordFilter.words = [];
+    saveKey("automod");
+    return res.json({ ok: true, payload: await guildPayload(client, guild) });
+  });
+
+  app.post("/api/guilds/:id/automod/cases/clear", requireAuth, async (req, res) => {
+    const guild = client.guilds.cache.get(req.params.id);
+    if (!guild) return res.status(404).json({ error: "guild not found" });
+    const { getAutomodConfig: gac } = await import("../utils/automod.js");
+    const { saveKey } = await import("../utils/db.js");
+    const cfg = gac(guild.id);
+    cfg.cases = [];
+    cfg.caseCounter = 0;
+    saveKey("automod");
+    return res.json({ ok: true, payload: await guildPayload(client, guild) });
+  });
+
+  app.post("/api/guilds/:id/reactionroles/add-mapping", requireAuth, async (req, res) => {
+    const guild = client.guilds.cache.get(req.params.id);
+    if (!guild) return res.status(404).json({ error: "guild not found" });
+    const { getReactionRoles, addMapping, buildReactionRoleMessage } = await import("../utils/reactionRoles.js");
+    const rrs = getReactionRoles(guild.id);
+    const body = req.body ?? {};
+    const lastKey = Object.keys(rrs).pop();
+    if (!lastKey) return res.status(400).json({ error: "No reaction role message exists." });
+    const rr = rrs[lastKey];
+    const emoji = String(body.emoji ?? "").trim();
+    const roleId = body.roleId;
+    if (!emoji || !roleId) return res.status(400).json({ error: "Emoji and role required." });
+    if (!guild.roles.cache.has(roleId)) return res.status(400).json({ error: "Role not found." });
+    addMapping(guild.id, lastKey, emoji, roleId, String(body.label ?? "").trim());
+    const updated = getReactionRoles(guild.id)[lastKey];
+    if (rr.channelId && rr.messageId) {
+      const ch = guild.channels.cache.get(rr.channelId);
+      if (ch) {
+        const msg = await ch.messages.fetch(rr.messageId).catch(() => null);
+        if (msg) await msg.edit(buildReactionRoleMessage(guild, updated)).catch(() => {});
+      }
+    }
+    return res.json({ ok: true, payload: await guildPayload(client, guild) });
+  });
+
+  app.post("/api/guilds/:id/reactionroles/remove-mapping", requireAuth, async (req, res) => {
+    const guild = client.guilds.cache.get(req.params.id);
+    if (!guild) return res.status(404).json({ error: "guild not found" });
+    const { getReactionRoles, removeMapping, buildReactionRoleMessage } = await import("../utils/reactionRoles.js");
+    const rrs = getReactionRoles(guild.id);
+    const lastKey = Object.keys(rrs).pop();
+    if (!lastKey) return res.status(400).json({ error: "No reaction role message exists." });
+    const rr = rrs[lastKey];
+    const emoji = String(req.body?.emoji ?? "").trim();
+    if (!emoji) return res.status(400).json({ error: "Emoji required." });
+    removeMapping(guild.id, lastKey, emoji);
+    const updated = getReactionRoles(guild.id)[lastKey];
+    if (rr.channelId && rr.messageId) {
+      const ch = guild.channels.cache.get(rr.channelId);
+      if (ch) {
+        const msg = await ch.messages.fetch(rr.messageId).catch(() => null);
+        if (msg) await msg.edit(buildReactionRoleMessage(guild, updated)).catch(() => {});
+      }
+    }
+    return res.json({ ok: true, payload: await guildPayload(client, guild) });
+  });
+
+  app.post("/api/guilds/:id/reactionroles/delete", requireAuth, async (req, res) => {
+    const guild = client.guilds.cache.get(req.params.id);
+    if (!guild) return res.status(404).json({ error: "guild not found" });
+    const { getReactionRoles, deleteReactionRole } = await import("../utils/reactionRoles.js");
+    const rrs = getReactionRoles(guild.id);
+    const lastKey = Object.keys(rrs).pop();
+    if (!lastKey) return res.status(400).json({ error: "No reaction role message exists." });
+    const rr = rrs[lastKey];
+    if (rr.channelId && rr.messageId) {
+      const ch = guild.channels.cache.get(rr.channelId);
+      if (ch) {
+        const msg = await ch.messages.fetch(rr.messageId).catch(() => null);
+        if (msg) await msg.delete().catch(() => {});
+      }
+    }
+    deleteReactionRole(guild.id, lastKey);
+    return res.json({ ok: true, payload: await guildPayload(client, guild) });
   });
 
   app.post("/api/guilds/:id/sticky/set", requireAuth, async (req, res) => {

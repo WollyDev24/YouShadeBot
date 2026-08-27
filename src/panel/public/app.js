@@ -147,6 +147,8 @@ function renderGuild(g) {
   renderCountingEmojis(g);
   renderSurveys(g, textChannels);
   renderSticky(g, textChannels);
+  renderAutomod(g);
+  renderReactionRoles(g);
   populateCustomEmojis(g);
 }
 
@@ -919,6 +921,162 @@ $("#btn-sk-set").addEventListener("click", async (e) => {
   $("#sk-content").value = "";
 });
 
+/* --- automod --- */
+
+function renderAutomod(g) {
+  const cfg = g.automod;
+  $("#am-status").textContent = cfg.enabled
+    ? "Automod is ON."
+    : "Automod is OFF — enable it to start filtering.";
+  $("#btn-am-toggle").textContent = cfg.enabled ? "Disable automod" : "Enable automod";
+  $("#btn-am-toggle").className = cfg.enabled ? "btn danger" : "btn primary";
+
+  fillSelect($("#am-log-channel"), g.channels.filter((c) => c.type === 0), cfg.logChannelId, "No text channels", true);
+
+  $("#am-word-enabled").checked = cfg.wordFilter.enabled;
+  $("#am-word-action").value = cfg.wordFilter.action;
+  $("#am-spam-enabled").checked = cfg.spamDetection.enabled;
+  $("#am-spam-count").value = cfg.spamDetection.messagesPerWindow ?? 5;
+  $("#am-spam-window").value = cfg.spamDetection.windowSeconds ?? 10;
+  $("#am-spam-action").value = cfg.spamDetection.action;
+  $("#am-mention-enabled").checked = cfg.massMention.enabled;
+  $("#am-mention-threshold").value = cfg.massMention.threshold ?? 5;
+  $("#am-mention-action").value = cfg.massMention.action;
+  $("#am-invite-enabled").checked = cfg.inviteBlocking.enabled;
+  $("#am-invite-action").value = cfg.inviteBlocking.action;
+
+  const wordList = $("#am-word-list");
+  wordList.innerHTML = "";
+  const words = cfg.wordFilter.words ?? [];
+  if (!words.length) {
+    wordList.innerHTML = `<span class="muted small">No blocked words.</span>`;
+  } else {
+    for (const w of words) {
+      const label = document.createElement("label");
+      label.className = "check";
+      label.innerHTML = `<code>${escapeHtml(w)}</code>`;
+      const btn = document.createElement("button");
+      btn.className = "btn danger small";
+      btn.textContent = "×";
+      btn.style.marginLeft = "6px";
+      btn.addEventListener("click", () => withGuild("automod/words/remove", { word: w }));
+      label.appendChild(btn);
+      wordList.appendChild(label);
+    }
+  }
+
+  const caseList = $("#am-case-list");
+  caseList.innerHTML = `<span class="muted small">${cfg.caseCount} case(s) logged.</span>`;
+}
+
+$("#btn-am-toggle").addEventListener("click", (e) => withGuild("automod/toggle", {}, e.currentTarget));
+
+$("#btn-am-log-save").addEventListener("click", (e) =>
+  withGuild("automod/config", { feature: "wordFilter", logChannelId: $("#am-log-channel").value || null }, e.currentTarget)
+);
+
+$("#btn-am-word-add").addEventListener("click", async (e) => {
+  const word = $("#am-word-input").value.trim();
+  if (!word) return;
+  await withGuild("automod/words/add", { word }, e.currentTarget);
+  $("#am-word-input").value = "";
+});
+
+$("#btn-am-word-save").addEventListener("click", (e) =>
+  withGuild("automod/config", {
+    feature: "wordFilter",
+    enabled: $("#am-word-enabled").checked,
+    action: $("#am-word-action").value
+  }, e.currentTarget)
+);
+
+$("#btn-am-word-clear").addEventListener("click", async (e) => {
+  if (!confirm("Clear all blocked words?")) return;
+  await withGuild("automod/words/clear", {}, e.currentTarget);
+});
+
+$("#btn-am-spam-save").addEventListener("click", (e) =>
+  withGuild("automod/config", {
+    feature: "spamDetection",
+    enabled: $("#am-spam-enabled").checked,
+    messagesPerWindow: Number($("#am-spam-count").value),
+    windowSeconds: Number($("#am-spam-window").value),
+    action: $("#am-spam-action").value
+  }, e.currentTarget)
+);
+
+$("#btn-am-mention-save").addEventListener("click", (e) =>
+  withGuild("automod/config", {
+    feature: "massMention",
+    enabled: $("#am-mention-enabled").checked,
+    threshold: Number($("#am-mention-threshold").value),
+    action: $("#am-mention-action").value
+  }, e.currentTarget)
+);
+
+$("#btn-am-invite-save").addEventListener("click", (e) =>
+  withGuild("automod/config", {
+    feature: "inviteBlocking",
+    enabled: $("#am-invite-enabled").checked,
+    action: $("#am-invite-action").value
+  }, e.currentTarget)
+);
+
+$("#btn-am-cases-clear").addEventListener("click", async (e) => {
+  if (!confirm("Clear all automod cases?")) return;
+  await withGuild("automod/cases/clear", {}, e.currentTarget);
+});
+
+/* --- reaction roles --- */
+
+function renderReactionRoles(g) {
+  fillSelect($("#rr-role"), g.roles, null, "No roles available", false);
+
+  const rr = g.reactionRoles?.length ? g.reactionRoles[g.reactionRoles.length - 1] : null;
+  if (rr) {
+    $("#rr-title").value = rr.title ?? "Pick your roles!";
+    $("#rr-description").value = rr.description ?? "React to get a role.";
+    $("#rr-color").value = rr.color ?? "#5865f2";
+    $("#rr-status").textContent = `Active in <#${rr.channelId}> with ${rr.mappingCount} mapping(s).`;
+  } else {
+    $("#rr-status").textContent = "No reaction role message — create one below.";
+  }
+
+  const list = $("#rr-mapping-list");
+  list.innerHTML = "";
+  if (!rr || !rr.mappings?.length) {
+    list.innerHTML = `<span class="muted small">No mappings yet.</span>`;
+    return;
+  }
+  for (const m of rr.mappings) {
+    const row = document.createElement("div");
+    row.className = "ann-item";
+    const info = document.createElement("div");
+    info.className = "grow";
+    info.innerHTML = `<strong>${escapeHtml(m.emoji)}</strong> → <span class="dc-mention">@${escapeHtml(m.roleName)}</span> ${m.label ? `<span class="muted small">(${escapeHtml(m.label)})</span>` : ""}`;
+    const btn = document.createElement("button");
+    btn.className = "btn danger small";
+    btn.textContent = "Remove";
+    btn.addEventListener("click", () => withGuild("reactionroles/remove-mapping", { emoji: m.emoji }));
+    row.append(info, btn);
+    list.appendChild(row);
+  }
+}
+
+$("#btn-rr-add-mapping").addEventListener("click", (e) => {
+  const emoji = $("#rr-emoji").value.trim();
+  const roleId = $("#rr-role").value;
+  if (!emoji || !roleId) return toast("Emoji and role required.", true);
+  withGuild("reactionroles/add-mapping", { emoji, roleId, label: $("#rr-label").value.trim() }, e.currentTarget);
+  $("#rr-emoji").value = "";
+  $("#rr-label").value = "";
+});
+
+$("#btn-rr-delete").addEventListener("click", async (e) => {
+  if (!confirm("Delete the reaction role message and all mappings?")) return;
+  await withGuild("reactionroles/delete", {}, e.currentTarget);
+});
+
 /* --- giveaways --- */
 
 function renderGiveaways(g, textChannels) {
@@ -1287,7 +1445,7 @@ $("#btn-commands").addEventListener("click", async (e) => {
 
 /* --- tabs --- */
 
-const TABS = ["channels", "messaging", "tickets", "moderation"];
+const TABS = ["channels", "messaging", "tickets", "automod", "moderation"];
 
 function applyTab(name) {
   if (!TABS.includes(name)) name = TABS[0];

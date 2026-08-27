@@ -23,7 +23,9 @@ const DEFAULTS = {
   starboard: {},
   panel: {},
   surveys: {},
-  sticky: {}
+  sticky: {},
+  automod: {},
+  reactionRoles: {}
 };
 
 let store;
