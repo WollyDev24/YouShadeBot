@@ -9,7 +9,7 @@ import {
   AttachmentBuilder,
   MessageFlags
 } from "../lib/discord.js";
-import { getData, save } from "./db.js";
+import { getData, saveKey } from "./db.js";
 
 const TYPE_DEFAULTS = {
   name: "New Panel",
@@ -51,7 +51,7 @@ export function getTickets(guildId) {
     }
 
     data.tickets[guildId] = cfg;
-    save();
+    saveKey("tickets");
     return cfg;
   }
 
@@ -60,7 +60,7 @@ export function getTickets(guildId) {
 
 function commit(guildId, cfg) {
   getData().tickets[guildId] = cfg;
-  save();
+  saveKey("tickets");
 }
 
 export function saveType(guildId, input) {

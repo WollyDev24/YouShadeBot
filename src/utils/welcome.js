@@ -1,5 +1,5 @@
 import { EmbedBuilder } from "../lib/discord.js";
-import { getData, save } from "./db.js";
+import { getData, saveKey } from "./db.js";
 
 const MODES = new Set(["text", "embed", "mix"]);
 
@@ -18,7 +18,7 @@ export function getWelcome(guildId) {
       embedColor: "#5865f2"
     };
     data.welcome[guildId] = cfg;
-    save();
+    saveKey("welcome");
     return cfg;
   }
 
@@ -31,13 +31,13 @@ export function getWelcome(guildId) {
     cfg.mixText = "Hey {user}, thanks for joining!";
     dirty = true;
   }
-  if (dirty) save();
+  if (dirty) saveKey("welcome");
   return cfg;
 }
 
 export function commitWelcome(guildId) {
   getData().welcome[guildId] = getWelcome(guildId);
-  save();
+  saveKey("welcome");
 }
 
 export function renderTemplate(tpl, ctx) {

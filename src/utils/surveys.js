@@ -9,11 +9,11 @@ import {
   TextInputStyle,
   MessageFlags
 } from "../lib/discord.js";
-import { getData, save } from "./db.js";
+import { getData, saveKey } from "./db.js";
 
 function commitGuild(guildId, surveys) {
   getData().surveys[guildId] = surveys;
-  save();
+  saveKey("surveys");
 }
 
 export function getSurveys(guildId) {

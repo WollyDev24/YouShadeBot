@@ -49,7 +49,23 @@ function authPassword() {
   return crypto.createHash("sha256").update(pw).digest("hex");
 }
 
+const payloadCache = new Map();
+const PAYLOAD_TTL = 5_000;
+
+function getCachedPayload(guildId) {
+  const entry = payloadCache.get(guildId);
+  if (entry && Date.now() - entry.ts < PAYLOAD_TTL) return entry.data;
+  return null;
+}
+
+function invalidatePayload(guildId) {
+  payloadCache.delete(guildId);
+}
+
 async function guildPayload(client, guild) {
+  const cached = getCachedPayload(guild.id);
+  if (cached) return cached;
+
   const temp = getGuildTemp(guild.id).trigger ?? null;
   const stats = statsConfig(guild.id);
 
@@ -82,7 +98,7 @@ async function guildPayload(client, guild) {
   const tickets = getTickets(guild.id);
   const data = getData();
 
-  return {
+  const payload = {
     id: guild.id,
     name: guild.name,
     icon: guild.iconURL({ size: 128 }),
@@ -172,6 +188,9 @@ async function guildPayload(client, guild) {
     categories,
     roles
   };
+
+  payloadCache.set(guild.id, { data: payload, ts: Date.now() });
+  return payload;
 }
 
 export function startPanel(client) {
@@ -221,10 +240,9 @@ export function startPanel(client) {
   app.get("/api/guilds", requireAuth, async (req, res) => {
     const guilds = client.guilds.cache;
     if (!guilds.size) return res.json([]);
-    const out = [];
-    for (const guild of guilds.values()) {
-      out.push(await guildPayload(client, guild));
-    }
+    const out = await Promise.all(
+      [...guilds.values()].map((g) => guildPayload(client, g))
+    );
     return res.json(out.sort((a, b) => a.name.localeCompare(b.name)));
   });
 

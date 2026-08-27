@@ -1,5 +1,5 @@
 import { EmbedBuilder } from "../lib/discord.js";
-import { getData, save } from "./db.js";
+import { getData, saveKey } from "./db.js";
 import crypto from "node:crypto";
 
 function all() {
@@ -36,7 +36,7 @@ export function scheduleAnnouncement(guildId, item) {
     at: Number(item.at),
     posted: false
   };
-  save();
+  saveKey("announcements");
   return data.announcements[guildId][id];
 }
 
@@ -44,7 +44,7 @@ export function cancelAnnouncement(guildId, annId) {
   const map = getAnnouncements(guildId);
   if (!map[annId]) return false;
   delete map[annId];
-  save();
+  saveKey("announcements");
   return true;
 }
 
@@ -73,7 +73,7 @@ export function markPosted(guildId, annId) {
   const map = getAnnouncements(guildId);
   if (map[annId]) {
     map[annId].posted = true;
-    save();
+    saveKey("announcements");
   }
 }
 

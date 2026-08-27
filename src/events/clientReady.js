@@ -18,12 +18,15 @@ export default {
 
     setInterval(async () => {
       const data = getData();
-      for (const guildId of Object.keys(data.stats || {})) {
-        const cfg = statsConfig(guildId);
-        if (!cfg.enabled) continue;
-        const guild = client.guilds.cache.get(guildId);
-        if (guild) await refreshStats(guild);
-      }
+      const guildIds = Object.keys(data.stats || {});
+      await Promise.allSettled(
+        guildIds.map(async (guildId) => {
+          const cfg = statsConfig(guildId);
+          if (!cfg.enabled) return;
+          const guild = client.guilds.cache.get(guildId);
+          if (guild) await refreshStats(guild);
+        })
+      );
     }, 5 * 60_000);
 
     setInterval(() => {

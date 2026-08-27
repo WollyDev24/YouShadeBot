@@ -1,4 +1,4 @@
-import { getData, save } from "./db.js";
+import { getData, saveKey } from "./db.js";
 
 export const DEFAULT_COUNTING_EMOJIS = {
   correct: "\u2705",
@@ -33,7 +33,7 @@ export function getGuildCounting(guildId) {
 
 export function commit(guildId) {
   getData().counting[guildId] = getGuildCounting(guildId);
-  save();
+  saveKey("counting");
 }
 
 export function incrementCount(guildId, userId) {

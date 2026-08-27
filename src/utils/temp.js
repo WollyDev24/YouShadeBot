@@ -1,7 +1,7 @@
 import { ChannelType, PermissionsBitField } from "../lib/discord.js";
-import { getData, save as _save } from "./db.js";
+import { getData, saveKey } from "./db.js";
 
-export const save = _save;
+export const save = saveKey;
 
 const pendingDeletes = new Map();
 
@@ -42,7 +42,7 @@ export async function createTempChannel(guild, member, triggerChannel) {
   });
 
   getGuildTemp(guild.id).channels[channel.id] = member.id;
-  save();
+  saveKey("temp");
 
   await member.voice.setChannel(channel).catch(() => {});
 
@@ -64,7 +64,7 @@ export function scheduleDelete(client, guildId, channelId, delayMs = 60_000) {
     const temp = getGuildTemp(guildId);
     if (temp.channels[channelId] && channel.members.size === 0) {
       delete temp.channels[channelId];
-      save();
+      saveKey("temp");
       await channel.delete("Empty temporary channel").catch(() => {});
     }
   }, delayMs);

@@ -2,7 +2,7 @@ import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { getData, save } from "./db.js";
+import { getData, saveKey } from "./db.js";
 
 const run = promisify(execFile);
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -20,7 +20,7 @@ export function setLogChannel(guildId, channelId) {
   } else {
     getData().logs[guildId] = String(channelId);
   }
-  save();
+  saveKey("logs");
 }
 
 async function notifyLogChannels(client, message) {

@@ -1,11 +1,11 @@
 import { EmbedBuilder } from "../lib/discord.js";
-import { getData, save } from "./db.js";
+import { getData, saveKey } from "./db.js";
 
 const timers = new Map();
 
 function commitGuild(guildId, data) {
   getData().sticky[guildId] = data;
-  save();
+  saveKey("sticky");
 }
 
 export function getStickyAll(guildId) {

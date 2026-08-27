@@ -1,5 +1,5 @@
 import { getTickets } from "../utils/tickets.js";
-import { save } from "../utils/db.js";
+import { saveKey } from "../utils/db.js";
 
 export default {
   name: "channelDelete",
@@ -26,6 +26,6 @@ export default {
       }
     }
 
-    if (dirty) save();
+    if (dirty) saveKey("tickets");
   }
 };

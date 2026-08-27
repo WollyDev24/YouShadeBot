@@ -1,5 +1,5 @@
 import { ChannelType } from "../lib/discord.js";
-import { getData, save } from "./db.js";
+import { getData, saveKey } from "./db.js";
 
 const limiter = (s) => (s.length > 100 ? s.slice(0, 100) : s);
 
@@ -65,7 +65,7 @@ export async function setupStats(guild) {
   cfg.channels = { total: total.id, bots: bots.id, online: online.id, voice: voice.id };
   cfg.enabled = true;
   getData().stats[guild.id] = cfg;
-  save();
+  saveKey("stats");
   return cfg;
 }
 
@@ -77,5 +77,5 @@ export async function disableStats(guild) {
     if (ch) await ch.delete().catch(() => {});
   }
   getData().stats[guild.id] = { categoryId: null, channels: {}, enabled: false };
-  save();
+  saveKey("stats");
 }

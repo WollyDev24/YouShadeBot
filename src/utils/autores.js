@@ -1,4 +1,4 @@
-import { getData, save } from "./db.js";
+import { getData, saveKey } from "./db.js";
 
 function cfg(guildId) {
   const data = getData();
@@ -21,7 +21,7 @@ export function addRule(guildId, { trigger, response, match }) {
     match: match === "exact" ? "exact" : "contains"
   };
   c.rules.push(rule);
-  save();
+  saveKey("autores");
   return rule;
 }
 
@@ -30,7 +30,7 @@ export function removeRule(guildId, id) {
   const idx = rules.findIndex((r) => r.id === id);
   if (idx === -1) return null;
   const [removed] = rules.splice(idx, 1);
-  save();
+  saveKey("autores");
   return removed;
 }
 
@@ -38,7 +38,7 @@ export function clearRules(guildId) {
   const count = getRules(guildId).length;
   if (!count) return 0;
   cfg(guildId).rules = [];
-  save();
+  saveKey("autores");
   return count;
 }
 

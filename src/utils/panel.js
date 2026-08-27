@@ -8,7 +8,7 @@ import {
   TextInputStyle,
   MessageFlags
 } from "../lib/discord.js";
-import { getData, save } from "./db.js";
+import { getData, saveKey } from "./db.js";
 import { getGuildTemp } from "./temp.js";
 import { getWelcome, commitWelcome } from "./welcome.js";
 import { getGuildCounting, commit as commitCounting, DEFAULT_COUNTING_EMOJIS } from "./counting.js";
@@ -28,7 +28,7 @@ export function getPanelConfig(guildId) {
 export function setPanelRole(guildId, roleId) {
   const cfg = getPanelConfig(guildId);
   cfg.roleId = roleId || null;
-  save();
+  saveKey("panel");
   return cfg;
 }
 
@@ -105,7 +105,7 @@ export async function toggleTemp(guild) {
   const { getData: gd } = await import("./db.js");
   if (t.trigger) {
     gd().temp[guild.id] = { trigger: null, channels: {} };
-    (await import("./db.js")).save();
+    (await import("./db.js")).saveKey("temp");
   }
   return tempView(guild);
 }
@@ -544,7 +544,7 @@ export function handleCmdsSubmit(interaction, values) {
   const data = getData();
   if (!data.commands[guild.id]) data.commands[guild.id] = {};
   data.commands[guild.id].disabled = [...new Set(disabled)];
-  save();
+  saveKey("panel");
 
   return commandsView(guild);
 }

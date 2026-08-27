@@ -1,5 +1,5 @@
 import { EmbedBuilder } from "../lib/discord.js";
-import { getData, save } from "./db.js";
+import { getData, saveKey } from "./db.js";
 
 export const DEFAULT_STAR = "⭐";
 
@@ -25,7 +25,7 @@ export function getStarboardConfig(guildId) {
     if (!cfg.threshold) cfg.threshold = 3;
     if (!cfg.emoji) cfg.emoji = DEFAULT_STAR;
     data.starboard[guildId] = cfg;
-    save();
+    saveKey("starboard");
   }
   return cfg;
 }
@@ -39,14 +39,14 @@ export function setStarboard(guildId, { channelId, threshold, emoji }) {
     cfg.channelId = String(channelId);
     cfg.enabled = true;
   }
-  save();
+  saveKey("starboard");
   return cfg;
 }
 
 export function disableStarboard(guildId) {
   const cfg = getStarboardConfig(guildId);
   cfg.enabled = false;
-  save();
+  saveKey("starboard");
   return cfg;
 }
 
@@ -112,7 +112,7 @@ export async function handleStarChange(reaction) {
 
     if (entry && stars === 0) {
       delete cfg.entries[message.id];
-      save();
+      saveKey("starboard");
       const boardChannel = message.guild.channels.cache.get(cfg.channelId);
       if (boardChannel?.isTextBased()) {
         await boardChannel.messages.delete(entry.boardMessageId).catch(() => {});
@@ -129,13 +129,13 @@ export async function handleStarChange(reaction) {
       const sent = await boardChannel.send({ embeds: [buildBoardEmbed(message, stars, cfg.emoji)] }).catch(() => null);
       if (!sent) return;
       cfg.entries[message.id] = { boardMessageId: sent.id, channelId: message.channel.id };
-      save();
+      saveKey("starboard");
       return;
     }
 
     if (entry.lastStars === stars) return;
     entry.lastStars = stars;
-    save();
+    saveKey("starboard");
 
     const boardMessage = await boardChannel.messages.fetch(entry.boardMessageId).catch(() => null);
     if (boardMessage) {

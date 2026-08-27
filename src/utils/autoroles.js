@@ -1,4 +1,4 @@
-import { getData, save } from "./db.js";
+import { getData, saveKey } from "./db.js";
 
 export function getAutoRoles(guildId) {
   const cfg = getData().autoroles[guildId];
@@ -32,13 +32,13 @@ export function setAutoRoles(guild, { humanRoleId, botRoleId }) {
     humanRoleId: human?.id ?? null,
     botRoleId: bot?.id ?? null
   };
-  save();
+  saveKey("autoroles");
   return getAutoRoles(guild.id);
 }
 
 export function disableAutoRoles(guildId) {
   delete getData().autoroles[guildId];
-  save();
+  saveKey("autoroles");
 }
 
 export async function applyAutoRoles(member) {

@@ -4,7 +4,7 @@ import {
   ButtonBuilder,
   ButtonStyle
 } from "../lib/discord.js";
-import { getData, save } from "./db.js";
+import { getData, saveKey } from "./db.js";
 
 const ACCENT = 0x5865f2;
 const ENDED_COLOR = 0x2b2d31;
@@ -43,7 +43,7 @@ export function createGiveaway(guildId, { channelId, title, description, link, c
     winnerIds: []
   };
   c.list[gw.id] = gw;
-  save();
+  saveKey("giveaways");
   return gw;
 }
 
@@ -59,7 +59,7 @@ export function toggleEntry(guildId, id, userId) {
     gw.entries.splice(idx, 1);
     joined = false;
   }
-  save();
+  saveKey("giveaways");
   return { joined, count: gw.entries.length };
 }
 
@@ -113,7 +113,7 @@ export function renderMessage(guildId, gw) {
 export async function postGiveawayMessage(channel, guildId, gw) {
   const msg = await channel.send(renderMessage(guildId, gw));
   gw.messageId = msg.id;
-  save();
+  saveKey("giveaways");
   return msg;
 }
 
@@ -159,7 +159,7 @@ async function conclude(client, guildId, gw) {
   gw.ended = true;
   const winners = pickWinners(gw.entries, gw.winners);
   gw.winnerIds = winners;
-  save();
+  saveKey("giveaways");
 
   const guild = client.guilds.cache.get(guildId);
   if (!guild) return;
@@ -187,7 +187,7 @@ export async function rerollGiveaway(client, guildId, id) {
   if (!fresh.length) throw new Error("Everyone who entered already won.");
 
   gw.winnerIds.push(...fresh);
-  save();
+  saveKey("giveaways");
 
   const guild = client.guilds.cache.get(guildId);
   if (guild) {
