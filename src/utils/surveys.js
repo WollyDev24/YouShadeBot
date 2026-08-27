@@ -92,7 +92,7 @@ export function buildSurveyMessage(guild, survey) {
 
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
-      .setCustomId(`sv_click:${survey.id}`)
+      .setCustomId(`sv:click:${survey.id}`)
       .setLabel(survey.buttonLabel.slice(0, 80))
       .setStyle(ButtonStyle.Primary)
   );
@@ -108,7 +108,7 @@ export function buildSurveyMessage(guild, survey) {
 
 export function surveyModal(survey) {
   const modal = new ModalBuilder()
-    .setCustomId(`sv_modal:${survey.id}`)
+    .setCustomId(`sv:modal:${survey.id}`)
     .setTitle(survey.question.slice(0, 100));
 
   const input = new TextInputBuilder()

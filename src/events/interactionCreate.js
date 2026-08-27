@@ -142,7 +142,7 @@ export default {
       return;
     }
 
-    if ((interaction.isButton() || interaction.isModalSubmit()) && interaction.customId?.startsWith("sv_")) {
+    if ((interaction.isButton() || interaction.isModalSubmit()) && interaction.customId?.startsWith("sv:")) {
       try {
         await handleSurveyInteraction(interaction);
       } catch (err) {
