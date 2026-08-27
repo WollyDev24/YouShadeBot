@@ -19,7 +19,9 @@ const DEFAULTS = {
   giveaways: {},
   logs: {},
   starboard: {},
-  panel: {}
+  panel: {},
+  surveys: {},
+  sticky: {}
 };
 
 let store;

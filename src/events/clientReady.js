@@ -4,6 +4,7 @@ import { runDue } from "../utils/announcements.js";
 import { runDue as runDueGiveaways } from "../utils/giveaways.js";
 import { startAutoUpdate } from "../utils/updater.js";
 import { startPanel } from "../panel/server.js";
+import { restoreAllTimers } from "../utils/sticky.js";
 
 export default {
   name: "clientReady",
@@ -13,6 +14,7 @@ export default {
     client.user.setActivity("/help", { type: "WATCHING" });
 
     startPanel(client);
+    restoreAllTimers(client);
 
     setInterval(async () => {
       const data = getData();

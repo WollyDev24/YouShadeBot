@@ -141,6 +141,16 @@ export default {
       }
       return;
     }
+
+    if ((interaction.isButton() || interaction.isModalSubmit()) && interaction.customId?.startsWith("sv_")) {
+      try {
+        await handleSurveyInteraction(interaction);
+      } catch (err) {
+        console.error("[error] survey interaction:", err);
+        await safeEphemeral(interaction, "Something went wrong with that survey.");
+      }
+      return;
+    }
   }
 };
 
@@ -241,4 +251,63 @@ function customIdIsLeave(customId) {
 }
 function customIdIsKeep(customId) {
   return customId.startsWith("gw_keep:");
+}
+
+async function handleSurveyInteraction(interaction) {
+  const { getSurvey, surveyModal, addResponse, responseEmbed, buildSurveyMessage } = await import("../utils/surveys.js");
+  const { getData: gd, save: sv } = await import("../utils/db.js");
+  const [, action, idStr] = interaction.customId.split(":");
+  const id = Number(idStr);
+  const survey = getSurvey(interaction.guildId, id);
+
+  if (!survey) {
+    return safeEphemeral(interaction, "This survey no longer exists.");
+  }
+
+  if (action === "click") {
+    const existing = survey.responses[interaction.user.id];
+    if (existing) {
+      return interaction.reply({
+        content: `\u2705 You already responded: *${existing.answer}*`,
+        flags: MessageFlags.Ephemeral
+      });
+    }
+    return interaction.showModal(surveyModal(survey));
+  }
+
+  if (action === "modal") {
+    const answer = interaction.fields.getTextInputValue("answer")?.trim();
+    if (!answer) {
+      return interaction.reply({ content: "\u274C Answer cannot be empty.", flags: MessageFlags.Ephemeral });
+    }
+
+    addResponse(interaction.guildId, id, interaction.user, answer);
+
+    await interaction.reply({
+      content: "\u2705 Your response has been recorded!",
+      flags: MessageFlags.Ephemeral
+    });
+
+    if (survey.responseChannelId) {
+      const ch = interaction.guild?.channels.cache.get(survey.responseChannelId);
+      if (ch && ch.isTextBased()) {
+        try {
+          await ch.send({ embeds: [responseEmbed(interaction.user, answer, survey)] });
+        } catch {}
+      }
+    }
+
+    if (survey.messageId && survey.channelId) {
+      const ch = interaction.guild?.channels.cache.get(survey.channelId);
+      if (ch) {
+        const msg = await ch.messages.fetch(survey.messageId).catch(() => null);
+        if (msg) {
+          try {
+            await msg.edit(buildSurveyMessage(interaction.guild, survey));
+          } catch {}
+        }
+      }
+    }
+    return;
+  }
 }

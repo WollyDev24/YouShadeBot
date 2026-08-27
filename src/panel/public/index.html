@@ -82,6 +82,32 @@
           <p id="stats-status" class="hint"></p>
         </section>
 
+        <section class="card" data-tab="channels">
+          <h3>Sticky Messages</h3>
+          <p class="muted small">
+            Keeps a message at the top of a channel by reposting it at a set interval.
+            Use <code>/sticky set</code> in Discord, or create one below.
+          </p>
+
+          <div class="field-row">
+            <label for="sk-channel">Channel</label>
+            <select id="sk-channel"></select>
+          </div>
+          <div class="field-row col">
+            <label for="sk-content">Message content</label>
+            <textarea id="sk-content" rows="3" maxlength="2000" placeholder="The message to keep sticky"></textarea>
+          </div>
+          <div class="field-row">
+            <label for="sk-interval">Interval (min)</label>
+            <input type="number" id="sk-interval" min="1" max="1440" value="5" style="width:80px" />
+            <button id="btn-sk-set" class="btn primary">Set sticky</button>
+          </div>
+          <p id="sk-status" class="hint"></p>
+
+          <h4 class="preview-title">Active stickies</h4>
+          <div id="sk-list" class="ann-list"></div>
+        </section>
+
         <section class="card" data-tab="messaging">
           <h3>Welcome messages</h3>
           <p class="muted small">
@@ -445,6 +471,46 @@
             <button id="btn-ct-save" class="btn primary">Save emojis</button>
           </div>
           <p id="ct-status" class="hint"></p>
+        </section>
+
+        <section class="card" data-tab="messaging">
+          <h3>Surveys</h3>
+          <p class="muted small">
+            Create interactive surveys — users click a button, fill out a text input modal,
+            and their answer (with name and username) is sent to a designated channel as a nice embed.
+          </p>
+
+          <h4 class="preview-title">Create survey</h4>
+          <div class="field-row col">
+            <label for="sv-question">Question</label>
+            <input type="text" id="sv-question" maxlength="200" placeholder="e.g. What should we stream next?" />
+          </div>
+          <div class="field-row col">
+            <label for="sv-description">Description (optional)</label>
+            <input type="text" id="sv-description" maxlength="500" placeholder="Extra context shown below the question" />
+          </div>
+          <div class="field-row">
+            <label for="sv-channel">Post to channel</label>
+            <select id="sv-channel"></select>
+            <label for="sv-response-channel">Responses to channel</label>
+            <select id="sv-response-channel"></select>
+          </div>
+          <div class="field-row">
+            <label for="sv-label">Button label</label>
+            <input type="text" id="sv-label" maxlength="80" value="Take Survey" style="width:140px" />
+            <label for="sv-emoji">Button emoji</label>
+            <input type="text" id="sv-emoji" maxlength="32" value="📋" style="width:100px" />
+            <button type="button" class="emoji-trigger" data-target="sv-emoji">😀</button>
+          </div>
+          <div class="field-row">
+            <label for="sv-color">Embed color</label>
+            <input type="color" id="sv-color" value="#5865f2" title="Embed color" />
+            <button id="btn-sv-create" class="btn primary">Create survey</button>
+          </div>
+          <p id="sv-status" class="hint"></p>
+
+          <h4 class="preview-title">Existing surveys</h4>
+          <div id="sv-list" class="ann-list"></div>
         </section>
 
       </div>

@@ -24,6 +24,21 @@ import {
 import { getLogChannel, setLogChannel, checkForUpdates } from "../utils/updater.js";
 import { getStarboardConfig, setStarboard, disableStarboard } from "../utils/starboard.js";
 import { getPanelConfig, setPanelRole } from "../utils/panel.js";
+import {
+  getSurveys,
+  getSurvey,
+  createSurvey,
+  updateSurvey,
+  deleteSurvey,
+  buildSurveyMessage
+} from "../utils/surveys.js";
+import {
+  getStickyAll,
+  setSticky,
+  removeSticky,
+  startTimer,
+  repostSticky
+} from "../utils/sticky.js";
 import { registerCommands } from "../utils/register.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -119,6 +134,36 @@ async function guildPayload(client, guild) {
     counting: (() => {
       const c = getGuildCounting(guild.id);
       return { channelId: c.channelId, emojis: { ...c.emojis } };
+    })(),
+    surveys: Object.values(getSurveys(guild.id)).map((s) => ({
+      id: s.id,
+      question: s.question,
+      description: s.description,
+      channelId: s.channelId,
+      responseChannelId: s.responseChannelId,
+      messageId: s.messageId,
+      buttonLabel: s.buttonLabel,
+      buttonEmoji: s.buttonEmoji,
+      color: s.color,
+      responseCount: Object.keys(s.responses).length,
+      responses: Object.entries(s.responses).map(([userId, r]) => ({
+        userId,
+        displayName: r.displayName,
+        username: r.username,
+        answer: r.answer,
+        at: r.at
+      }))
+    })),
+    sticky: (() => {
+      const all = getStickyAll(guild.id);
+      return Object.entries(all).map(([channelId, s]) => ({
+        channelId,
+        channelName: guild.channels.cache.get(channelId)?.name ?? "(deleted)",
+        content: s.content,
+        authorTag: s.authorTag,
+        interval: s.interval,
+        messageId: s.messageId
+      }));
     })(),
     panelRoleId: getPanelConfig(guild.id).roleId,
     availableCommands: [...client.commands.keys()].sort(),
@@ -692,6 +737,167 @@ export function startPanel(client) {
     if (body.sixtyNine) cfg.emojis.sixtyNine = String(body.sixtyNine).slice(0, 32);
     if (body.milestone) cfg.emojis.milestone = String(body.milestone).slice(0, 32);
     commitCounting(guild.id);
+    return res.json({ ok: true, payload: await guildPayload(client, guild) });
+  });
+
+  app.post("/api/guilds/:id/surveys/create", requireAuth, async (req, res) => {
+    const guild = client.guilds.cache.get(req.params.id);
+    if (!guild) return res.status(404).json({ error: "guild not found" });
+
+    const body = req.body ?? {};
+    const question = String(body.question ?? "").trim();
+    if (!question) return res.status(400).json({ error: "Question cannot be empty." });
+
+    const color = String(body.color ?? "#5865f2").trim();
+    if (!/^#?[0-9a-fA-F]{6}$/.test(color)) {
+      return res.status(400).json({ error: "Invalid hex color." });
+    }
+
+    const channelId = body.channelId && guild.channels.cache.has(body.channelId) ? body.channelId : null;
+    const responseChannelId = body.responseChannelId && guild.channels.cache.has(body.responseChannelId)
+      ? body.responseChannelId
+      : null;
+
+    const survey = createSurvey(guild.id, {
+      question,
+      description: String(body.description ?? "").trim(),
+      channelId,
+      responseChannelId,
+      buttonLabel: String(body.buttonLabel ?? "Take Survey").slice(0, 80) || "Take Survey",
+      buttonEmoji: String(body.buttonEmoji ?? "📋").slice(0, 32) || "📋",
+      color: color.startsWith("#") ? color : `#${color}`
+    });
+
+    return res.json({ ok: true, savedId: survey.id, payload: await guildPayload(client, guild) });
+  });
+
+  app.post("/api/guilds/:id/surveys/save", requireAuth, async (req, res) => {
+    const guild = client.guilds.cache.get(req.params.id);
+    if (!guild) return res.status(404).json({ error: "guild not found" });
+
+    const body = req.body ?? {};
+    const id = Number(body.id);
+    const survey = getSurvey(guild.id, id);
+    if (!survey) return res.status(400).json({ error: "Survey not found." });
+
+    const channelId = body.channelId && guild.channels.cache.has(body.channelId) ? body.channelId : survey.channelId;
+    const responseChannelId = body.responseChannelId && guild.channels.cache.has(body.responseChannelId)
+      ? body.responseChannelId
+      : survey.responseChannelId;
+
+    updateSurvey(guild.id, id, {
+      question: body.question !== undefined ? String(body.question).trim() || survey.question : survey.question,
+      description: body.description !== undefined ? String(body.description).trim() : survey.description,
+      channelId,
+      responseChannelId,
+      buttonLabel: body.buttonLabel !== undefined ? String(body.buttonLabel).slice(0, 80) || survey.buttonLabel : survey.buttonLabel,
+      buttonEmoji: body.buttonEmoji !== undefined ? String(body.buttonEmoji).slice(0, 32) || survey.buttonEmoji : survey.buttonEmoji,
+      color: body.color !== undefined
+        ? (String(body.color).startsWith("#") ? String(body.color) : `#${String(body.color)}`)
+        : survey.color
+    });
+
+    return res.json({ ok: true, payload: await guildPayload(client, guild) });
+  });
+
+  app.post("/api/guilds/:id/surveys/delete", requireAuth, async (req, res) => {
+    const guild = client.guilds.cache.get(req.params.id);
+    if (!guild) return res.status(404).json({ error: "guild not found" });
+
+    const id = Number(req.body?.id);
+    const removed = deleteSurvey(guild.id, id);
+    if (!removed) return res.status(400).json({ error: "Survey not found." });
+
+    if (removed.messageId && removed.channelId) {
+      const ch = guild.channels.cache.get(removed.channelId);
+      const old = ch ? await ch.messages.fetch(removed.messageId).catch(() => null) : null;
+      if (old) await old.delete().catch(() => {});
+    }
+
+    return res.json({ ok: true, payload: await guildPayload(client, guild) });
+  });
+
+  app.post("/api/guilds/:id/surveys/post", requireAuth, async (req, res) => {
+    const guild = client.guilds.cache.get(req.params.id);
+    if (!guild) return res.status(404).json({ error: "guild not found" });
+
+    const id = Number(req.body?.id);
+    const survey = getSurvey(guild.id, id);
+    if (!survey) return res.status(400).json({ error: "Survey not found." });
+
+    const channelId = req.body?.channelId && guild.channels.cache.has(req.body.channelId)
+      ? req.body.channelId
+      : survey.channelId;
+    if (!channelId) {
+      return res.status(400).json({ error: "Pick a channel to post to." });
+    }
+
+    const ch = guild.channels.cache.get(channelId);
+    if (!ch || !ch.isTextBased()) {
+      return res.status(400).json({ error: "That's not a valid text channel." });
+    }
+
+    try {
+      if (survey.messageId && survey.channelId) {
+        const oldCh = guild.channels.cache.get(survey.channelId);
+        const old = oldCh ? await oldCh.messages.fetch(survey.messageId).catch(() => null) : null;
+        if (old) await old.delete().catch(() => {});
+      }
+
+      const msg = await ch.send(buildSurveyMessage(guild, survey));
+      survey.messageId = msg.id;
+      survey.channelId = channelId;
+      const { save: sv } = await import("../utils/db.js");
+      sv();
+      return res.json({ ok: true, payload: await guildPayload(client, guild) });
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/guilds/:id/sticky/set", requireAuth, async (req, res) => {
+    const guild = client.guilds.cache.get(req.params.id);
+    if (!guild) return res.status(404).json({ error: "guild not found" });
+
+    const body = req.body ?? {};
+    const channelId = body.channelId;
+    if (!channelId || !guild.channels.cache.has(channelId))
+      return res.status(400).json({ error: "Pick a valid channel." });
+
+    const content = String(body.content ?? "").trim();
+    if (!content) return res.status(400).json({ error: "Content cannot be empty." });
+
+    const interval = Number(body.interval);
+    if (!Number.isFinite(interval) || interval < 1 || interval > 1440)
+      return res.status(400).json({ error: "Interval must be 1–1440 minutes." });
+
+    setSticky(guild.id, channelId, {
+      content,
+      authorTag: "Dashboard",
+      authorId: "dashboard",
+      interval
+    });
+
+    await repostSticky(client, guild.id, channelId);
+    startTimer(client, guild.id, channelId);
+
+    return res.json({ ok: true, payload: await guildPayload(client, guild) });
+  });
+
+  app.post("/api/guilds/:id/sticky/remove", requireAuth, async (req, res) => {
+    const guild = client.guilds.cache.get(req.params.id);
+    if (!guild) return res.status(404).json({ error: "guild not found" });
+
+    const channelId = req.body?.channelId;
+    const removed = removeSticky(guild.id, channelId);
+    if (!removed) return res.status(400).json({ error: "No sticky in that channel." });
+
+    if (removed.messageId) {
+      const ch = guild.channels.cache.get(channelId);
+      const old = ch ? await ch.messages.fetch(removed.messageId).catch(() => null) : null;
+      if (old) await old.delete().catch(() => {});
+    }
+
     return res.json({ ok: true, payload: await guildPayload(client, guild) });
   });
 

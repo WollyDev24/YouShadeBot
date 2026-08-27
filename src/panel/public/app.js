@@ -145,6 +145,8 @@ function renderGuild(g) {
   renderUpdates(g, textChannels);
   renderStarboard(g, textChannels);
   renderCountingEmojis(g);
+  renderSurveys(g, textChannels);
+  renderSticky(g, textChannels);
   populateCustomEmojis(g);
 }
 
@@ -780,6 +782,142 @@ $("#btn-ct-save").addEventListener("click", (e) =>
     e.currentTarget
   )
 );
+
+/* --- surveys --- */
+
+function renderSurveys(g, textChannels) {
+  fillSelect($("#sv-channel"), textChannels, $("#sv-channel").value || null, "No text channels", false);
+  fillSelect($("#sv-response-channel"), textChannels, $("#sv-response-channel").value || null, "No text channels", false);
+
+  const count = g.surveys.length;
+  $("#sv-status").textContent = count
+    ? `${count} survey(s) created.`
+    : "No surveys yet — create one above.";
+
+  const list = $("#sv-list");
+  list.innerHTML = "";
+  if (!g.surveys.length) {
+    list.innerHTML = `<span class="muted small">No surveys yet.</span>`;
+    return;
+  }
+
+  for (const s of g.surveys) {
+    const row = document.createElement("div");
+    row.className = "ann-item";
+
+    const info = document.createElement("div");
+    info.className = "grow";
+    const head = document.createElement("div");
+    head.className = "ann-head";
+    head.innerHTML =
+      `<strong>${escapeHtml(s.question)}</strong>` +
+      ` <span class="muted small">#${s.id} · ${s.responseCount} response(s) · ${s.buttonEmoji} ${escapeHtml(s.buttonLabel)}</span>`;
+    const body = document.createElement("div");
+    body.className = "small muted";
+    body.textContent = s.description
+      ? s.description.slice(0, 100) + (s.description.length > 100 ? "..." : "")
+      : (s.channelId ? `Posted in #${g.channels.find((c) => c.id === s.channelId)?.name ?? "(deleted)"}` : "Not posted yet");
+    info.append(head, body);
+
+    const btnPost = document.createElement("button");
+    btnPost.className = "btn small";
+    btnPost.textContent = s.messageId ? "Re-post" : "Post";
+    btnPost.addEventListener("click", (e) => {
+      withGuild("surveys/post", { id: s.id, channelId: $("#sv-channel").value || null }, e.currentTarget);
+    });
+
+    const btnDelete = document.createElement("button");
+    btnDelete.className = "btn danger small";
+    btnDelete.textContent = "Delete";
+    btnDelete.addEventListener("click", async (e) => {
+      if (!confirm(`Delete survey #${s.id} ("${s.question}")? ${s.responseCount} response(s) will be lost.`)) return;
+      await withGuild("surveys/delete", { id: s.id }, e.currentTarget);
+    });
+
+    row.append(info, btnPost, btnDelete);
+    list.appendChild(row);
+  }
+}
+
+$("#btn-sv-create").addEventListener("click", async (e) => {
+  const btn = e.currentTarget;
+  const question = $("#sv-question").value.trim();
+  if (!question) return toast("Enter a question first.", true);
+
+  await withGuild(
+    "surveys/create",
+    {
+      question,
+      description: $("#sv-description").value.trim(),
+      channelId: $("#sv-channel").value || null,
+      responseChannelId: $("#sv-response-channel").value || null,
+      buttonLabel: $("#sv-label").value.trim() || "Take Survey",
+      buttonEmoji: $("#sv-emoji").value.trim() || "📋",
+      color: $("#sv-color").value
+    },
+    btn
+  );
+  $("#sv-question").value = "";
+  $("#sv-description").value = "";
+});
+
+/* --- sticky messages --- */
+
+function renderSticky(g, textChannels) {
+  fillSelect($("#sk-channel"), textChannels, $("#sk-channel").value || null, "No text channels", false);
+
+  const count = g.sticky.length;
+  $("#sk-status").textContent = count
+    ? `${count} active sticky message(s).`
+    : "No sticky messages — set one above or use /sticky set in Discord.";
+
+  const list = $("#sk-list");
+  list.innerHTML = "";
+  if (!g.sticky.length) {
+    list.innerHTML = `<span class="muted small">No active sticky messages.</span>`;
+    return;
+  }
+
+  for (const s of g.sticky) {
+    const row = document.createElement("div");
+    row.className = "ann-item";
+
+    const info = document.createElement("div");
+    info.className = "grow";
+    const head = document.createElement("div");
+    head.className = "ann-head";
+    head.innerHTML =
+      `<span class="dc-mention">#${escapeHtml(s.channelName)}</span>` +
+      ` <span class="muted small">every ${s.interval}m · by ${escapeHtml(s.authorTag)}</span>`;
+    const body = document.createElement("div");
+    body.className = "small";
+    body.textContent = s.content.slice(0, 100) + (s.content.length > 100 ? "..." : "");
+    info.append(head, body);
+
+    const btnRemove = document.createElement("button");
+    btnRemove.className = "btn danger small";
+    btnRemove.textContent = "Remove";
+    btnRemove.addEventListener("click", (e) =>
+      withGuild("sticky/remove", { channelId: s.channelId }, e.currentTarget)
+    );
+
+    row.append(info, btnRemove);
+    list.appendChild(row);
+  }
+}
+
+$("#btn-sk-set").addEventListener("click", async (e) => {
+  const btn = e.currentTarget;
+  const channelId = $("#sk-channel").value;
+  const content = $("#sk-content").value.trim();
+  const interval = Number($("#sk-interval").value);
+  if (!channelId) return toast("Pick a channel first.", true);
+  if (!content) return toast("Enter message content.", true);
+  if (!Number.isFinite(interval) || interval < 1) return toast("Interval must be at least 1 minute.", true);
+
+  await withGuild("sticky/set", { channelId, content, interval }, btn);
+  $("#sk-content").value = "";
+});
 
 /* --- giveaways --- */
 
