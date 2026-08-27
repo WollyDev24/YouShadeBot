@@ -15,9 +15,12 @@ export default {
     .addSubcommand((s) =>
       s
         .setName("create")
-        .setDescription("Create a new survey")
+        .setDescription("Create and post a new survey")
         .addStringOption((o) =>
           o.setName("question").setDescription("The survey question").setRequired(true).setMaxLength(200)
+        )
+        .addChannelOption((o) =>
+          o.setName("channel").setDescription("Channel to post the survey to").setRequired(true)
         )
         .addStringOption((o) =>
           o.setName("description").setDescription("Optional description below the question").setMaxLength(1000)
@@ -66,10 +69,18 @@ export default {
     if (sub === "create") {
       const question = interaction.options.getString("question");
       const description = interaction.options.getString("description") ?? "";
+      const channel = interaction.options.getChannel("channel");
       const responseChannel = interaction.options.getChannel("response_channel");
       const buttonLabel = interaction.options.getString("button_label") ?? "Take Survey";
       const buttonEmoji = interaction.options.getString("button_emoji") ?? "📋";
       const color = interaction.options.getString("color") ?? "#5865f2";
+
+      if (!channel || !channel.isTextBased() || channel.isDMBased()) {
+        return interaction.reply({
+          content: "\u274C The channel must be a text channel in this server.",
+          flags: MessageFlags.Ephemeral
+        });
+      }
 
       if (responseChannel && (!responseChannel.isTextBased() || responseChannel.isDMBased())) {
         return interaction.reply({
@@ -85,19 +96,32 @@ export default {
         });
       }
 
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
       const survey = createSurvey(guild.id, {
         question,
         description,
+        channelId: channel.id,
         responseChannelId: responseChannel?.id ?? null,
         buttonLabel,
         buttonEmoji,
         color: color.startsWith("#") ? color : `#${color}`
       });
 
-      return interaction.reply({
-        content: `\u2705 Survey **#${survey.id}** created!\n**Question:** ${question}\nUse \`/survey post id:${survey.id}\` to send it to a channel.`,
-        flags: MessageFlags.Ephemeral
-      });
+      try {
+        const msg = await channel.send(buildSurveyMessage(guild, survey));
+        survey.messageId = msg.id;
+        const { save } = await import("../utils/db.js");
+        save();
+
+        return interaction.editReply({
+          content: `\u2705 Survey **#${survey.id}** created and posted to <#${channel.id}>!`
+        });
+      } catch (err) {
+        return interaction.editReply({
+          content: `\u2705 Survey **#${survey.id}** created but couldn't post to <#${channel.id}>: ${err.message}\nUse \`/survey post id:${survey.id}\` to retry.`
+        });
+      }
     }
 
     if (sub === "post") {

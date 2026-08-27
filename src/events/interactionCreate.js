@@ -286,14 +286,16 @@ async function handleSurveyInteraction(interaction) {
     await interaction.reply({
       content: "\u2705 Your response has been recorded!",
       flags: MessageFlags.Ephemeral
-    });
+    }).catch(() => {});
 
     if (survey.responseChannelId) {
       const ch = interaction.guild?.channels.cache.get(survey.responseChannelId);
       if (ch && ch.isTextBased()) {
         try {
           await ch.send({ embeds: [responseEmbed(interaction.user, answer, survey)] });
-        } catch {}
+        } catch (err) {
+          console.error("[survey] couldn't send response embed:", err.message);
+        }
       }
     }
 

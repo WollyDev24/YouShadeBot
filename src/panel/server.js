@@ -768,6 +768,18 @@ export function startPanel(client) {
       color: color.startsWith("#") ? color : `#${color}`
     });
 
+    if (channelId) {
+      const ch = guild.channels.cache.get(channelId);
+      if (ch && ch.isTextBased()) {
+        try {
+          const msg = await ch.send(buildSurveyMessage(guild, survey));
+          survey.messageId = msg.id;
+          const { save: sv } = await import("../utils/db.js");
+          sv();
+        } catch {}
+      }
+    }
+
     return res.json({ ok: true, savedId: survey.id, payload: await guildPayload(client, guild) });
   });
 
