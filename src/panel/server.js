@@ -42,6 +42,7 @@ import {
 import { registerCommands } from "../utils/register.js";
 import { getAutomodConfig } from "../utils/automod.js";
 import { getReactionRoles } from "../utils/reactionRoles.js";
+import { isLocked, getStatus, getAllLockdowns, lockChannel, unlockChannel, cleanup } from "../utils/lockdown.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC = path.join(__dirname, "public");
@@ -212,6 +213,17 @@ async function guildPayload(client, guild) {
           label: m.label
         }))
       }));
+    })(),
+    lockdowns: (() => {
+      const lockdowns = getData().lockdowns ?? {};
+      return Object.entries(lockdowns)
+        .filter(([, l]) => l.locked)
+        .map(([channelId, l]) => ({
+          channelId,
+          lockedBy: l.lockedBy,
+          lockedByName: guild.members.cache.get(l.lockedBy)?.user?.tag ?? l.lockedBy,
+          lockedAt: l.lockedAt
+        }));
     })(),
     panelRoleId: getPanelConfig(guild.id).roleId,
     availableCommands: [...client.commands.keys()].sort(),
@@ -1125,6 +1137,63 @@ export function startPanel(client) {
     }
 
     return res.json({ ok: true, payload: await guildPayload(client, guild) });
+  });
+
+  app.post("/api/guilds/:id/lockdown/lock", requireAuth, async (req, res) => {
+    const guild = client.guilds.cache.get(req.params.id);
+    if (!guild) return res.status(404).json({ error: "guild not found" });
+
+    const channelId = req.body?.channelId;
+    const channel = guild.channels.cache.get(channelId);
+    if (!channel || !channel.isTextBased())
+      return res.status(400).json({ error: "Pick a valid text channel." });
+    if (isLocked(channelId))
+      return res.status(400).json({ error: "Channel is already locked." });
+
+    try {
+      await lockChannel(channel, "dashboard");
+      return res.json({ ok: true, payload: await guildPayload(client, guild) });
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/guilds/:id/lockdown/unlock", requireAuth, async (req, res) => {
+    const guild = client.guilds.cache.get(req.params.id);
+    if (!guild) return res.status(404).json({ error: "guild not found" });
+
+    const channelId = req.body?.channelId;
+    const channel = guild.channels.cache.get(channelId);
+    if (!channel) return res.status(400).json({ error: "Channel not found." });
+    if (!isLocked(channelId))
+      return res.status(400).json({ error: "Channel is not locked." });
+
+    try {
+      await unlockChannel(channel);
+      return res.json({ ok: true, payload: await guildPayload(client, guild) });
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/guilds/:id/lockdown/unlock-all", requireAuth, async (req, res) => {
+    const guild = client.guilds.cache.get(req.params.id);
+    if (!guild) return res.status(404).json({ error: "guild not found" });
+
+    const lockdowns = getAllLockdowns();
+    let count = 0;
+    for (const l of lockdowns) {
+      const ch = guild.channels.cache.get(l.channelId);
+      if (ch) {
+        try {
+          await unlockChannel(ch);
+          count++;
+        } catch {}
+      } else {
+        cleanup(l.channelId);
+      }
+    }
+    return res.json({ ok: true, unlocked: count, payload: await guildPayload(client, guild) });
   });
 
   app.post("/api/guilds/:id/panel/role", requireAuth, async (req, res) => {

@@ -149,6 +149,7 @@ function renderGuild(g) {
   renderSticky(g, textChannels);
   renderAutomod(g);
   renderReactionRoles(g);
+  renderLockdown(g);
   populateCustomEmojis(g);
 }
 
@@ -1075,6 +1076,47 @@ $("#btn-rr-add-mapping").addEventListener("click", (e) => {
 $("#btn-rr-delete").addEventListener("click", async (e) => {
   if (!confirm("Delete the reaction role message and all mappings?")) return;
   await withGuild("reactionroles/delete", {}, e.currentTarget);
+});
+
+/* --- lockdown --- */
+
+function renderLockdown(g) {
+  fillSelect($("#ld-channel"), g.channels.filter((c) => c.type === 0), null, "No text channels", false);
+
+  const list = $("#ld-list");
+  list.innerHTML = "";
+  const lockdowns = g.lockdowns ?? [];
+  if (!lockdowns.length) {
+    list.innerHTML = `<span class="muted small">No channels are currently locked.</span>`;
+    return;
+  }
+  for (const l of lockdowns) {
+    const row = document.createElement("div");
+    row.className = "ann-item";
+    const info = document.createElement("div");
+    info.className = "grow";
+    const age = Math.floor((Date.now() - l.lockedAt) / 60000);
+    info.innerHTML = `<span class="dc-mention">#${escapeHtml(l.channelId)}</span> — locked by ${escapeHtml(l.lockedByName)} ${age}m ago`;
+    const btn = document.createElement("button");
+    btn.className = "btn primary small";
+    btn.textContent = "Unlock";
+    btn.addEventListener("click", () => withGuild("lockdown/unlock", { channelId: l.channelId }));
+    row.append(info, btn);
+    list.appendChild(row);
+  }
+}
+
+$("#btn-ld-lock").addEventListener("click", (e) => {
+  const channelId = $("#ld-channel").value;
+  if (!channelId) return toast("Pick a channel first.", true);
+  withGuild("lockdown/lock", { channelId }, e.currentTarget);
+});
+
+$("#btn-ld-unlock-all").addEventListener("click", async (e) => {
+  const lockdowns = currentPayload?.lockdowns ?? [];
+  if (!lockdowns.length) return toast("No channels are locked.");
+  if (!confirm(`Unlock all ${lockdowns.length} locked channel(s)?`)) return;
+  await withGuild("lockdown/unlock-all", {}, e.currentTarget);
 });
 
 /* --- giveaways --- */

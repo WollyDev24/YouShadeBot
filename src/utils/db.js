@@ -25,7 +25,8 @@ const DEFAULTS = {
   surveys: {},
   sticky: {},
   automod: {},
-  reactionRoles: {}
+  reactionRoles: {},
+  lockdowns: {}
 };
 
 let store;

@@ -486,6 +486,22 @@
         </section>
 
         <section class="card" data-tab="moderation">
+          <h3>Lockdown</h3>
+          <p class="muted small">
+            Quickly lock channels to prevent members from sending messages. Locked channels are listed below.
+          </p>
+          <div class="field-row">
+            <label for="ld-channel">Channel to lock</label>
+            <select id="ld-channel"></select>
+            <button id="btn-ld-lock" class="btn danger">Lock</button>
+          </div>
+          <div class="field-row">
+            <button id="btn-ld-unlock-all" class="btn primary">Unlock all channels</button>
+          </div>
+          <div id="ld-list" class="ann-list"></div>
+        </section>
+
+        <section class="card" data-tab="moderation">
           <h3>Reaction Roles</h3>
           <p class="muted small">
             Post a message, users react to get/lose roles. "Unique" mode: one role per group. "Synced": multiple allowed.
