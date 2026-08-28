@@ -5,38 +5,26 @@ const SUBREDDITS = ["memes", "dankmemes", "me_irl", "funny"];
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
 
 async function fetchMeme(subreddit) {
-  const url = `https://www.reddit.com/r/${encodeURIComponent(subreddit)}/hot.json?limit=50&raw_json=1`;
+  const url = `https://meme-api.com/gimme/${encodeURIComponent(subreddit)}`;
   const res = await fetch(url, {
     headers: {
       "Accept": "application/json",
-      "User-Agent": "YouShadeBot/1.0 (https://github.com/WollyDev24/YouShadeBot)"
+      "User-Agent": "YouShadeBot/1.1 (https://github.com/WollyDev24/YouShadeBot)"
     }
   });
 
-  if (!res.ok) throw new Error(`Reddit returned ${res.status}`);
+  if (!res.ok) throw new Error(`API returned ${res.status}`);
 
-  const json = await res.json();
-  const posts = json?.data?.children ?? [];
-
-  const imagePosts = posts.filter((p) => {
-    const d = p.data;
-    if (d.stickied || d.is_self || d.over_18 || d.spoiler) return false;
-    const url = d.url_overridden_by_dest ?? d.url ?? "";
-    return /\.(jpg|jpeg|png|gif|webp)$/i.test(url) || d.post_hint === "image";
-  });
-
-  if (!imagePosts.length) throw new Error("No image posts found");
-
-  const post = pick(imagePosts).data;
-  const imageUrl = post.url_overridden_by_dest ?? post.url;
+  const data = await res.json();
+  if (!data.url) throw new Error("No meme found");
 
   return {
-    title: post.title,
-    imageUrl,
-    author: post.author,
-    subreddit: post.subreddit_name_prefixed,
-    upvotes: post.ups,
-    link: `https://reddit.com${post.permalink}`
+    title: data.title ?? "No title",
+    imageUrl: data.url,
+    author: data.author ?? "unknown",
+    subreddit: data.subreddit ? `r/${data.subreddit}` : `r/${subreddit}`,
+    upvotes: data.ups ?? 0,
+    link: data.postLink ?? "#"
   };
 }
 
