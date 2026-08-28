@@ -46,7 +46,7 @@ export async function checkForUpdates(client) {
   busy = true;
   try {
     const branch = await git("rev-parse", "--abbrev-ref", "HEAD");
-    if ((await git("status", "--porcelain")).length > 0) {
+    if ((await git("status", "--porcelain", "--untracked-files=no")).length > 0) {
       return { status: "dirty" };
     }
 
