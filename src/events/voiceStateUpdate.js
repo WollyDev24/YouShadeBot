@@ -13,7 +13,11 @@ export default {
     if (joinedId && joinedId !== leftId) {
       cancelDelete(joinedId);
 
-      if (isTriggerChannel(guildId, joinedId) && !isTempChannel(guildId, joinedId)) {
+      const trigger = isTriggerChannel(guildId, joinedId);
+      const isTemp = isTempChannel(guildId, joinedId);
+      console.log(`[temp] voiceStateUpdate: joined ${joinedId}, trigger=${trigger}, isTemp=${isTemp}, temp data:`, JSON.stringify(getData().temp[guildId]?.trigger));
+
+      if (trigger && !isTemp) {
         try {
           await createTempChannel(guild, member, newState.channel);
         } catch (err) {
