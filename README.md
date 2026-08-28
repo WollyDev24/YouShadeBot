@@ -1,101 +1,244 @@
+<div align="center">
+
 # YouShadeBot
 
-Discord management bot in JavaScript (discord.js v14) with **temporary voice channels**,
-**live server stats** and **moderation tools**.
+**All-in-one Discord server management bot**
+
+[![Node.js](https://ziadoua.github.io/m3-Markdown-Badges/badges/Node.js/nodejs2.svg)](https://nodejs.org)
+[![discord.js](https://ziadoua.github.io/m3-Markdown-Badges/badges/discord.js/discordjs2.svg)](https://discord.js.org)
+[![License](https://ziadoua.github.io/m3-Markdown-Badges/badges/Apache/apache2.svg)](LICENSE)
+[![Dashboard](https://ziadoua.github.io/m3-Markdown-Badges/badges/HTML/html2.svg)](#dashboard)
+
+</div>
+
+A feature-rich Discord bot with a **web dashboard** for managing everything from
+automod to reaction roles. Built with **discord.js v14**, **Express**, and
+**SQLite**.
+
+---
 
 ## Features
 
-### Temporary Channels `/temp`
-Users join a trigger voice channel and get their own personal voice channel created automatically.
+### Moderation
 
-- `/temp setup <channel>` — mark a channel as the trigger (the one users join)
-- `/temp name <name>` — rename your channel
-- `/temp limit <count>` — set the user limit (0 = unlimited)
-- `/temp lock` / `/temp unlock` — control who can join
-- `/temp claim` — take over an abandoned channel
-- `/temp remove` — delete your channel
-- `/temp disable` / `/temp info`
+- 🤖 **Automod** — word filter, spam detection, mass-mention blocking, invite link blocking with configurable actions
+- 🔒 **Lockdown** — lock/unlock channels instantly, bulk-lock all at once
+- 🎭 **Reaction Roles** — users react to get roles, with unique and synced modes
+- 🎫 **Tickets** — configurable support ticket system with panels, categories, and logging
+- 📋 **Commands** — `/mod` (kick, ban, timeout, unban), `/clear` (bulk delete), `/lockdown`, `/automod`, `/reactionrole`
+- 🚫 **Autores** — automatic keyword-triggered responses
 
-Empty temp channels auto-delete after 60 seconds (with a warning message).
+### Engagement
 
-### Channel Stats `/stats`
-Creates voice channels showing live server numbers (updated every 5 minutes):
+- 🔢 **Counting Game** — members count together in a channel with milestone celebrations
+- ⭐ **Starboard** — best messages get pinned to a star channel
+- 🎁 **Giveaways** — timed giveaways with button entries and winner selection
+- 📊 **Surveys** — button + modal surveys with response tracking
+- 📌 **Sticky Messages** — messages that repost at configurable intervals
 
-- 👥 Members: N
-- 🤖 Bots: N
-- 🟢 Online: N
-- 🎤 In Voice: N
+### Server Management
 
-Commands: `/stats setup`, `/stats refresh`, `/stats disable`
-
-### Moderation `/mod` and `/clear`
-- `/mod kick <target> [reason]`
-- `/mod ban <target> [days] [reason]`
-- `/mod unban <user>`
-- `/mod timeout <target> <minutes> [reason]`
-- `/clear <amount>` — bulk delete messages
+- 🔊 **Temporary Channels** — users join a trigger channel and get their own voice channel
+- 📈 **Live Stats** — voice channels that display member, bot, online, and voice counts
+- 👋 **Welcome / Farewell** — configurable join and leave messages
+- 🎭 **Auto-Roles** — automatically assign roles to new members
+- 📝 **Logging** — track member joins, leaves, kicks, bans, and message edits
+- 🔔 **Scheduled Announcements** — timed embed messages
 
 ### Utility
-- `/ping`, `/avatar`, `/userinfo`, `/serverinfo`, `/help`
 
-## Setup
+- 🛠️ **Interactive Panel** — `/panel` opens a button-based management menu in chat
+- 🔍 **Info Commands** — `/ping`, `/avatar`, `/userinfo`, `/serverinfo`, `/help`
+- 🔁 **Autores** — keyword-triggered automatic responses
 
-1. Clone and install:
+### Dashboard
 
-```bash
-npm install
-```
+All features are fully configurable through the **web dashboard** at `http://127.0.0.1:3000`:
 
-2. Create your bot at https://discord.com/developers/applications
-   and enable these intents: Server Members, Message Content, Voice State, Presence.
-   Invite it with the `applications.commands` scope and appropriate permissions
-   (Manage Channels, Manage Messages, Moderate Members, Move Members, View Channel).
+- Toggle features on/off, configure channels, thresholds, and colors
+- Automod: manage word lists, spam settings, case history
+- Reaction roles: create messages, add/remove emoji-to-role mappings
+- Lockdown: view locked channels, lock/unlock with one click
+- Sticky messages: set, remove, configure intervals
+- Surveys, giveaways, tickets, starboard, welcome, stats, and more
 
-3. Copy `.env.example` to `.env` and fill in:
+---
 
-```
-TOKEN=your-bot-token-here
-CLIENT_ID=your-application-id-here
-GUILD_ID=optional-guild-id-for-quick-registration
-PANEL_PASSWORD=admin
-PANEL_HOST=127.0.0.1
-PANEL_PORT=3000
-```
+## Built with
 
-`GUILD_ID` is optional. Commands register instantly with it; omit it to
-register globally (takes up to an hour for new commands to be cached).
+- [discord.js v14](https://discord.js.org) — Discord API wrapper
+- [Express](https://expressjs.com) — web dashboard server
+- [better-sqlite3](https://github.com/WiseLibs/better-sqlite3) — SQLite database with WAL mode
+- [cookie-parser](https://github.com/expressjs/cookie-parser) — dashboard session auth
 
-4. Run:
-
-```bash
-npm start      # or npm run dev for auto-reload
-```
-
-## Management panel
-
-The bot serves a local web dashboard for configuration at
-`http://127.0.0.1:3000` (default password `PANEL_PASSWORD` = `admin`).
-
-From the panel you can:
-
-- See live bot status (ping, uptime, servers, members)
-- Pick any server the bot is in
-- Set/disable the **temporary channel** trigger
-- Create/refresh/remove the **server stats** channels
-- Re-register slash commands
+---
 
 ## Project structure
 
-```
+```text
 src/
-  index.js            # client setup + startup
-  commands/           # slash commands (one file each)
-  events/             # clientReady, interactionCreate, voiceStateUpdate
-  panel/
-    server.js         # local dashboard API + static server
-    public/           # dashboard frontend (HTML/CSS/JS)
-  utils/
-    db.js             # JSON persistence (data/store.json)
-    temp.js           # temporary channel logic
-    stats.js          # stats channel logic
+├── index.js                  # Client setup, intent config, startup
+├── lib/
+│   └── discord.js            # discord.js re-export facade
+├── commands/                 # Slash commands (one file each)
+│   ├── automod.js            # /automod setup|toggle|word-add|...
+│   ├── autoroles.js          # /autoroles setup|disable
+│   ├── avatar.js             # /avatar
+│   ├── clear.js              # /clear
+│   ├── counting.js           # /counting setup|disable|emojis
+│   ├── filter.js             # /filter add|remove|list
+│   ├── fun.js                # /8ball, /joke
+│   ├── giveaway.js           # /giveaway create|end|reroll
+│   ├── help.js               # /help
+│   ├── lockdown.js           # /lockdown lock|unlock|status|list
+│   ├── logging.js            # /log setup|disable
+│   ├── moderation.js         # /mod kick|ban|unban|timeout
+│   ├── panel.js              # /panel (interactive management menu)
+│   ├── ping.js               # /ping
+│   ├── reactionrole.js       # /reactionrole create|add|remove|delete|list
+│   ├── serverinfo.js         # /serverinfo
+│   ├── starboard.js          # /starboard setup|disable
+│   ├── stats.js              # /stats setup|refresh|disable
+│   ├── sticky.js             # /sticky set|remove|list
+│   ├── survey.js             # /survey create|post|list|delete
+│   ├── temp.js               # /temp setup|name|limit|lock|unlock|claim|remove
+│   ├── update.js             # /update check
+│   └── userinfo.js           # /userinfo
+├── events/                   # Discord.js event handlers
+│   ├── channelDelete.js      # Clean up temp/stats data on channel delete
+│   ├── clientReady.js        # Bot startup: stats refresh, sticky timers, update check
+│   ├── guildMemberAdd.js     # Welcome messages, auto-roles
+│   ├── interactionCreate.js  # Routes slash commands, panel buttons, survey modals
+│   ├── messageCreate.js      # Counting game, autores, automod checks
+│   ├── messageReactionAdd.js # Starboard, reaction role assign
+│   ├── messageReactionRemove.js # Starboard, reaction role remove
+│   └── voiceStateUpdate.js   # Temporary channel creation + cleanup
+├── panel/                    # Web dashboard
+│   ├── server.js             # Express API + static file server
+│   └── public/
+│       ├── index.html        # Dashboard HTML
+│       ├── app.js            # Dashboard frontend logic
+│       └── style.css         # Dashboard styles
+├── utils/                    # Feature modules
+│   ├── announcements.js      # Scheduled announcement logic
+│   ├── automod.js            # Word filter, spam detection, case logging
+│   ├── autores.js            # Keyword-triggered auto-responses
+│   ├── autoroles.js          # Auto-role assignment
+│   ├── counting.js           # Counting game state
+│   ├── db.js                 # SQLite store (WAL, batched writes, saveKey())
+│   ├── giveaways.js          # Giveaway CRUD + winner selection
+│   ├── handlers.js           # Auto-loads commands and events
+│   ├── lockdown.js           # Channel lock/unlock with overwrite restore
+│   ├── panel.js              # Interactive panel view builders + access control
+│   ├── reactionRoles.js      # Reaction role CRUD + reaction handlers
+│   ├── register.js           # Slash command registration
+│   ├── starboard.js          # Starboard config + threshold logic
+│   ├── stats.js              # Live stats channel management
+│   ├── sticky.js             # Sticky message CRUD + timer management
+│   ├── surveys.js            # Survey CRUD + response handling
+│   ├── temp.js               # Temporary voice channel lifecycle
+│   ├── tickets.js            # Ticket system
+│   ├── updater.js            # Version check + log channel
+│   └── welcome.js            # Welcome/farewell message builder
+└── data/
+    └── store.db              # SQLite database (auto-migrates from store.json)
 ```
+
+---
+
+## Getting started
+
+### Prerequisites
+
+- [Node.js](https://nodejs.org) 18+
+- A Discord bot application with these intents enabled:
+  - Server Members, Message Content, Voice State, Presence, Guild Messages, Guild Message Reactions
+- Invite with the `applications.commands` scope and permissions:
+  - Manage Channels, Manage Messages, Moderate Members, Move Members, View Channel, Send Messages
+
+### Installation
+
+1. **Clone the repository**
+
+   ```bash
+   git clone https://github.com/WollyDev24/YouShadeBot
+   cd YouShadeBot
+   ```
+
+2. **Install dependencies**
+
+   ```bash
+   npm install
+   ```
+
+3. **Configure environment**
+
+   ```bash
+   cp .env.example .env
+   ```
+
+   Fill in your `.env`:
+
+   ```
+   TOKEN=your-bot-token-hits here
+   CLIENT_ID=your-application-id-here
+   GUILD_ID=optional-guild-id-for-quick-registration
+   PANEL_PASSWORD=admin
+   PANEL_HOST=127.0.0.1
+   PANEL_PORT=3000
+   ```
+
+   `GUILD_ID` is optional — commands register instantly with it; omit it for
+   global registration (takes up to an hour).
+
+4. **Run**
+
+   ```bash
+   npm start          # production
+   npm run dev        # auto-reload on code changes
+   ```
+
+---
+
+## Dashboard
+
+The bot serves a local web dashboard at `http://127.0.0.1:3000` (default
+password: `admin`).
+
+From the panel you can:
+
+- View live bot status (ping, uptime, guilds, members)
+- Pick any server the bot is in
+- Configure **all features** without touching code:
+  - Temporary channels, stats, welcome/farewell, auto-roles
+  - Counting game, starboard, giveaways, surveys, sticky messages
+  - Automod (word filter, spam, mass mention, invite blocking)
+  - Reaction roles, tickets, lockdown, logging, announcements
+  - Command toggles, panel role restriction
+- Re-register slash commands instantly
+
+---
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a pull request.
+
+1. Fork the repository
+2. Create your feature branch: `git checkout -b feature/AmazingFeature`
+3. Commit your changes: `git commit -m 'Add some AmazingFeature'`
+4. Push to the branch: `git push origin feature/AmazingFeature`
+5. Open a pull request
+
+---
+
+## License
+
+This project is licensed under the **Apache 2.0 License** — see the [LICENSE](LICENSE) file for details.
+
+---
+
+<div align="center">
+
+Made with ❤️ by [WollyDev24](https://github.com/wollydev24)
+
+</div>
