@@ -91,12 +91,14 @@ function scheduleFlush() {
 
 function flushNow() {
   if (!dirty.size || !db) return;
-  const keys = [...dirty];
+  const keys = [...dirty].filter((k) => typeof k === "string" && k.length > 0);
   dirty.clear();
   const upsert = db.prepare("INSERT OR REPLACE INTO kv (key, value) VALUES (?, ?)");
   const batch = db.transaction(() => {
     for (const key of keys) {
-      upsert.run(key, JSON.stringify(store[key]));
+      const raw = JSON.stringify(store[key]);
+      if (typeof raw !== "string") continue;
+      upsert.run(key, raw);
     }
   });
   batch();
@@ -112,6 +114,10 @@ export function save() {
 
 export function saveKey(key) {
   getData();
+  if (typeof key !== "string" || !key) {
+    console.error("[db] saveKey called with invalid key:", key, "\n", new Error().stack);
+    return;
+  }
   dirty.add(key);
   scheduleFlush();
 }
