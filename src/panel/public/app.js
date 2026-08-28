@@ -147,6 +147,7 @@ function renderGuild(g) {
   renderCountingEmojis(g);
   renderSurveys(g, textChannels);
   renderSticky(g, textChannels);
+  renderPolls(g);
   renderAutomod(g);
   renderReactionRoles(g);
   renderLockdown(g);
@@ -921,6 +922,29 @@ $("#btn-sk-set").addEventListener("click", async (e) => {
   await withGuild("sticky/set", { channelId, content, interval }, btn);
   $("#sk-content").value = "";
 });
+
+/* --- polls --- */
+
+function renderPolls(g) {
+  const list = $("#poll-list");
+  list.innerHTML = "";
+  const polls = g.polls ?? [];
+  if (!polls.length) {
+    list.innerHTML = `<span class="muted small">No polls yet. Create one with <code>/poll create</code>.</span>`;
+    return;
+  }
+  for (const p of polls) {
+    const row = document.createElement("div");
+    row.className = "ann-item";
+    const info = document.createElement("div");
+    info.className = "grow";
+    const status = p.ended ? "ended" : "active";
+    const ch = p.channelId ? `<#${p.channelId}>` : "(unknown)";
+    info.innerHTML = `<strong>#${p.id}</strong> — ${escapeHtml(p.question)}<br><span class="muted small">${p.options.length} options · ${p.totalVotes} vote(s) · ${status} · ${ch}</span>`;
+    row.appendChild(info);
+    list.appendChild(row);
+  }
+}
 
 /* --- automod --- */
 

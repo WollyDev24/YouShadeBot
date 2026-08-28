@@ -43,6 +43,7 @@ import { registerCommands } from "../utils/register.js";
 import { getAutomodConfig } from "../utils/automod.js";
 import { getReactionRoles } from "../utils/reactionRoles.js";
 import { isLocked, getStatus, getAllLockdowns, lockChannel, unlockChannel, cleanup } from "../utils/lockdown.js";
+import { getPolls } from "../utils/polls.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC = path.join(__dirname, "public");
@@ -224,6 +225,20 @@ async function guildPayload(client, guild) {
           lockedByName: guild.members.cache.get(l.lockedBy)?.user?.tag ?? l.lockedBy,
           lockedAt: l.lockedAt
         }));
+    })(),
+    polls: (() => {
+      const polls = getPolls(guild.id);
+      return Object.values(polls).map((p) => ({
+        id: p.id,
+        question: p.question,
+        options: p.options,
+        totalVotes: Object.keys(p.votes).length,
+        ended: p.ended,
+        channelId: p.channelId,
+        messageId: p.messageId,
+        authorId: p.authorId,
+        createdAt: p.createdAt
+      }));
     })(),
     panelRoleId: getPanelConfig(guild.id).roleId,
     availableCommands: [...client.commands.keys()].sort(),
