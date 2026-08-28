@@ -1,6 +1,6 @@
 import { SlashCommandBuilder, ChannelType, PermissionsBitField, MessageFlags } from "../lib/discord.js";
-import { getGuildTemp, getOwner, isTempChannel, save } from "../utils/temp.js";
-import { getData } from "../utils/db.js";
+import { getGuildTemp, getOwner, isTempChannel } from "../utils/temp.js";
+import { getData, saveKey } from "../utils/db.js";
 
 export default {
   data: new SlashCommandBuilder()
@@ -78,7 +78,7 @@ export default {
         const channel = interaction.options.getChannel("channel");
         temp.trigger = channel.id;
         getData().temp[guild.id] = temp;
-        save();
+        saveKey("temp");
         return interaction.reply({
           content: `Temporary channels are now enabled. Anyone joining ${channel} will get their own channel!`,
           flags: MessageFlags.Ephemeral
@@ -87,7 +87,7 @@ export default {
 
       case "disable": {
         getData().temp[guild.id] = { trigger: null, channels: {} };
-        save();
+        saveKey("temp");
         return interaction.reply({ content: "Temporary channels disabled for this server.", flags: MessageFlags.Ephemeral });
       }
 
@@ -155,7 +155,7 @@ export default {
         }
         temp.channels[ch.id] = member.id;
         getData().temp[guild.id] = temp;
-        save();
+        saveKey("temp");
         return interaction.reply({ content: `You are now the owner of **${ch.name}**.`, flags: MessageFlags.Ephemeral });
       }
 
@@ -164,7 +164,7 @@ export default {
           return interaction.reply({ content: "Only the channel owner can do that.", flags: MessageFlags.Ephemeral });
         delete temp.channels[ch.id];
         getData().temp[guild.id] = temp;
-        save();
+        saveKey("temp");
         await ch.delete("Owner removed temporary channel");
         return interaction.reply({ content: "Temporary channel deleted.", flags: MessageFlags.Ephemeral });
       }

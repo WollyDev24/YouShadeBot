@@ -1,8 +1,6 @@
 import { ChannelType, PermissionsBitField } from "../lib/discord.js";
 import { getData, saveKey } from "./db.js";
 
-export const save = saveKey;
-
 const pendingDeletes = new Map();
 
 export function getGuildTemp(guildId) {
@@ -25,38 +23,31 @@ export function getOwner(guildId, channelId) {
 }
 
 export async function createTempChannel(guild, member, triggerChannel) {
-  console.log("[temp] createTempChannel called for", member.user.tag, "in guild", guild.id);
   const parent = triggerChannel.parentId ?? null;
   const name = member.displayName.length > 28 ? member.displayName.slice(0, 28) : member.displayName;
 
-  try {
-    const channel = await guild.channels.create({
-      name: `\u{1F3AC} ${name}`,
-      type: ChannelType.GuildVoice,
-      parent,
-      permissionOverwrites: [
-        {
-          id: guild.roles.everyone.id,
-          allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.Connect],
-          deny: [PermissionsBitField.Flags.ManageChannels, PermissionsBitField.Flags.KickMembers]
-        }
-      ]
-    });
-    console.log("[temp] channel created:", channel.id);
+  const channel = await guild.channels.create({
+    name: `\u{1F3AC} ${name}`,
+    type: ChannelType.GuildVoice,
+    parent,
+    permissionOverwrites: [
+      {
+        id: guild.roles.everyone.id,
+        allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.Connect],
+        deny: [PermissionsBitField.Flags.ManageChannels, PermissionsBitField.Flags.KickMembers]
+      }
+    ]
+  });
 
-    getGuildTemp(guild.id).channels[channel.id] = member.id;
-    saveKey("temp");
+  getGuildTemp(guild.id).channels[channel.id] = member.id;
+  saveKey("temp");
 
-    await member.voice.setChannel(channel).catch((e) => console.error("[temp] move failed:", e));
+  await member.voice.setChannel(channel).catch(() => {});
 
-    await channel
-      .send(`Welcome, ${member}! This is your temporary channel.\nUse \`/temp\` commands to manage it.`)
-      .catch(() => {});
-    return channel;
-  } catch (err) {
-    console.error("[temp] createTempChannel error:", err);
-    throw err;
-  }
+  await channel
+    .send(`Welcome, ${member}! This is your temporary channel.\nUse \`/temp\` commands to manage it.`)
+    .catch(() => {});
+  return channel;
 }
 
 export function scheduleDelete(client, guildId, channelId, delayMs = 60_000) {
