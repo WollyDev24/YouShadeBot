@@ -44,6 +44,7 @@ import { getAutomodConfig } from "../utils/automod.js";
 import { getReactionRoles } from "../utils/reactionRoles.js";
 import { isLocked, getStatus, getAllLockdowns, lockChannel, unlockChannel, cleanup } from "../utils/lockdown.js";
 import { getPolls } from "../utils/polls.js";
+import { getReminders } from "../utils/reminders.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC = path.join(__dirname, "public");
@@ -240,6 +241,15 @@ async function guildPayload(client, guild) {
         createdAt: p.createdAt
       }));
     })(),
+    reminders: getReminders(guild.id).map((r) => ({
+      id: r.id,
+      target: r.target,
+      channelId: r.channelId,
+      message: r.message,
+      at: r.at,
+      repeatMs: r.repeatMs,
+      createdAt: r.createdAt
+    })),
     panelRoleId: getPanelConfig(guild.id).roleId,
     availableCommands: [...client.commands.keys()].sort(),
     customEmojis,

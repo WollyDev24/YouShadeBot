@@ -2,6 +2,7 @@ import { statsConfig, refreshStats } from "../utils/stats.js";
 import { getData } from "../utils/db.js";
 import { runDue } from "../utils/announcements.js";
 import { runDue as runDueGiveaways } from "../utils/giveaways.js";
+import { runDue as runDueReminders } from "../utils/reminders.js";
 import { startAutoUpdate } from "../utils/updater.js";
 import { startPanel } from "../panel/server.js";
 import { restoreAllTimers } from "../utils/sticky.js";
@@ -32,6 +33,7 @@ export default {
     setInterval(() => {
       runDue(client).catch((err) => console.error("[announcements] scheduler:", err));
       runDueGiveaways(client).catch((err) => console.error("[giveaways] scheduler:", err));
+      runDueReminders(client).catch((err) => console.error("[reminders] scheduler:", err));
     }, 30_000);
 
     startAutoUpdate(client);

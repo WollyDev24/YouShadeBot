@@ -27,7 +27,8 @@ const DEFAULTS = {
   automod: {},
   reactionRoles: {},
   lockdowns: {},
-  polls: {}
+  polls: {},
+  reminders: {}
 };
 
 let store;

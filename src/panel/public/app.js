@@ -148,6 +148,7 @@ function renderGuild(g) {
   renderSurveys(g, textChannels);
   renderSticky(g, textChannels);
   renderPolls(g);
+  renderReminders(g);
   renderAutomod(g);
   renderReactionRoles(g);
   renderLockdown(g);
@@ -944,6 +945,41 @@ function renderPolls(g) {
     row.appendChild(info);
     list.appendChild(row);
   }
+}
+
+function renderReminders(g) {
+  const list = $("#reminder-list");
+  list.innerHTML = "";
+  const reminders = g.reminders ?? [];
+  if (!reminders.length) {
+    list.innerHTML = `<span class="muted small">No reminders set. Create one with <code>/reminder set</code>.</span>`;
+    return;
+  }
+  for (const r of reminders) {
+    const row = document.createElement("div");
+    row.className = "ann-item";
+    const info = document.createElement("div");
+    info.className = "grow";
+    const ch = r.channelId ? `<#${r.channelId}>` : "(unknown)";
+    const target = r.target ? escapeHtml(r.target.replace(/[<>@&]/g, "")) : "(no target)";
+    const repeat = r.repeatMs ? ` · every ${formatReminderDuration(r.repeatMs)}` : "";
+    const due = r.at <= Date.now() ? "due" : `<t:${Math.floor(r.at / 1000)}:R>`;
+    info.innerHTML = `<strong>#${r.id}</strong> — ${target} in ${ch} — ${due}${repeat}<br><span class="muted small">${escapeHtml(r.message)}</span>`;
+    row.appendChild(info);
+    list.appendChild(row);
+  }
+}
+
+function formatReminderDuration(ms) {
+  const secs = Math.round(ms / 1000);
+  const d = Math.floor(secs / 86400);
+  const h = Math.floor((secs % 86400) / 3600);
+  const m = Math.floor((secs % 3600) / 60);
+  const parts = [];
+  if (d) parts.push(`${d}d`);
+  if (h) parts.push(`${h}h`);
+  if (m) parts.push(`${m}m`);
+  return parts.join(" ") || "0s";
 }
 
 /* --- automod --- */
