@@ -5,10 +5,9 @@ import {
   getPoll,
   getPolls,
   buildPollEmbed,
-  buildPollResultsEmbed
+  buildPollResultsEmbed,
+  buildPollButtons
 } from "../utils/polls.js";
-
-const NUMBER_EMOJIS = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"];
 
 export default {
   data: new SlashCommandBuilder()
@@ -99,11 +98,7 @@ export default {
 
       try {
         const embed = buildPollEmbed(poll);
-        const msg = await channel.send({ embeds: [embed] });
-
-        for (let i = 0; i < options.length && i < NUMBER_EMOJIS.length; i++) {
-          await msg.react(NUMBER_EMOJIS[i]);
-        }
+        const msg = await channel.send({ embeds: [embed], components: buildPollButtons(poll) });
 
         poll.messageId = msg.id;
         const { saveKey } = await import("../utils/db.js");
@@ -153,8 +148,7 @@ export default {
             const msg = await ch.messages.fetch(poll.messageId).catch(() => null);
             if (msg) {
               const resultsEmbed = buildPollResultsEmbed(poll);
-              await msg.edit({ embeds: [resultsEmbed] });
-              await msg.reactions.removeAll().catch(() => {});
+              await msg.edit({ embeds: [resultsEmbed], components: [] });
             }
           }
         } catch {}

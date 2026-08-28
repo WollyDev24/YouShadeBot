@@ -1,7 +1,5 @@
-import { EmbedBuilder } from "../lib/discord.js";
+import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from "../lib/discord.js";
 import { getData, saveKey } from "./db.js";
-
-const NUMBER_EMOJIS = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"];
 
 export function progressBar(ratio, length = 10) {
   const filled = Math.round(ratio * length);
@@ -14,18 +12,6 @@ export function getPolls(guildId) {
 
 export function getPoll(guildId, pollId) {
   return getPolls(guildId)[pollId] ?? null;
-}
-
-export function getActivePollByMessage(messageId) {
-  const allPolls = getData().polls;
-  for (const [guildId, guildPolls] of Object.entries(allPolls)) {
-    for (const [id, poll] of Object.entries(guildPolls)) {
-      if (poll.messageId === messageId && !poll.ended) {
-        return { guildId: Number(guildId), pollId: Number(id), poll };
-      }
-    }
-  }
-  return null;
 }
 
 export function createPoll(guildId, opts) {
@@ -59,25 +45,40 @@ export function endPoll(guildId, pollId) {
   return poll;
 }
 
-export function addVote(guildId, pollId, userId, optionIndex) {
-  const poll = getPoll(guildId, pollId);
-  if (!poll || poll.ended) return false;
-  if (optionIndex < 0 || optionIndex >= poll.options.length) return false;
-
-  const prev = poll.votes[userId];
-  poll.votes[userId] = optionIndex;
-  saveKey("polls");
-  return { changed: prev !== undefined, previousIndex: prev };
-}
-
-export function removeVote(guildId, pollId, userId) {
+export function toggleVote(guildId, pollId, userId, optionIndex) {
   const poll = getPoll(guildId, pollId);
   if (!poll || poll.ended) return null;
-  if (!(userId in poll.votes)) return null;
-  const prev = poll.votes[userId];
-  delete poll.votes[userId];
+  if (optionIndex < 0 || optionIndex >= poll.options.length) return null;
+
+  const current = poll.votes[userId];
+  if (current === optionIndex) {
+    delete poll.votes[userId];
+    saveKey("polls");
+    return { action: "removed", index: optionIndex };
+  }
+
+  poll.votes[userId] = optionIndex;
   saveKey("polls");
-  return prev;
+  return { action: current === undefined ? "added" : "changed", index: optionIndex, previousIndex: current };
+}
+
+export function buildPollButtons(poll) {
+  const rows = [];
+  let row = new ActionRowBuilder();
+  poll.options.forEach((opt, i) => {
+    if (row.components.length === 5) {
+      rows.push(row);
+      row = new ActionRowBuilder();
+    }
+    row.addComponents(
+      new ButtonBuilder()
+        .setCustomId(`poll:vote:${poll.id}:${i}`)
+        .setLabel(`${i + 1}. ${opt}`.slice(0, 80))
+        .setStyle(ButtonStyle.Secondary)
+    );
+  });
+  rows.push(row);
+  return rows;
 }
 
 export function buildPollEmbed(poll) {
@@ -91,14 +92,14 @@ export function buildPollEmbed(poll) {
     const count = counts[i];
     const ratio = totalVotes > 0 ? count / totalVotes : 0;
     const pct = totalVotes > 0 ? Math.round(ratio * 100) : 0;
-    return `${NUMBER_EMOJIS[i]} **${opt}**\n${progressBar(ratio)} ${pct}% (${count} vote${count !== 1 ? "s" : ""})`;
+    return `**${i + 1}. ${opt}**\n${progressBar(ratio)} ${pct}% (${count} vote${count !== 1 ? "s" : ""})`;
   });
 
   const embed = new EmbedBuilder()
-    .setTitle(poll.question)
+    .setTitle(`📊 ${poll.question}`)
     .setDescription(lines.join("\n\n"))
     .setColor(0x5865f2)
-    .setFooter({ text: `${totalVotes} total vote${totalVotes !== 1 ? "s" : ""}` })
+    .setFooter({ text: `Use the buttons below to vote · ${totalVotes} total vote${totalVotes !== 1 ? "s" : ""}` })
     .setTimestamp(poll.createdAt);
 
   return embed;
@@ -117,7 +118,7 @@ export function buildPollResultsEmbed(poll) {
     const ratio = totalVotes > 0 ? count / totalVotes : 0;
     const pct = totalVotes > 0 ? Math.round(ratio * 100) : 0;
     const winner = count === maxCount && totalVotes > 0 ? " 👑" : "";
-    return `${NUMBER_EMOJIS[i]} **${opt}**${winner}\n${progressBar(ratio)} ${pct}% (${count} vote${count !== 1 ? "s" : ""})`;
+    return `**${i + 1}. ${opt}**${winner}\n${progressBar(ratio)} ${pct}% (${count} vote${count !== 1 ? "s" : ""})`;
   });
 
   const embed = new EmbedBuilder()

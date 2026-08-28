@@ -1,6 +1,7 @@
 import { MessageFlags, ActionRowBuilder, ButtonBuilder, ButtonStyle } from "../lib/discord.js";
 import { routeButton } from "../utils/tickets.js";
 import { getGiveaway, toggleEntry, renderMessage } from "../utils/giveaways.js";
+import { getPoll, toggleVote, buildPollEmbed, buildPollButtons } from "../utils/polls.js";
 import { getData } from "../utils/db.js";
 import {
   hasPanelAccess,
@@ -125,6 +126,40 @@ export default {
 
       if (customIdIsKeep(interaction.customId)) {
         return interaction.update({ content: "You're still in — good luck!", components: [] });
+      }
+      return;
+    }
+
+    if (interaction.isButton() && interaction.customId?.startsWith("poll:vote:")) {
+      const [, , idStr, optStr] = interaction.customId.split(":");
+      const poll = getPoll(interaction.guildId, Number(idStr));
+      if (!poll) return safeEphemeral(interaction, "This poll no longer exists.");
+      if (poll.ended) {
+        const disabledRows = buildPollButtons(poll).map((row) =>
+          new ActionRowBuilder().addComponents(
+            ...row.components.map((c) => ButtonBuilder.from(c).setDisabled(true))
+          )
+        );
+        return interaction.update({ embeds: [buildPollEmbed(poll)], components: disabledRows });
+      }
+
+      const optionIndex = Number(optStr);
+      if (Number.isNaN(optionIndex)) return safeEphemeral(interaction, "Invalid poll option.");
+
+      const result = toggleVote(interaction.guildId, poll.id, interaction.user.id, optionIndex);
+      if (!result) return safeEphemeral(interaction, "Couldn't update your vote.");
+
+      const actionMsg =
+        result.action === "removed" ? `Removed your vote for **${poll.options[result.index]}**.` :
+        result.action === "changed" ? `Changed your vote to **${poll.options[result.index]}**.` :
+        `Voted for **${poll.options[result.index]}**!`;
+
+      try {
+        await interaction.update({ embeds: [buildPollEmbed(poll)] });
+        await interaction.followUp({ content: actionMsg, flags: MessageFlags.Ephemeral });
+      } catch (err) {
+        console.error("[error] poll vote:", err);
+        await safeEphemeral(interaction, actionMsg);
       }
       return;
     }
