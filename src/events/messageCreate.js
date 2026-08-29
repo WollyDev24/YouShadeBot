@@ -1,6 +1,7 @@
-import { getGuildCounting, incrementCount, resetCount, upsertStatus } from "../utils/counting.js";
+import { getGuildCounting, incrementCount, resetCount, upsertStatus, checkReward } from "../utils/counting.js";
 import { findMatch, renderResponse } from "../utils/autores.js";
 import { getAutomodConfig, checkWordFilter, checkSpam, checkMassMention, checkInviteLink, executeAction, addCase, buildCaseEmbed } from "../utils/automod.js";
+import { grantXp, canEarnXp, getLeveling } from "../utils/leveling.js";
 
 const MILESTONES = new Set([69, 100, 200, 300, 400, 500, 1000, 1500, 2000]);
 const replyCooldowns = new Map();
@@ -122,7 +123,14 @@ export default {
     }
 
     const cfg = getGuildCounting(guild.id);
-    if (!cfg.channelId || message.channel.id !== cfg.channelId) return;
+    const isCountingChannel = cfg.channelId && message.channel.id === cfg.channelId;
+
+    if (!isCountingChannel) {
+      if (getLeveling(guild.id).enabled && canEarnXp(message.author.id)) {
+        await grantXp(client, guild.id, message.author.id);
+      }
+      return;
+    }
 
     const num = extractNumber(message.content);
     const expected = cfg.current + 1;
@@ -133,6 +141,14 @@ export default {
       const c = getGuildCounting(guild.id);
       if (MILESTONES.has(c.current)) {
         message.react(c.current === 69 ? c.emojis.sixtyNine : c.emojis.milestone).catch(() => {});
+      }
+      const reward = checkReward(guild.id);
+      if (reward) {
+        const member = guild.members.cache.get(reward.userId);
+        if (member) await member.roles.add(reward.roleId).catch(() => {});
+        message.channel
+          .send(`🎉 <@${reward.userId}> reached **${reward.count}** and earned <@&${reward.roleId}>!`)
+          .catch(() => {});
       }
       upsertStatus(guild.id, message.channel);
       return;

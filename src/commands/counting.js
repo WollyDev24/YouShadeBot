@@ -1,5 +1,5 @@
 import { SlashCommandBuilder, ChannelType, PermissionsBitField, MessageFlags, EmbedBuilder } from "../lib/discord.js";
-import { getGuildCounting, topCounters, commit, upsertStatus, DEFAULT_COUNTING_EMOJIS } from "../utils/counting.js";
+import { getGuildCounting, topCounters, commit, upsertStatus, setReward, DEFAULT_COUNTING_EMOJIS } from "../utils/counting.js";
 
 export default {
   data: new SlashCommandBuilder()
@@ -48,6 +48,13 @@ export default {
         )
     )
     .addSubcommand((s) => s.setName("info").setDescription("Show current counting status"))
+    .addSubcommand((s) =>
+      s
+        .setName("reward")
+        .setDescription("Award a role every N correct counts")
+        .addRoleOption((o) => o.setName("role").setDescription("Role to award"))
+        .addIntegerOption((o) => o.setName("every").setDescription("Award every N counts (e.g. every 100)"))
+    )
     .addSubcommand((s) =>
       s
         .setName("leaderboard")
@@ -165,6 +172,36 @@ export default {
           }
         );
       return interaction.reply({ embeds: [embed] });
+    }
+
+    if (sub === "reward") {
+      if (
+        !interaction.member.permissions.has(PermissionsBitField.Flags.ManageChannels) &&
+        interaction.member.id !== guild.ownerId
+      ) {
+        return interaction.reply({
+          content: "You need the **Manage Channels** permission to do that.",
+          flags: MessageFlags.Ephemeral
+        });
+      }
+      const role = interaction.options.getRole("role");
+      const every = interaction.options.getInteger("every");
+      if ((role && !every) || (!role && every)) {
+        return interaction.reply({
+          content: "Provide both a role and an interval (every N counts), or neither to clear.",
+          flags: MessageFlags.Ephemeral
+        });
+      }
+      if (every && every < 1) {
+        return interaction.reply({ content: "The interval must be at least 1.", flags: MessageFlags.Ephemeral });
+      }
+      const result = setReward(guild.id, role ? role.id : null, every ?? null);
+      return interaction.reply({
+        content: result.roleId
+          ? `Counting reward set: <@&${result.roleId}> every **${result.every}** counts.`
+          : "Counting reward cleared.",
+        flags: MessageFlags.Ephemeral
+      });
     }
 
     const top = interaction.options.getInteger("top") ?? 10;

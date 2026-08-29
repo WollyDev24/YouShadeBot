@@ -45,6 +45,23 @@ export function incrementCount(guildId, userId) {
   commit(guildId);
 }
 
+export function setReward(guildId, roleId, every) {
+  const c = getGuildCounting(guildId);
+  c.rewardRoleId = roleId ? String(roleId) : null;
+  c.rewardEvery = Number(every) > 0 ? Number(every) : null;
+  commit(guildId);
+  return { roleId: c.rewardRoleId, every: c.rewardEvery };
+}
+
+export function checkReward(guildId) {
+  const c = getGuildCounting(guildId);
+  if (!c.rewardRoleId || !c.rewardEvery) return null;
+  if (c.current > 0 && c.current % c.rewardEvery === 0) {
+    return { userId: c.lastUserId, roleId: c.rewardRoleId, count: c.current, every: c.rewardEvery };
+  }
+  return null;
+}
+
 export function resetCount(guildId) {
   const c = getGuildCounting(guildId);
   c.current = 0;

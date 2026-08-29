@@ -152,6 +152,8 @@ function renderGuild(g) {
   renderAutomod(g);
   renderReactionRoles(g);
   renderLockdown(g);
+  renderLeveling(g);
+  renderRoleMenus(g);
   populateCustomEmojis(g);
 }
 
@@ -774,6 +776,11 @@ function renderCountingEmojis(g) {
   $("#ct-status").textContent = g.counting.channelId
     ? `Counting game active in <#${g.counting.channelId}>.`
     : "No counting channel set up yet — use /counting setup in Discord first.";
+
+  const rw = g.counting.rewardRoleId;
+  $("#ct-reward").textContent = rw
+    ? `Every correct count ending in a multiple of ${g.counting.rewardEvery} awards <@&${rw}> — best streak so far: ${g.counting.best}.`
+    : "No reward role configured — set one with /counting reward in Discord.";
 }
 
 $("#btn-ct-save").addEventListener("click", (e) =>
@@ -1137,6 +1144,54 @@ $("#btn-rr-delete").addEventListener("click", async (e) => {
   if (!confirm("Delete the reaction role message and all mappings?")) return;
   await withGuild("reactionroles/delete", {}, e.currentTarget);
 });
+
+/* --- leveling --- */
+
+function renderLeveling(g) {
+  const lv = g.leveling || { enabled: false, roles: [] };
+  $("#lv-status").textContent = lv.enabled
+    ? `Leveling is on — ${lv.userCount ? `${lv.userCount} member(s) earning XP` : "no activity yet"}${lv.annChannelId ? `, announcements in <#${lv.annChannelId}>` : ""}.`
+    : "Leveling is currently off — use /level enable in Discord to start.";
+
+  const list = $("#lv-rewards");
+  list.innerHTML = "";
+  if (!lv.roles.length) {
+    list.innerHTML = `<span class="muted small">No level reward roles configured yet — use /level reward in Discord.</span>`;
+    return;
+  }
+  for (const r of [...lv.roles].sort((a, b) => a.level - b.level)) {
+    const row = document.createElement("div");
+    row.className = "ann-item";
+    const info = document.createElement("div");
+    info.className = "grow";
+    info.innerHTML = `Level <strong>${r.level}</strong> → <span class="dc-mention">@${escapeHtml(g.roles.find((x) => x.id === r.roleId)?.name ?? "(deleted role)")}</span>`;
+    row.appendChild(info);
+    list.appendChild(row);
+  }
+}
+
+/* --- role menus --- */
+
+function renderRoleMenus(g) {
+  const list = $("#rm-list");
+  list.innerHTML = "";
+  const menus = g.roleMenus || [];
+  if (!menus.length) {
+    list.innerHTML = `<span class="muted small">No role menus yet — use /rolemenu create in a channel, then /rolemenu addrole.</span>`;
+    return;
+  }
+  for (const m of menus) {
+    const item = document.createElement("div");
+    item.className = "ann-item";
+    const info = document.createElement("div");
+    info.className = "grow";
+    info.innerHTML = `<strong>${escapeHtml(m.title)}</strong>
+      <span class="muted small">in <#${m.channelId}> · ${m.mode === "unique" ? "pick one" : "pick many"}</span>
+      <br><span class="muted small">${m.roles.length ? "Roles: " + m.roles.map((r) => `@${escapeHtml(g.roles.find((x) => x.id === r.roleId)?.name ?? "(deleted role)")}`).join(", ") : "No roles added yet"}</span>`;
+    item.appendChild(info);
+    list.appendChild(item);
+  }
+}
 
 /* --- lockdown --- */
 

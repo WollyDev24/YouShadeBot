@@ -17,6 +17,8 @@ const {
   REST,
   Routes,
   SlashCommandBuilder,
+  StringSelectMenuBuilder,
+  StringSelectMenuOptionBuilder,
   TextInputBuilder,
   TextInputStyle
 } = discord;
@@ -38,6 +40,8 @@ export {
   REST,
   Routes,
   SlashCommandBuilder,
+  StringSelectMenuBuilder,
+  StringSelectMenuOptionBuilder,
   TextInputBuilder,
   TextInputStyle
 };

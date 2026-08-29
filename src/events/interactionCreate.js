@@ -2,6 +2,7 @@ import { MessageFlags, ActionRowBuilder, ButtonBuilder, ButtonStyle } from "../l
 import { routeButton } from "../utils/tickets.js";
 import { getGiveaway, toggleEntry, renderMessage } from "../utils/giveaways.js";
 import { getPoll, toggleVote, buildPollEmbed, buildPollButtons } from "../utils/polls.js";
+import { handleMenuSelect } from "../utils/roleMenus.js";
 import { getData } from "../utils/db.js";
 import {
   hasPanelAccess,
@@ -160,6 +161,16 @@ export default {
       } catch (err) {
         console.error("[error] poll vote:", err);
         await safeEphemeral(interaction, actionMsg);
+      }
+      return;
+    }
+
+    if (interaction.isStringSelectMenu() && interaction.customId?.startsWith("rolemenu:")) {
+      try {
+        await handleMenuSelect(interaction);
+      } catch (err) {
+        console.error("[error] rolemenu:", err);
+        await safeEphemeral(interaction, "Something went wrong with that menu.");
       }
       return;
     }

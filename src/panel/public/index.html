@@ -570,6 +570,26 @@
           <p id="up-status" class="hint"></p>
         </section>
 
+        <section class="card" data-tab="moderation">
+          <h3>Leveling</h3>
+          <p class="muted small">
+            Members earn XP by chatting and level up on an XP curve. Configure roles and
+            the announcement channel with <code>/level</code> in Discord.
+          </p>
+          <p id="lv-status" class="hint"></p>
+          <h4 class="preview-title">Role rewards</h4>
+          <div id="lv-rewards" class="ann-list"></div>
+        </section>
+
+        <section class="card" data-tab="moderation">
+          <h3>Role Menus</h3>
+          <p class="muted small">
+            Dropdown menus that let members pick roles with one click. Create via
+            <code>/rolemenu create</code> then add roles with <code>/rolemenu addrole</code>.
+          </p>
+          <div id="rm-list" class="ann-list"></div>
+        </section>
+
         <section class="card" data-tab="messaging">
           <h3>Auto-responses</h3>
           <p class="muted small">
@@ -647,6 +667,8 @@
             <button id="btn-ct-save" class="btn primary">Save emojis</button>
           </div>
           <p id="ct-status" class="hint"></p>
+          <h4 class="preview-title">Reward</h4>
+          <p id="ct-reward" class="hint"></p>
         </section>
 
         <section class="card" data-tab="messaging">

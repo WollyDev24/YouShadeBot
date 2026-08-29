@@ -28,7 +28,9 @@ const DEFAULTS = {
   reactionRoles: {},
   lockdowns: {},
   polls: {},
-  reminders: {}
+  reminders: {},
+  leveling: {},
+  roleMenus: {}
 };
 
 let store;

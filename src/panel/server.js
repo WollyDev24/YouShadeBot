@@ -45,6 +45,8 @@ import { getReactionRoles } from "../utils/reactionRoles.js";
 import { isLocked, getStatus, getAllLockdowns, lockChannel, unlockChannel, cleanup } from "../utils/lockdown.js";
 import { getPolls } from "../utils/polls.js";
 import { getReminders } from "../utils/reminders.js";
+import { getLeveling } from "../utils/leveling.js";
+import { getRoleMenus } from "../utils/roleMenus.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC = path.join(__dirname, "public");
@@ -154,8 +156,26 @@ async function guildPayload(client, guild) {
     })(),
     counting: (() => {
       const c = getGuildCounting(guild.id);
-      return { channelId: c.channelId, emojis: { ...c.emojis } };
+      return { channelId: c.channelId, emojis: { ...c.emojis }, rewardRoleId: c.rewardRoleId ?? null, rewardEvery: c.rewardEvery ?? null, best: c.best ?? 0 };
     })(),
+    leveling: (() => {
+      const l = getLeveling(guild.id);
+      return {
+        enabled: l.enabled,
+        annChannelId: l.annChannelId,
+        removeLower: l.removeLower,
+        roles: Object.entries(l.roles ?? {}).map(([level, roleId]) => ({ level: Number(level), roleId })),
+        userCount: Object.keys(l.users ?? {}).length
+      };
+    })(),
+    roleMenus: Object.values(getRoleMenus(guild.id)).map((m) => ({
+      id: m.id,
+      channelId: m.channelId,
+      messageId: m.messageId,
+      title: m.title,
+      mode: m.mode,
+      roles: m.roles
+    })),
     surveys: Object.values(getSurveys(guild.id)).map((s) => ({
       id: s.id,
       question: s.question,
