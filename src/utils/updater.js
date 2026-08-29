@@ -77,8 +77,8 @@ export async function checkForUpdates(client) {
 
     const changed = await git("diff", "--name-only", local, remote);
     if (changed.includes("package.json") || changed.includes("package-lock.json")) {
-      await notifyLogChannels(client, "Dependencies changed — running `npm install`…");
-      await run("npm", ["install", "--omit=dev", "--no-audit", "--no-fund"], { cwd: ROOT });
+      await notifyLogChannels(client, "Dependencies changed — running `npm ci`…");
+      await run("npm", ["ci", "--omit=dev", "--no-audit", "--no-fund"], { cwd: ROOT });
     }
 
     spawn(
