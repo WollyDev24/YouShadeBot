@@ -5,13 +5,13 @@ import os from "node:os";
 import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { ChannelType, EmbedBuilder } from "../lib/discord.js";
-import { getData, save } from "../utils/db.js";
+import { getData, save, saveKey } from "../utils/db.js";
 import { getGuildTemp } from "../utils/temp.js";
 import { setupStats, disableStats, refreshStats, statsConfig } from "../utils/stats.js";
 import { getTickets, saveType, deleteType, buildSinglePanel, buildCombinedPanel } from "../utils/tickets.js";
 import { getWelcome, sanitize as sanitizeWelcome, sendWelcome, buildContext } from "../utils/welcome.js";
 import { upcoming as upcomingAnnouncements, scheduleAnnouncement, cancelAnnouncement, postAnnouncement } from "../utils/announcements.js";
-import { getGuildCounting, commit as commitCounting } from "../utils/counting.js";
+import { getGuildCounting, commit as commitCounting, setReward as setCountingReward } from "../utils/counting.js";
 import { getRules as getFilterRules, addRule as addFilterRule, removeRule as removeFilterRule } from "../utils/autores.js";
 import { getAutoRoles as getGuildAutoRoles, setAutoRoles as setGuildAutoRoles, disableAutoRoles as disableGuildAutoRoles } from "../utils/autoroles.js";
 import {
@@ -45,8 +45,15 @@ import { getReactionRoles } from "../utils/reactionRoles.js";
 import { isLocked, getStatus, getAllLockdowns, lockChannel, unlockChannel, cleanup } from "../utils/lockdown.js";
 import { getPolls } from "../utils/polls.js";
 import { getReminders } from "../utils/reminders.js";
-import { getLeveling } from "../utils/leveling.js";
-import { getRoleMenus } from "../utils/roleMenus.js";
+import { getLeveling, commit as commitLeveling } from "../utils/leveling.js";
+import {
+  getRoleMenus,
+  createRoleMenu,
+  addRole as addRoleToMenu,
+  removeRole as removeRoleFromMenu,
+  deleteRoleMenu,
+  buildMenuPayload
+} from "../utils/roleMenus.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC = path.join(__dirname, "public");
@@ -860,6 +867,166 @@ export function startPanel(client) {
     if (body.milestone) cfg.emojis.milestone = String(body.milestone).slice(0, 32);
     commitCounting(guild.id);
     return res.json({ ok: true, payload: await guildPayload(client, guild) });
+  });
+
+  app.post("/api/guilds/:id/counting/reward", requireAuth, async (req, res) => {
+    const guild = client.guilds.cache.get(req.params.id);
+    if (!guild) return res.status(404).json({ error: "guild not found" });
+
+    const body = req.body ?? {};
+    const roleId = body.roleId;
+    if (roleId && !guild.roles.cache.has(roleId)) return res.status(400).json({ error: "Role not found." });
+    const every = Number(body.every);
+    if (every < 1 || !Number.isFinite(every)) return res.status(400).json({ error: "Interval must be at least 1." });
+
+    setCountingReward(guild.id, roleId || null, every);
+    return res.json({ ok: true, note: "Counting reward saved.", payload: await guildPayload(client, guild) });
+  });
+
+  app.post("/api/guilds/:id/leveling/save", requireAuth, async (req, res) => {
+    const guild = client.guilds.cache.get(req.params.id);
+    if (!guild) return res.status(404).json({ error: "guild not found" });
+
+    const l = getLeveling(guild.id);
+    const body = req.body ?? {};
+    l.enabled = Boolean(body.enabled ?? l.enabled);
+    l.removeLower = Boolean(body.removeLower ?? l.removeLower);
+    const annChannelId = body.annChannelId;
+    if (annChannelId !== undefined && annChannelId !== null && annChannelId !== "") {
+      if (!guild.channels.cache.has(annChannelId)) return res.status(400).json({ error: "Channel not found." });
+      l.annChannelId = annChannelId;
+    } else {
+      l.annChannelId = null;
+    }
+    commitLeveling(guild.id);
+    return res.json({ ok: true, note: "Leveling settings saved.", payload: await guildPayload(client, guild) });
+  });
+
+  app.post("/api/guilds/:id/leveling/set-role", requireAuth, async (req, res) => {
+    const guild = client.guilds.cache.get(req.params.id);
+    if (!guild) return res.status(404).json({ error: "guild not found" });
+
+    const l = getLeveling(guild.id);
+    const body = req.body ?? {};
+    const roleId = body.roleId;
+    const level = Number(body.level);
+    if (!guild.roles.cache.has(roleId)) return res.status(400).json({ error: "Role not found." });
+    if (!Number.isInteger(level) || level < 1) return res.status(400).json({ error: "Level must be a positive integer." });
+
+    l.roles[level] = roleId;
+    commitLeveling(guild.id);
+    return res.json({ ok: true, note: `Reward role set for level ${level}.`, payload: await guildPayload(client, guild) });
+  });
+
+  app.post("/api/guilds/:id/leveling/remove-role", requireAuth, async (req, res) => {
+    const guild = client.guilds.cache.get(req.params.id);
+    if (!guild) return res.status(404).json({ error: "guild not found" });
+
+    const l = getLeveling(guild.id);
+    const level = Number(req.body?.level);
+    if (!Number.isInteger(level) || level < 1) return res.status(400).json({ error: "Level must be a positive integer." });
+    delete l.roles[level];
+    commitLeveling(guild.id);
+    return res.json({ ok: true, note: `Reward role removed for level ${level}.`, payload: await guildPayload(client, guild) });
+  });
+
+  app.post("/api/guilds/:id/rolemenus/create", requireAuth, async (req, res) => {
+    const guild = client.guilds.cache.get(req.params.id);
+    if (!guild) return res.status(404).json({ error: "guild not found" });
+
+    const body = req.body ?? {};
+    const channelId = body.channelId;
+    if (!channelId || !guild.channels.cache.has(channelId)) return res.status(400).json({ error: "A valid channel is required." });
+    const color = String(body.color ?? "#5865f2").trim();
+    if (!/^#?[0-9a-fA-F]{6}$/.test(color)) return res.status(400).json({ error: "Invalid hex color." });
+
+    const config = createRoleMenu(guild.id, {
+      id: body.id || undefined,
+      title: body.title,
+      description: body.description,
+      color,
+      mode: body.mode,
+      channelId
+    });
+
+    const ch = guild.channels.cache.get(channelId);
+    let messageId = null;
+    if (config.roles.length) {
+      const sent = await ch.send(buildMenuPayload(guild, config)).catch(() => null);
+      if (sent) messageId = sent.id;
+    }
+    config.messageId = messageId;
+    saveKey("roleMenus");
+    return res.json({ ok: true, note: messageId ? "Role menu posted." : "Role menu created — add roles to post it.", payload: await guildPayload(client, guild) });
+  });
+
+  app.post("/api/guilds/:id/rolemenus/add-role", requireAuth, async (req, res) => {
+    const guild = client.guilds.cache.get(req.params.id);
+    if (!guild) return res.status(404).json({ error: "guild not found" });
+
+    const body = req.body ?? {};
+    const roleId = body.roleId;
+    if (!guild.roles.cache.has(roleId)) return res.status(400).json({ error: "Role not found." });
+
+    const config = getRoleMenus(guild.id)[body.id];
+    if (!config) return res.status(400).json({ error: "Role menu not found." });
+    const result = addRoleToMenu(guild.id, config.id, roleId, String(body.label ?? "").trim());
+    if (!result.ok) return res.status(400).json({ error: result.error });
+
+    const updated = getRoleMenus(guild.id)[config.id];
+    if (config.channelId && config.messageId) {
+      const ch = guild.channels.cache.get(config.channelId);
+      if (ch) {
+        const msg = await ch.messages.fetch(config.messageId).catch(() => null);
+        if (msg) await msg.edit(buildMenuPayload(guild, updated)).catch(() => {});
+      }
+    } else if (config.channelId) {
+      const ch = guild.channels.cache.get(config.channelId);
+      const sent = await ch?.send(buildMenuPayload(guild, updated)).catch(() => null);
+      if (sent) {
+        updated.messageId = sent.id;
+        saveKey("roleMenus");
+      }
+    }
+    return res.json({ ok: true, payload: await guildPayload(client, guild) });
+  });
+
+  app.post("/api/guilds/:id/rolemenus/remove-role", requireAuth, async (req, res) => {
+    const guild = client.guilds.cache.get(req.params.id);
+    if (!guild) return res.status(404).json({ error: "guild not found" });
+
+    const config = getRoleMenus(guild.id)[req.body?.id];
+    if (!config) return res.status(400).json({ error: "Role menu not found." });
+    if (!guild.roles.cache.has(req.body?.roleId)) return res.status(400).json({ error: "Role not found." });
+    const result = removeRoleFromMenu(guild.id, config.id, req.body.roleId);
+    if (!result.ok) return res.status(400).json({ error: result.error });
+
+    const updated = getRoleMenus(guild.id)[config.id];
+    if (config.channelId && config.messageId) {
+      const ch = guild.channels.cache.get(config.channelId);
+      if (ch) {
+        const msg = await ch.messages.fetch(config.messageId).catch(() => null);
+        if (msg) await msg.edit(buildMenuPayload(guild, updated)).catch(() => {});
+      }
+    }
+    return res.json({ ok: true, payload: await guildPayload(client, guild) });
+  });
+
+  app.post("/api/guilds/:id/rolemenus/delete", requireAuth, async (req, res) => {
+    const guild = client.guilds.cache.get(req.params.id);
+    if (!guild) return res.status(404).json({ error: "guild not found" });
+
+    const config = getRoleMenus(guild.id)[req.body?.id];
+    if (!config) return res.status(400).json({ error: "Role menu not found." });
+    if (config.channelId && config.messageId) {
+      const ch = guild.channels.cache.get(config.channelId);
+      if (ch) {
+        const msg = await ch.messages.fetch(config.messageId).catch(() => null);
+        if (msg) await msg.delete().catch(() => {});
+      }
+    }
+    deleteRoleMenu(guild.id, config.id);
+    return res.json({ ok: true, note: "Role menu deleted.", payload: await guildPayload(client, guild) });
   });
 
   app.post("/api/guilds/:id/surveys/create", requireAuth, async (req, res) => {

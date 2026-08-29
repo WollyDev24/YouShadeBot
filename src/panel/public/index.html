@@ -573,21 +573,70 @@
         <section class="card" data-tab="moderation">
           <h3>Leveling</h3>
           <p class="muted small">
-            Members earn XP by chatting and level up on an XP curve. Configure roles and
-            the announcement channel with <code>/level</code> in Discord.
+            Members earn XP by chatting and level up on an XP curve. Rewards and the
+            announcement channel are configured here (or with <code>/level</code>).
           </p>
-          <p id="lv-status" class="hint"></p>
+          <div id="lv-status" class="hint"></div>
+          <div class="field-row">
+            <button id="btn-lv-save" class="btn primary">Save settings</button>
+            <label for="lv-ann">Announcement channel</label>
+            <select id="lv-ann"></select>
+          </div>
+          <div class="field-row">
+            <label><input type="checkbox" id="lv-removelower" /> Remove lower-tier reward roles when a higher level is reached</label>
+          </div>
           <h4 class="preview-title">Role rewards</h4>
+          <div class="field-row">
+            <label for="lv-level">Level</label>
+            <input type="number" id="lv-level" min="1" value="1" style="width:80px" />
+            <label for="lv-role">Role</label>
+            <select id="lv-role"></select>
+            <button id="btn-lv-add-role" class="btn primary">Add reward</button>
+          </div>
           <div id="lv-rewards" class="ann-list"></div>
         </section>
 
         <section class="card" data-tab="moderation">
           <h3>Role Menus</h3>
           <p class="muted small">
-            Dropdown menus that let members pick roles with one click. Create via
-            <code>/rolemenu create</code> then add roles with <code>/rolemenu addrole</code>.
+            Dropdown menus that let members pick roles with one click. Create a menu, then
+            add roles — it posts automatically to the chosen channel.
           </p>
-          <div id="rm-list" class="ann-list"></div>
+          <div class="field-row">
+            <label for="rm-title">Title</label>
+            <input type="text" id="rm-title" maxlength="100" value="Pick your roles!" style="width:200px" />
+            <label for="rm-color">Color</label>
+            <input type="color" id="rm-color" value="#5865f2" />
+          </div>
+          <div class="field-row col">
+            <label for="rm-description">Description</label>
+            <textarea id="rm-description" rows="2" maxlength="500">Select the roles you want.</textarea>
+          </div>
+          <div class="field-row">
+            <label for="rm-mode">Mode</label>
+            <select id="rm-mode">
+              <option value="multi">Multi (choose several)</option>
+              <option value="unique">Unique (pick one)</option>
+            </select>
+            <label for="rm-channel">Channel</label>
+            <select id="rm-channel"></select>
+            <button id="btn-rm-create" class="btn primary">Create menu</button>
+          </div>
+          <h4 class="preview-title">Manage a menu</h4>
+          <div class="field-row">
+            <label for="rm-pick">Menu</label>
+            <select id="rm-pick"></select>
+            <button id="btn-rm-delete" class="btn danger">Delete menu</button>
+          </div>
+          <div id="rm-current" class="hint"></div>
+          <div class="field-row">
+            <label for="rm-role">Role</label>
+            <select id="rm-role"></select>
+            <label for="rm-label">Label</label>
+            <input type="text" id="rm-label" maxlength="80" style="width:140px" placeholder="(optional)" />
+            <button id="btn-rm-add-role" class="btn primary">Add role</button>
+          </div>
+          <div id="rm-roles" class="ann-list"></div>
         </section>
 
         <section class="card" data-tab="messaging">
@@ -668,7 +717,15 @@
           </div>
           <p id="ct-status" class="hint"></p>
           <h4 class="preview-title">Reward</h4>
-          <p id="ct-reward" class="hint"></p>
+          <div id="ct-reward" class="hint"></div>
+          <div class="field-row">
+            <label for="ct-reward-role">Reward role</label>
+            <select id="ct-reward-role"></select>
+            <label for="ct-reward-every">Every</label>
+            <input type="number" id="ct-reward-every" min="1" value="10" style="width:80px" />
+            <span class="muted small">correct count</span>
+            <button id="btn-ct-reward-save" class="btn primary">Save reward</button>
+          </div>
         </section>
 
         <section class="card" data-tab="messaging">

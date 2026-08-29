@@ -780,8 +780,24 @@ function renderCountingEmojis(g) {
   const rw = g.counting.rewardRoleId;
   $("#ct-reward").textContent = rw
     ? `Every correct count ending in a multiple of ${g.counting.rewardEvery} awards <@&${rw}> — best streak so far: ${g.counting.best}.`
-    : "No reward role configured — set one with /counting reward in Discord.";
+    : "No reward configured yet — set a role and interval below.";
+
+  const rSel = $("#ct-reward-role");
+  fillSelect(rSel, g.roles, rSel.value || rw, "No roles available", true);
+  const rEvery = $("#ct-reward-every");
+  if (rEvery.dataset.guildId !== g.id) {
+    rEvery.dataset.guildId = g.id;
+    rEvery.value = g.counting.rewardEvery ?? 10;
+  }
 }
+
+$("#btn-ct-reward-save").addEventListener("click", (e) =>
+  withGuild(
+    "counting/reward",
+    { roleId: $("#ct-reward-role").value || null, every: $("#ct-reward-every").value },
+    e.currentTarget
+  )
+);
 
 $("#btn-ct-save").addEventListener("click", (e) =>
   withGuild(
@@ -1149,49 +1165,166 @@ $("#btn-rr-delete").addEventListener("click", async (e) => {
 
 function renderLeveling(g) {
   const lv = g.leveling || { enabled: false, roles: [] };
+
+  const ann = $("#lv-ann");
+  fillSelect(ann, g.channels.filter((c) => c.type === 0), ann.value || lv.annChannelId, "No text channels", true);
+
+  const cb = $("#lv-removelower");
+  if (cb.dataset.guildId !== g.id) {
+    cb.dataset.guildId = g.id;
+    cb.checked = lv.removeLower !== false;
+  }
+
   $("#lv-status").textContent = lv.enabled
     ? `Leveling is on — ${lv.userCount ? `${lv.userCount} member(s) earning XP` : "no activity yet"}${lv.annChannelId ? `, announcements in <#${lv.annChannelId}>` : ""}.`
-    : "Leveling is currently off — use /level enable in Discord to start.";
+    : "Leveling is off. Add a reward role below and save to enable it.";
+
+  const roleSel = $("#lv-role");
+  fillSelect(roleSel, g.roles, null, "No roles available", false);
 
   const list = $("#lv-rewards");
   list.innerHTML = "";
-  if (!lv.roles.length) {
-    list.innerHTML = `<span class="muted small">No level reward roles configured yet — use /level reward in Discord.</span>`;
-    return;
+  const rewards = [...lv.roles].sort((a, b) => a.level - b.level);
+  if (!rewards.length) {
+    list.innerHTML = `<span class="muted small">No level reward roles yet — add one below.</span>`;
   }
-  for (const r of [...lv.roles].sort((a, b) => a.level - b.level)) {
+  for (const r of rewards) {
     const row = document.createElement("div");
     row.className = "ann-item";
     const info = document.createElement("div");
     info.className = "grow";
     info.innerHTML = `Level <strong>${r.level}</strong> → <span class="dc-mention">@${escapeHtml(g.roles.find((x) => x.id === r.roleId)?.name ?? "(deleted role)")}</span>`;
-    row.appendChild(info);
+    const btn = document.createElement("button");
+    btn.className = "btn danger small";
+    btn.textContent = "Remove";
+    btn.addEventListener("click", () => withGuild("leveling/remove-role", { level: r.level }));
+    row.append(info, btn);
     list.appendChild(row);
   }
 }
 
+$("#btn-lv-save").addEventListener("click", (e) =>
+  withGuild(
+    "leveling/save",
+    {
+      enabled: true,
+      removeLower: $("#lv-removelower").checked,
+      annChannelId: $("#lv-ann").value || null
+    },
+    e.currentTarget
+  )
+);
+
+$("#btn-lv-add-role").addEventListener("click", (e) => {
+  const roleId = $("#lv-role").value;
+  const level = Number($("#lv-level").value);
+  if (!roleId) return toast("Choose a role.", true);
+  if (!Number.isInteger(level) || level < 1) return toast("Level must be a positive integer.", true);
+  withGuild("leveling/set-role", { roleId, level }, e.currentTarget);
+  withGuild("leveling/save", { enabled: true, removeLower: $("#lv-removelower").checked, annChannelId: $("#lv-ann").value || null });
+});
+
 /* --- role menus --- */
 
 function renderRoleMenus(g) {
-  const list = $("#rm-list");
-  list.innerHTML = "";
   const menus = g.roleMenus || [];
+
+  const chSel = $("#rm-channel");
+  fillSelect(chSel, g.channels.filter((c) => c.type === 0), null, "No text channels", false);
+
+  const pick = $("#rm-pick");
+  const current = pick.value;
+  pick.innerHTML = "";
   if (!menus.length) {
-    list.innerHTML = `<span class="muted small">No role menus yet — use /rolemenu create in a channel, then /rolemenu addrole.</span>`;
-    return;
+    const o = document.createElement("option");
+    o.textContent = "No menus yet";
+    o.disabled = true;
+    o.selected = true;
+    pick.appendChild(o);
+  } else {
+    for (const m of menus) {
+      const o = document.createElement("option");
+      o.value = m.id;
+      o.textContent = m.title;
+      if (m.id === current) o.selected = true;
+      pick.appendChild(o);
+    }
   }
-  for (const m of menus) {
-    const item = document.createElement("div");
-    item.className = "ann-item";
+
+  const selected = menus.find((m) => m.id === pick.value) || menus[0] || null;
+  if (selected) renderRoleMenuDetail(g, selected);
+  else {
+    $("#rm-current").textContent = "";
+    $("#rm-roles").innerHTML = `<span class="muted small">No menus yet — create one above.</span>`;
+  }
+
+  const roleSel = $("#rm-role");
+  fillSelect(roleSel, g.roles, null, "No roles available", false);
+}
+
+function renderRoleMenuDetail(g, m) {
+  $("#rm-current").textContent = `"${m.title}" in <#${m.channelId}> · ${m.mode === "unique" ? "pick one" : "pick many"} · ${m.roles.length}/${25} roles`;
+
+  const list = $("#rm-roles");
+  list.innerHTML = "";
+  if (!m.roles.length) {
+    list.innerHTML = `<span class="muted small">No roles in this menu yet — add one below.${m.messageId ? "" : " The menu will post to the channel when the first role is added."}</span>`;
+  }
+  for (const r of m.roles) {
+    const row = document.createElement("div");
+    row.className = "ann-item";
     const info = document.createElement("div");
     info.className = "grow";
-    info.innerHTML = `<strong>${escapeHtml(m.title)}</strong>
-      <span class="muted small">in <#${m.channelId}> · ${m.mode === "unique" ? "pick one" : "pick many"}</span>
-      <br><span class="muted small">${m.roles.length ? "Roles: " + m.roles.map((r) => `@${escapeHtml(g.roles.find((x) => x.id === r.roleId)?.name ?? "(deleted role)")}`).join(", ") : "No roles added yet"}</span>`;
-    item.appendChild(info);
-    list.appendChild(item);
+    info.innerHTML = `<span class="dc-mention">@${escapeHtml(g.roles.find((x) => x.id === r.roleId)?.name ?? "(deleted role)")}</span>` +
+      (r.label ? ` <span class="muted small">(${escapeHtml(r.label)})</span>` : "");
+    const btn = document.createElement("button");
+    btn.className = "btn danger small";
+    btn.textContent = "Remove";
+    btn.addEventListener("click", () => withGuild("rolemenus/remove-role", { id: m.id, roleId: r.roleId }));
+    row.append(info, btn);
+    list.appendChild(row);
   }
 }
+
+$("#rm-pick").addEventListener("change", () => {
+  const g = currentGuild();
+  const m = (g?.roleMenus || []).find((x) => x.id === $("#rm-pick").value);
+  if (m) renderRoleMenuDetail(g, m);
+});
+
+$("#btn-rm-create").addEventListener("click", (e) => {
+  const channelId = $("#rm-channel").value;
+  if (!channelId) return toast("Choose a channel.", true);
+  withGuild(
+    "rolemenus/create",
+    {
+      title: $("#rm-title").value.trim() || "Pick your roles!",
+      description: $("#rm-description").value.trim() || "Select the roles you want.",
+      color: $("#rm-color").value,
+      mode: $("#rm-mode").value,
+      channelId
+    },
+    e.currentTarget
+  );
+  $("#rm-description").value = "Select the roles you want.";
+  $("#rm-title").value = "Pick your roles!";
+});
+
+$("#btn-rm-add-role").addEventListener("click", (e) => {
+  const id = $("#rm-pick").value;
+  const roleId = $("#rm-role").value;
+  if (!id) return toast("Create a menu first.", true);
+  if (!roleId) return toast("Choose a role.", true);
+  withGuild("rolemenus/add-role", { id, roleId, label: $("#rm-label").value.trim() }, e.currentTarget);
+  $("#rm-label").value = "";
+});
+
+$("#btn-rm-delete").addEventListener("click", async (e) => {
+  const id = $("#rm-pick").value;
+  if (!id) return toast("No menu to delete.", true);
+  if (!confirm("Delete this role menu and remove its message?")) return;
+  await withGuild("rolemenus/delete", { id }, e.currentTarget);
+});
 
 /* --- lockdown --- */
 
