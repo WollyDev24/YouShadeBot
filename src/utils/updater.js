@@ -46,8 +46,13 @@ export async function checkForUpdates(client) {
   busy = true;
   try {
     const branch = await git("rev-parse", "--abbrev-ref", "HEAD");
-    if ((await git("status", "--porcelain", "--untracked-files=no")).length > 0) {
-      return { status: "dirty" };
+    const modified = await git("status", "--porcelain", "--untracked-files=no");
+    if (modified.length > 0) {
+      const files = modified
+        .split("\n")
+        .map((l) => l.trim().replace(/^[A-Z]+\s+/, ""))
+        .filter(Boolean);
+      return { status: "dirty", modified: files };
     }
 
     await git("fetch", "origin", branch);
