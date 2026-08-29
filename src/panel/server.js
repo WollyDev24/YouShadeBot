@@ -1259,6 +1259,18 @@ export function startPanel(client) {
         }
       }
     }
+    // Self-check: verify the HTTP server actually responds on the bound port.
+    // On managed hosts (Wispbyte etc.) the public URL 503s when the process is
+    // NOT serving on the port the proxy forwards to. This local probe tells us
+    // whether the app is serving or whether it's a proxy/routing issue.
+    setTimeout(async () => {
+      try {
+        const probe = await fetch(`http://127.0.0.1:${port}/`);
+        console.log(`[panel] self-check OK: 127.0.0.1:${port} -> HTTP ${probe.status}`);
+      } catch (err) {
+        console.error(`[panel] self-check FAILED: nothing responding on 127.0.0.1:${port}: ${err.message}`);
+      }
+    }, 1500);
   });
   return server;
 }
