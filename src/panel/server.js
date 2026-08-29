@@ -267,6 +267,21 @@ export function startPanel(client) {
   app.use(express.json());
   app.use(cookieParser());
 
+  // Request logging for diagnosing hangs behind proxies/routers: logs every
+  // incoming request with method, path and a completion marker.
+  app.use((req, res, next) => {
+    const start = Date.now();
+    res.on("finish", () => {
+      const ms = Date.now() - start;
+      if (ms >= 500) {
+        console.log(`[panel] SLOW ${req.method} ${req.originalUrl} -> ${res.statusCode} (${ms}ms)`);
+      } else {
+        console.log(`[panel] ${req.method} ${req.originalUrl} -> ${res.statusCode} (${ms}ms)`);
+      }
+    });
+    next();
+  });
+
   const AUTH_COOKIE = "ys_panel";
 
   const requireAuth = (req, res, next) => {
