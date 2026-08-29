@@ -20,15 +20,9 @@ export default {
           `Found **${result.commits}** new commit(s) — pulling, installing dependencies if needed and restarting. Back in a few seconds!`
         );
       case "dirty":
-        return result.modified?.length
-          ? interaction.editReply(
-              `Skipped: local changes in: \`${result.modified.join("`, `")}\`.\nOn the server run \`git restore ${result.modified
-                .map((f) => f)
-                .join(" ")}\` and try again.`
-            )
-          : interaction.editReply(
-              "Skipped: the working tree has local changes. Commit or stash them first."
-            );
+        return interaction.editReply(
+          `Couldn't clear local changes (\`${(result.modified ?? []).join(", ")}\`) before updating. They may need manual resolution on the server.`
+        );
       case "diverged":
         return interaction.editReply(
           "Skipped: local history has diverged from origin — needs a manual `git pull`."

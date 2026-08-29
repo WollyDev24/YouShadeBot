@@ -47,13 +47,6 @@ export async function checkForUpdates(client) {
   try {
     const branch = await git("rev-parse", "--abbrev-ref", "HEAD");
     const modified = await git("status", "--porcelain", "--untracked-files=no");
-    if (modified.length > 0) {
-      const files = modified
-        .split("\n")
-        .map((l) => l.trim().replace(/^[A-Z]+\s+/, ""))
-        .filter(Boolean);
-      return { status: "dirty", modified: files };
-    }
 
     await git("fetch", "origin", branch);
     const local = await git("rev-parse", "HEAD");
@@ -70,6 +63,24 @@ export async function checkForUpdates(client) {
         `Auto-update skipped: local history diverged from origin/${branch}. Manual intervention needed.`
       );
       return { status: "diverged" };
+    }
+
+    // Self-heal: the working tree may have tracked-file churn (e.g. a prior
+    // npm install rewriting package.json / package-lock.json). There may be no
+    // shell access to clean it, so discard tracked changes before the
+    // fast-forward pull. Untracked files (.env, data/) are untouched.
+    const files = modified
+      .split("\n")
+      .map((l) => l.trim().replace(/^[A-Z]+\s+/, ""))
+      .filter(Boolean);
+    if (files.length > 0) {
+      console.log(`[updater] restoring dirty tracked files before update: ${files.join(", ")}`);
+      try {
+        await git("restore", ".");
+      } catch (err) {
+        console.error("[updater] failed to restore working tree:", err.message);
+        return { status: "dirty", modified: files };
+      }
     }
 
     const count = changelog.split("\n").length;
