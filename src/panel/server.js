@@ -1249,13 +1249,7 @@ export function startPanel(client) {
       process.env.WISPB_DEFAULT_PORT ||
       3000
   );
-  // Wispbyte and similar managed hosts run a reverse proxy on the same machine
-  // that forwards public traffic to the app at localhost. On those platforms the
-  // app must bind to 127.0.0.1, NOT 0.0.0.0. We detect that by the presence of a
-  // platform-injected PORT env var (a self-hosted bot typically won't have one).
-  const host =
-    process.env.PANEL_HOST ||
-    (process.env.PORT ? "127.0.0.1" : "0.0.0.0");
+  const host = process.env.PANEL_HOST || "0.0.0.0";
   const server = app.listen(port, host, () => {
     console.log(`[panel] dashboard running at http://${host}:${port}`);
     if (host === "0.0.0.0" || host === "::") {
