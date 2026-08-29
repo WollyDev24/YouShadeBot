@@ -1240,7 +1240,15 @@ export function startPanel(client) {
 
   app.use(express.static(PUBLIC));
 
-  const port = Number(process.env.PANEL_PORT || 3000);
+  // Wispbyte and similar panels expose your server at a public address:port and
+  // provide that port via environment variables (or you set it in Startup > Env
+  // vars). Prefer an explicit PANEL_PORT, then the platform-provided PORT.
+  const port = Number(
+    process.env.PANEL_PORT ||
+      process.env.PORT ||
+      process.env.WISPB_DEFAULT_PORT ||
+      3000
+  );
   const host = process.env.PANEL_HOST || "0.0.0.0";
   const server = app.listen(port, host, () => {
     console.log(`[panel] dashboard running at http://${host}:${port}`);
