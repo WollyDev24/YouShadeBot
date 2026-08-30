@@ -602,22 +602,30 @@ export function startPanel(client) {
   });
 
   app.get("/api/status", requireAuth, async (req, res) => {
-    if (!client.user) return res.json({ online: false });
-    const guilds = client.guilds.cache;
     const auth = getAuth(req);
-    return res.json({
-      online: true,
-      tag: client.user.tag,
-      id: client.user.id,
-      ping: Math.round(client.ws.ping),
-      uptime: Math.floor(process.uptime()),
-      guildCount: guilds.size,
-      totalMembers: guilds.reduce((n, g) => n + g.memberCount, 0),
+    const base = {
       frontendRev: FRONTEND_REV,
       superuser: isSuperuser(auth),
       oauthEnabled: oauthConfig().enabled,
-      inviteUrl: `https://discord.com/oauth2/authorize?client_id=${client.user.id}&scope=bot%20applications.commands&permissions=${INVITE_PERMISSIONS}`,
       user: auth?.kind === "discord" ? { name: auth.session.name, avatar: auth.session.avatar } : null
+    };
+    // Report the bot online state from the ready flag, not client.user: on some
+    // discord.js versions client.user can be unset even while the gateway is up.
+    const online = typeof client.isReady === "function" ? client.isReady() : Boolean(client.user);
+    if (!online) return res.json({ ...base, online: false });
+    const guilds = client.guilds.cache;
+    return res.json({
+      ...base,
+      online: true,
+      tag: client.user?.tag ?? client.user?.username ?? "",
+      id: client.user?.id ?? "",
+      ping: Math.round(client.ws.ping || 0),
+      uptime: Math.floor(process.uptime()),
+      guildCount: guilds.size,
+      totalMembers: guilds.reduce((n, g) => n + g.memberCount, 0),
+      inviteUrl: client.user?.id
+        ? `https://discord.com/oauth2/authorize?client_id=${client.user.id}&scope=bot%20applications.commands&permissions=${INVITE_PERMISSIONS}`
+        : null
     });
   });
 
