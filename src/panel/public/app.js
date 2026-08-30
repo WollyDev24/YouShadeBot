@@ -213,15 +213,21 @@ const INTRO_STEPS = [
 let introStep = 0;
 let introServerId = null;
 let introChannelId = "";
+let SUPERUSER = false;
+
+function getIntroSteps() {
+  return INTRO_STEPS.filter((s) => !(s.title === "Register commands" && !SUPERUSER));
+}
 
 function renderIntro() {
-  $("#intro-step").textContent = `${introStep + 1}/${INTRO_STEPS.length}`;
-  const st = INTRO_STEPS[introStep];
+  const steps = getIntroSteps();
+  $("#intro-step").textContent = `${introStep + 1}/${steps.length}`;
+  const st = steps[introStep];
   $("#intro-title").textContent = st.title;
   $("#intro-desc").textContent = st.desc;
-  $("#intro-bar").style.width = `${((introStep + 1) / INTRO_STEPS.length) * 100}%`;
+  $("#intro-bar").style.width = `${((introStep + 1) / steps.length) * 100}%`;
   $("#btn-intro-back").disabled = introStep === 0;
-  $("#btn-intro-next").textContent = introStep === INTRO_STEPS.length - 1 ? "Finish" : "Next";
+  $("#btn-intro-next").textContent = introStep === steps.length - 1 ? "Finish" : "Next";
   const body = $("#intro-body");
   const oldHeight = body.offsetHeight;
   body.style.height = `${oldHeight}px`;
@@ -263,7 +269,7 @@ $("#btn-intro-back").addEventListener("click", () => {
   }
 });
 $("#btn-intro-next").addEventListener("click", () => {
-  if (introStep === INTRO_STEPS.length - 1) {
+  if (introStep === getIntroSteps().length - 1) {
     dismissIntro();
     return;
   }
@@ -302,6 +308,7 @@ async function loadStatus() {
     }
     $("#btn-commands").classList.toggle("hidden", st.superuser === false);
     $("#btn-up-check").classList.toggle("hidden", st.superuser === false);
+    SUPERUSER = st.superuser === true;
   } catch {}
 }
 
