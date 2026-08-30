@@ -607,7 +607,24 @@ label.check input { accent-color: var(--accent); }
   white-space: nowrap;
 }
 .intro-body { margin-top: 10px; overflow: hidden; transition: height 0.25s ease; }
-.intro-body select { width: 100%; }
+.intro-body select {
+  width: 100%;
+  padding: 9px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-soft);
+  color: var(--text);
+  font-size: 0.9rem;
+}
+.intro-body select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--glow);
+}
+.intro-body select option {
+  background: var(--card);
+  color: var(--text);
+}
 .intro-status { margin-top: 10px; font-size: 0.85rem; }
 .intro-actions {
   display: flex;
