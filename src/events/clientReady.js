@@ -3,7 +3,7 @@ import { getData } from "../utils/db.js";
 import { runDue } from "../utils/announcements.js";
 import { runDue as runDueGiveaways } from "../utils/giveaways.js";
 import { runDue as runDueReminders } from "../utils/reminders.js";
-import { startAutoUpdate } from "../utils/updater.js";
+import { startAutoUpdate, notifyLogChannels } from "../utils/updater.js";
 import { startPanel } from "../panel/server.js";
 import { restoreAllTimers } from "../utils/sticky.js";
 
@@ -13,6 +13,9 @@ export default {
   execute(client) {
     console.log(`[ready] logged in as ${client.user.tag}`);
     client.user.setActivity("/help", { type: "WATCHING" });
+
+    const commandCount = client.commands?.size ?? 0;
+    notifyLogChannels(client, `\u{1F7E2} **Bot started** — registered **${commandCount}** commands.`).catch(() => {});
 
     startPanel(client);
     restoreAllTimers(client);

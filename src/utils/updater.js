@@ -23,7 +23,7 @@ export function setLogChannel(guildId, channelId) {
   saveKey("logs");
 }
 
-async function notifyLogChannels(client, message) {
+export async function notifyLogChannels(client, message) {
   const data = getData();
   for (const guildId of Object.keys(data.logs ?? {})) {
     const channelId = data.logs[guildId];
