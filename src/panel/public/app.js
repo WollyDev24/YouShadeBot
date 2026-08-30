@@ -155,6 +155,7 @@ function renderGuild(g) {
   renderLeveling(g);
   renderRoleMenus(g);
   populateCustomEmojis(g);
+  renderOverview(g);
 }
 
 /* --- welcome --- */
@@ -1734,23 +1735,179 @@ $("#btn-commands").addEventListener("click", async (e) => {
   }
 });
 
-/* --- tabs --- */
+/* --- tabs & search --- */
 
-const TABS = ["channels", "messaging", "tickets", "automod", "moderation"];
+const TABS = ["overview", "channels", "messaging", "tickets", "roles", "automod", "moderation"];
+let activeTab = null;
+
+function tabSections() {
+  return [...document.querySelectorAll("#guild-view section.card[data-tab]")];
+}
+
+function sectionSearchText(card) {
+  if (!card.dataset.searchText) {
+    card.dataset.searchText = (
+      card.querySelector("h3")?.textContent +
+      " " +
+      (card.querySelector(".muted.small")?.textContent ?? "")
+    ).toLowerCase();
+  }
+  return card.dataset.searchText;
+}
+
+function applyVisibility() {
+  const q = $("#search").value.trim().toLowerCase();
+  let count = 0;
+
+  for (const card of tabSections()) {
+    if (card.dataset.tab === "overview") {
+      card.classList.toggle("hidden", q.length > 0);
+      if (q.length && sectionSearchText(card).includes(q)) count++;
+      continue;
+    }
+    let visible;
+    if (q) {
+      visible = sectionSearchText(card).includes(q);
+    } else {
+      visible = card.dataset.tab === activeTab;
+    }
+    card.classList.toggle("hidden", !visible);
+    if (visible) count++;
+  }
+
+  const searching = q.length > 0;
+  document.body.classList.toggle("searching", searching);
+  const countEl = $("#search-count");
+  if (searching) {
+    countEl.textContent = `${count} match${count === 1 ? "" : "es"}`;
+  } else {
+    countEl.textContent = "";
+  }
+}
 
 function applyTab(name) {
-  if (!TABS.includes(name)) name = TABS[0];
+  if (!TABS.includes(name)) name = "overview";
+  activeTab = name;
   try { localStorage.setItem("ys_tab", name); } catch {}
   document.querySelectorAll("#tabs .tab").forEach((t) => t.classList.toggle("active", t.dataset.tab === name));
-  document.querySelectorAll("#guild-view section.card[data-tab]").forEach((card) => {
-    card.classList.toggle("hidden", card.dataset.tab !== name);
-  });
+  $("#search").value = "";
+  applyVisibility();
 }
+
+function focusSearch() {
+  $("#search").focus();
+  $("#search").select();
+}
+
+$("#search").addEventListener("input", applyVisibility);
 
 document.querySelectorAll("#tabs .tab").forEach((btn) =>
   btn.addEventListener("click", () => applyTab(btn.dataset.tab))
 );
+
+document.addEventListener("keydown", (e) => {
+  if (e.key === "/" && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) {
+    e.preventDefault();
+    focusSearch();
+  }
+  if (e.key === "Escape") {
+    $("#search").value = "";
+    applyVisibility();
+  }
+});
+
 applyTab((() => { try { return localStorage.getItem("ys_tab"); } catch { return null; } })());
+
+/* --- overview --- */
+
+function ovTile(icon, tab, targetId, name, state, stateClass = "") {
+  const t = document.createElement("div");
+  t.className = `ov-tile ${stateClass}`;
+  t.innerHTML = `
+    <div class="ov-tile-head"><span class="ov-tile-ico">${icon}</span><span class="ov-tile-name">${escapeHtml(name)}</span></div>
+    <div class="ov-tile-foot"><span class="dot"></span><span>${escapeHtml(state)}</span></div>
+  `;
+  t.addEventListener("click", () => gotoFeature(tab, targetId));
+  return t;
+}
+
+function gotoFeature(tab, targetId) {
+  applyTab(tab);
+  const card = document.getElementById(targetId);
+  if (card) {
+    card.scrollIntoView({ behavior: "smooth", block: "center" });
+    card.classList.remove("flash");
+    void card.offsetWidth;
+    card.classList.add("flash");
+  }
+}
+
+function renderOverview(g) {
+  const grid = $("#ov-grid");
+  grid.innerHTML = "";
+  const channelName = (id) => g.channels.find((c) => c.id === id)?.name ?? "";
+  const tiles = [
+    ovTile("🎟️", "tickets", "sec-tickets", "Tickets",
+      `${g.tickets.types.length} type(s) · ${g.tickets.openCount} open`, g.tickets.types.length ? "on" : "off"),
+    ovTile("💬", "messaging", "sec-welcome", "Welcome messages",
+      g.welcome.enabled ? `On → ${channelName(g.welcome.channelId) || "(no channel)"}` : "Off",
+      g.welcome.enabled ? "on" : "off"),
+    ovTile("👋", "messaging", "sec-autoresponses", "Auto-responses",
+      `${g.filters.length} rule(s)`, g.filters.length ? "on" : "off"),
+    ovTile("🎁", "messaging", "sec-giveaways", "Giveaways",
+      `${g.giveaways.filter((x) => !x.ended).length} running`, g.giveaways.some((x) => !x.ended) ? "on" : "off"),
+    ovTile("📊", "messaging", "sec-polls", "Polls",
+      `${g.polls.length} total`, g.polls.length ? "on" : "off"),
+    ovTile("⏰", "messaging", "sec-reminders", "Reminders",
+      `${g.reminders.length} set`, g.reminders.length ? "on" : "off"),
+    ovTile("📣", "messaging", "sec-announcements", "Announcements",
+      `${g.announcements.length} scheduled`, g.announcements.length ? "on" : "off"),
+    ovTile("📨", "messaging", "sec-embedsender", "Embed sender",
+      "Send a message or embed", "off"),
+    ovTile("⭐", "messaging", "sec-starboard", "Starboard",
+      g.starboard.enabled ? `On → ${channelName(g.starboard.channelId) || "(no channel)"}` : "Off",
+      g.starboard.enabled ? "on" : "off"),
+    ovTile("🔢", "messaging", "sec-counting", "Counting",
+      g.counting.channelId ? `Active · reward: ${g.counting.rewardRoleId ? "set" : "none"}` : "Not set up",
+      g.counting.channelId ? "on" : "off"),
+    ovTile("📋", "messaging", "sec-surveys", "Surveys",
+      `${g.surveys.length} created`, g.surveys.length ? "on" : "off"),
+    ovTile("🔊", "channels", "sec-temp", "Temp channels",
+      g.temp.enabled ? `On → ${channelName(g.temp.triggerId) || "(no trigger)"}` : "Off",
+      g.temp.enabled ? "on" : "off"),
+    ovTile("📈", "channels", "sec-stats", "Server stats",
+      g.stats.enabled ? "Live channels on" : "Off", g.stats.enabled ? "on" : "off"),
+    ovTile("📌", "channels", "sec-sticky", "Sticky messages",
+      `${g.sticky.length} active`, g.sticky.length ? "on" : "off"),
+    ovTile("🛡️", "automod", "sec-automod", "Automod",
+      g.automod.enabled ? `On · ${g.automod.caseCount} case(s)` : "Off",
+      g.automod.enabled ? "on" : "off"),
+    ovTile("🚧", "moderation", "sec-lockdown", "Lockdown",
+      `${g.lockdowns.length} locked`, g.lockdowns.length ? "warn" : "off"),
+    ovTile("⚡", "moderation", "sec-update", "Auto-update",
+      g.logChannelId ? `Logging → #${channelName(g.logChannelId) || "(deleted)"}` : "No logging channel",
+      g.logChannelId ? "on" : "off"),
+    ovTile("🎭", "roles", "sec-reactionroles", "Reaction roles",
+      `${g.reactionRoles.length} message(s)`, g.reactionRoles.length ? "on" : "off"),
+    ovTile("📚", "roles", "sec-rolemenus", "Role menus",
+      `${g.roleMenus.length} menu(s)`, g.roleMenus.length ? "on" : "off"),
+    ovTile("🧑‍🤝‍🧑", "roles", "sec-autoroles", "Auto-join roles",
+      g.autoRoles.humanRoleId || g.autoRoles.botRoleId ? "Set" : "Off",
+      g.autoRoles.humanRoleId || g.autoRoles.botRoleId ? "on" : "off"),
+    ovTile("🏆", "roles", "sec-leveling", "Leveling",
+      g.leveling.enabled ? `On · ${g.leveling.userCount} member(s)` : "Off",
+      g.leveling.enabled ? "on" : "off"),
+    ovTile("🧰", "moderation", "sec-commands", "Command toggles",
+      g.disabledCommands.length ? `${g.disabledCommands.length} disabled` : "All enabled",
+      g.disabledCommands.length ? "warn" : "on"),
+    ovTile("🖥️", "moderation", "sec-panel", "Discord panel",
+      g.panelRoleId ? "Role restricted" : "Manage Server only",
+      g.panelRoleId ? "on" : "off")
+  ];
+
+  for (const t of tiles) grid.appendChild(t);
+  $("#ov-empty").classList.toggle("hidden", tiles.length > 0);
+}
 
 async function refreshAll() {
   await Promise.all([loadStatus(), loadGuilds()]);

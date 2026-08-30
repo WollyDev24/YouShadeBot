@@ -20,8 +20,11 @@
   <div id="app" class="app hidden">
     <aside class="sidebar">
       <div class="brand">
-        <h1>YouShade</h1>
-        <span class="muted">Bot Panel</span>
+        <div class="brand-logo">YS</div>
+        <div>
+          <h1>YouShade</h1>
+          <span class="muted">Bot Panel</span>
+        </div>
       </div>
       <div id="status-box" class="status-box">
         <div class="status-line"><span class="dot" id="status-dot"></span><span id="status-text">—</span></div>
@@ -34,6 +37,7 @@
     </aside>
 
     <main class="main">
+      <div class="main-inner">
       <div id="empty-state" class="empty hidden">
         <h2>Select a server</h2>
         <p class="muted">Pick a server on the left to manage its channels.</p>
@@ -49,14 +53,33 @@
         </header>
 
         <nav id="tabs" class="tabs">
-          <button type="button" class="tab" data-tab="channels">Channels &amp; Stats</button>
-          <button type="button" class="tab" data-tab="messaging">Messaging</button>
-          <button type="button" class="tab" data-tab="tickets">Tickets</button>
-          <button type="button" class="tab" data-tab="automod">Automod</button>
-          <button type="button" class="tab" data-tab="moderation">Moderation</button>
+          <button type="button" class="tab" data-tab="overview"><span class="tab-ico">🏠</span>Overview</button>
+          <button type="button" class="tab" data-tab="channels"><span class="tab-ico">🔊</span>Channels</button>
+          <button type="button" class="tab" data-tab="messaging"><span class="tab-ico">💬</span>Messaging</button>
+          <button type="button" class="tab" data-tab="tickets"><span class="tab-ico">🎫</span>Tickets</button>
+          <button type="button" class="tab" data-tab="roles"><span class="tab-ico">🎭</span>Roles</button>
+          <button type="button" class="tab" data-tab="automod"><span class="tab-ico">🛡️</span>Automod</button>
+          <button type="button" class="tab" data-tab="moderation"><span class="tab-ico">⚙️</span>Moderation</button>
         </nav>
 
-        <section class="card" data-tab="channels">
+        <div class="toolbar">
+          <div class="search-box">
+            <span class="search-ico">⌕</span>
+            <input type="text" id="search" placeholder="Search anything…  (press /)" autocomplete="off" spellcheck="false" />
+            <span id="search-count" class="search-count"></span>
+          </div>
+        </div>
+
+        <section class="card" data-tab="overview" id="sec-overview">
+          <h3>Overview</h3>
+          <p class="muted small">
+            At-a-glance status of every feature. Click a tile to jump straight to its settings.
+          </p>
+          <div id="ov-grid" class="ov-grid"></div>
+          <p id="ov-empty" class="hint hidden">Nothing is configured yet — use the tabs or search above to set things up.</p>
+        </section>
+
+        <section class="card" data-tab="channels" id="sec-temp">
           <h3>Temporary Channels</h3>
           <p class="muted small">
             Users who join the trigger voice channel get their own private temporary voice channel.
@@ -70,7 +93,7 @@
           <button id="btn-temp-disable" class="btn danger">Disable temporary channels</button>
         </section>
 
-        <section class="card" data-tab="channels">
+        <section class="card" data-tab="channels" id="sec-stats">
           <h3>Server Stats</h3>
           <p class="muted small">
             Voice channels showing live member / bot / online / in-voice numbers, updated every 5 minutes.
@@ -83,7 +106,7 @@
           <p id="stats-status" class="hint"></p>
         </section>
 
-        <section class="card" data-tab="channels">
+        <section class="card" data-tab="channels" id="sec-sticky">
           <h3>Sticky Messages</h3>
           <p class="muted small">
             Keeps a message at the top of a channel by reposting it at a set interval.
@@ -109,7 +132,7 @@
           <div id="sk-list" class="ann-list"></div>
         </section>
 
-        <section class="card" data-tab="messaging">
+        <section class="card" data-tab="messaging" id="sec-polls">
           <h3>Polls</h3>
           <p class="muted small">
             Button-based polls with live progress bars. Create via <code>/poll create</code>.
@@ -117,7 +140,7 @@
           <div id="poll-list" class="ann-list"></div>
         </section>
 
-        <section class="card" data-tab="messaging">
+        <section class="card" data-tab="messaging" id="sec-reminders">
           <h3>Reminders</h3>
           <p class="muted small">
             Scheduled reminders sent to a channel. Create via <code>/reminder set</code>.
@@ -125,7 +148,7 @@
           <div id="reminder-list" class="ann-list"></div>
         </section>
 
-        <section class="card" data-tab="messaging">
+        <section class="card" data-tab="messaging" id="sec-welcome">
           <h3>Welcome messages</h3>
           <p class="muted small">
             Greets new members in a channel of your choice. Variables: <code>{user}</code>
@@ -186,7 +209,7 @@
           </div>
         </section>
 
-        <section class="card" data-tab="tickets">
+        <section class="card" data-tab="tickets" id="sec-tickets">
           <h3>Tickets</h3>
           <p class="muted small">
             Create one panel per purpose (Support, Reports, Appeals&#8230;). Each type gets its own category,
@@ -211,7 +234,7 @@
           </div>
         </section>
 
-        <section class="card" data-tab="messaging">
+        <section class="card" data-tab="messaging" id="sec-embedsender">
           <h3>Embed sender</h3>
           <p class="muted small">
             Send a normal message or a styled embed to any text channel.
@@ -268,7 +291,7 @@
           </div>
         </section>
 
-        <section class="card" data-tab="messaging">
+        <section class="card" data-tab="messaging" id="sec-announcements">
           <h3>Scheduled announcements</h3>
           <p class="muted small">
             Queue messages or embeds to be posted automatically at a set time. Uses the same
@@ -292,7 +315,7 @@
           <div id="an-list" class="ann-list"></div>
         </section>
 
-        <section class="card" data-tab="messaging">
+        <section class="card" data-tab="messaging" id="sec-giveaways">
           <h3>Giveaways</h3>
           <p class="muted small">
             Posts a giveaway with a join button. When time runs out, winners are drawn,
@@ -341,7 +364,7 @@
           <div id="gw-list" class="ann-list"></div>
         </section>
 
-        <section class="card" data-tab="automod">
+        <section class="card" data-tab="automod" id="sec-automod">
           <h3>Automod</h3>
           <p class="muted small">
             Automatically moderate messages. Configure filters below, then enable the master toggle.
@@ -357,7 +380,7 @@
           </div>
         </section>
 
-        <section class="card" data-tab="automod">
+        <section class="card" data-tab="automod" id="sec-automod-word">
           <h3>Word Filter</h3>
           <p class="muted small">Block messages containing specific words. Case-insensitive, whole-word match.</p>
           <div class="field-row">
@@ -385,7 +408,7 @@
           </div>
         </section>
 
-        <section class="card" data-tab="automod">
+        <section class="card" data-tab="automod" id="sec-automod-spam">
           <h3>Spam Detection</h3>
           <p class="muted small">Detects users sending too many messages in a short window.</p>
           <div class="field-row">
@@ -406,7 +429,7 @@
           <button id="btn-am-spam-save" class="btn primary">Save spam settings</button>
         </section>
 
-        <section class="card" data-tab="automod">
+        <section class="card" data-tab="automod" id="sec-automod-mention">
           <h3>Mass Mention Detection</h3>
           <p class="muted small">Block messages with too many user/role mentions.</p>
           <div class="field-row">
@@ -425,7 +448,7 @@
           <button id="btn-am-mention-save" class="btn primary">Save</button>
         </section>
 
-        <section class="card" data-tab="automod">
+        <section class="card" data-tab="automod" id="sec-automod-invite">
           <h3>Invite Link Blocking</h3>
           <p class="muted small">Block Discord invite links (discord.gg, etc).</p>
           <div class="field-row">
@@ -442,7 +465,7 @@
           <button id="btn-am-invite-save" class="btn primary">Save</button>
         </section>
 
-        <section class="card" data-tab="automod">
+        <section class="card" data-tab="automod" id="sec-automod-cases">
           <h3>Case History</h3>
           <p class="muted small">Every automod action is logged here.</p>
           <div class="field-row">
@@ -451,7 +474,7 @@
           <div id="am-case-list" class="ann-list"></div>
         </section>
 
-        <section class="card" data-tab="moderation">
+        <section class="card" data-tab="moderation" id="sec-commands">
           <h3>Commands</h3>
           <p class="muted small">
             Disable slash commands you don't want available on this server.
@@ -463,7 +486,7 @@
           <p id="cmd-status" class="hint"></p>
         </section>
 
-        <section class="card" data-tab="moderation">
+        <section class="card" data-tab="roles" id="sec-autoroles">
           <h3>Auto-join roles</h3>
           <p class="muted small">
             New members instantly get a role — a different one for real people and bots.
@@ -486,7 +509,7 @@
           <p id="ar-status" class="hint"></p>
         </section>
 
-        <section class="card" data-tab="moderation">
+        <section class="card" data-tab="moderation" id="sec-panel">
           <h3>Discord Panel</h3>
           <p class="muted small">
             The <code>/panel</code> command opens an interactive management menu inside Discord.
@@ -501,7 +524,7 @@
           <p id="pn-status" class="hint"></p>
         </section>
 
-        <section class="card" data-tab="moderation">
+        <section class="card" data-tab="moderation" id="sec-lockdown">
           <h3>Lockdown</h3>
           <p class="muted small">
             Quickly lock channels to prevent members from sending messages. Locked channels are listed below.
@@ -517,7 +540,7 @@
           <div id="ld-list" class="ann-list"></div>
         </section>
 
-        <section class="card" data-tab="moderation">
+        <section class="card" data-tab="roles" id="sec-reactionroles">
           <h3>Reaction Roles</h3>
           <p class="muted small">
             Post a message, users react to get/lose roles. "Unique" mode: one role per group. "Synced": multiple allowed.
@@ -550,7 +573,7 @@
           <div id="rr-mapping-list" class="ann-list"></div>
         </section>
 
-        <section class="card" data-tab="moderation">
+        <section class="card" data-tab="moderation" id="sec-update">
           <h3>Auto-update</h3>
           <p class="muted small">
             Every hour the bot checks GitHub for new commits. If there are any it pulls them,
@@ -570,7 +593,7 @@
           <p id="up-status" class="hint"></p>
         </section>
 
-        <section class="card" data-tab="moderation">
+        <section class="card" data-tab="roles" id="sec-leveling">
           <h3>Leveling</h3>
           <p class="muted small">
             Members earn XP by chatting and level up on an XP curve. Rewards and the
@@ -596,7 +619,7 @@
           <div id="lv-rewards" class="ann-list"></div>
         </section>
 
-        <section class="card" data-tab="moderation">
+        <section class="card" data-tab="roles" id="sec-rolemenus">
           <h3>Role Menus</h3>
           <p class="muted small">
             Dropdown menus that let members pick roles with one click. Create a menu, then
@@ -639,7 +662,7 @@
           <div id="rm-roles" class="ann-list"></div>
         </section>
 
-        <section class="card" data-tab="messaging">
+        <section class="card" data-tab="messaging" id="sec-autoresponses">
           <h3>Auto-responses</h3>
           <p class="muted small">
             When a message matches a trigger, the bot replies automatically.
@@ -669,7 +692,7 @@
           <h4 class="preview-title">Rules</h4>
           <div id="fr-list" class="ann-list"></div>
         </section>
-        <section class="card" data-tab="messaging">
+        <section class="card" data-tab="messaging" id="sec-starboard">
           <h3>Starboard</h3>
           <p class="muted small">
             When a message collects enough reactions, it gets reposted to the starboard channel.
@@ -693,7 +716,7 @@
           <p id="sb-status" class="hint"></p>
         </section>
 
-        <section class="card" data-tab="messaging">
+        <section class="card" data-tab="messaging" id="sec-counting">
           <h3>Counting Game Emojis</h3>
           <p class="muted small">
             Customize the emojis the bot reacts with during the counting game.
@@ -728,7 +751,7 @@
           </div>
         </section>
 
-        <section class="card" data-tab="messaging">
+        <section class="card" data-tab="messaging" id="sec-surveys">
           <h3>Surveys</h3>
           <p class="muted small">
             Create interactive surveys — users click a button, fill out a text input modal,
@@ -768,6 +791,7 @@
           <div id="sv-list" class="ann-list"></div>
         </section>
 
+      </div>
       </div>
     </main>
   </div>
