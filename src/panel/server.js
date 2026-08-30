@@ -1744,6 +1744,21 @@ export function startPanel(client) {
     return res.json(result);
   });
 
+  // Serve the panel UI. No-store + revision tags on the asset URLs so browsers
+  // never run stale JS/CSS after a bot update (a stale app.js is a common cause
+  // of "the popup didn't appear" reports).
+  app.use((req, res, next) => {
+    res.set("Cache-Control", "no-store");
+    next();
+  });
+  app.get("/", (req, res) => {
+    const html = fs.readFileSync(path.join(PUBLIC, "index.html"), "utf8");
+    res.set("Content-Type", "text/html; charset=utf-8").send(
+      html
+        .replace('href="/style.css"', `href="/style.css?v=${FRONTEND_REV}"`)
+        .replace('src="/app.js"', `src="/app.js?v=${FRONTEND_REV}"`)
+    );
+  });
   app.use(express.static(PUBLIC));
 
   // Wispbyte and similar panels expose your server at a public address:port and
