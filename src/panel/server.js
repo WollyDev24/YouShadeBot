@@ -611,7 +611,9 @@ export function startPanel(client) {
       frontendRev: FRONTEND_REV,
       superuser: isSuperuser(auth),
       oauthEnabled: oauthConfig().enabled,
-      user: auth?.kind === "discord" ? { name: auth.session.name, avatar: auth.session.avatar } : null
+      user: auth?.kind === "discord"
+        ? { id: auth.session.userId, name: auth.session.name, avatar: auth.session.avatar, kind: "discord" }
+        : auth?.kind === "password" ? { name: "Administrator", kind: "password" } : null
     };
     // Report the bot online state from the ready flag, not client.user: on some
     // discord.js versions client.user can be unset even while the gateway is up.

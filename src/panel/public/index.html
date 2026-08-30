@@ -37,17 +37,17 @@
         <div class="status-line"><span class="dot" id="status-dot"></span><span id="status-text">—</span></div>
         <div class="muted small" id="status-meta"></div>
       </div>
-      <div id="user-box" class="user-box hidden">
+      <button id="user-box" class="user-box hidden" type="button" aria-label="Account">
         <img id="user-avatar" class="user-avatar" alt="" />
-        <div class="user-box-info">
+        <span class="user-box-info">
           <span id="user-name" class="user-name"></span>
-          <span class="muted small">signed in via Discord</span>
-        </div>
-      </div>
+          <span id="user-sub" class="muted small">Account</span>
+        </span>
+        <span class="user-box-gear" aria-hidden="true">⚙️</span>
+      </button>
       <h2 class="sidebar-title">Servers</h2>
       <ul id="guild-list" class="guild-list"></ul>
       <button id="btn-commands" class="btn ghost full">Re-register commands</button>
-      <button id="btn-logout" class="btn ghost full">Log out</button>
     </aside>
 
     <main class="main">
@@ -833,6 +833,29 @@
           <button id="btn-intro-back" class="btn">Back</button>
           <button id="btn-intro-next" class="btn primary">Next</button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="user-modal" class="user-modal hidden">
+    <div class="user-card">
+      <div class="user-card-head">
+        <img id="user-modal-avatar" class="user-modal-avatar" alt="" />
+        <div class="user-card-id">
+          <h3 id="user-modal-name"></h3>
+          <span id="user-modal-sub" class="muted small"></span>
+        </div>
+        <button id="btn-user-close" class="user-modal-close" type="button" aria-label="Close">✕</button>
+      </div>
+      <div class="user-modal-section">
+        <h4>Account</h4>
+        <div class="user-info-row"><span>Discord ID</span><code id="user-info-id"></code></div>
+        <div class="user-info-row"><span>Login method</span><span id="user-info-kind"></span></div>
+        <div class="user-info-row"><span>Bot admin</span><span id="user-info-admin"></span></div>
+      </div>
+      <div class="user-modal-section">
+        <h4>Settings</h4>
+        <button id="btn-logout" class="btn danger full">Log out</button>
       </div>
     </div>
   </div>

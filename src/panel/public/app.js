@@ -2,6 +2,7 @@ const $ = (sel) => document.querySelector(sel);
 
 let guilds = [];
 let selectedGuildId = null;
+let CUR_USER = null;
 
 async function api(path, options = {}) {
   const res = await fetch(path, {
@@ -299,11 +300,15 @@ async function loadStatus() {
 
     const userBox = $("#user-box");
     if (st.user) {
+      CUR_USER = Object.assign({}, st.user, { admin: st.superuser === true || st.user.kind === "password" });
+      const isDiscord = st.user.kind === "discord";
       userBox.classList.remove("hidden");
       $("#user-avatar").src = st.user.avatar || "";
       $("#user-avatar").style.display = st.user.avatar ? "" : "none";
       $("#user-name").textContent = st.user.name;
+      $("#user-sub").textContent = isDiscord ? "signed in via Discord" : "password login";
     } else {
+      CUR_USER = null;
       userBox.classList.add("hidden");
     }
     $("#btn-commands").classList.toggle("hidden", st.superuser === false);
@@ -1977,8 +1982,32 @@ $("#login-form").addEventListener("submit", async (e) => {
   }
 });
 
+function openUserModal() {
+  if (!CUR_USER) return;
+  $("#user-modal-name").textContent = CUR_USER.name || "Administrator";
+  const avatar = $("#user-modal-avatar");
+  avatar.src = CUR_USER.avatar || "";
+  avatar.style.display = CUR_USER.avatar ? "" : "none";
+  $("#user-modal-sub").textContent = CUR_USER.kind === "discord" ? "signed in via Discord" : "password login";
+  $("#user-info-id").textContent = CUR_USER.id || "—";
+  $("#user-info-kind").textContent = CUR_USER.kind === "discord" ? "Discord OAuth" : "Panel password";
+  $("#user-info-admin").textContent = CUR_USER.admin ? "Yes" : "No";
+  $("#user-modal").classList.remove("hidden");
+}
+
+function hideUserModal() {
+  $("#user-modal").classList.add("hidden");
+}
+
+$("#user-box").addEventListener("click", openUserModal);
+$("#btn-user-close").addEventListener("click", hideUserModal);
+$("#user-modal").addEventListener("click", (e) => {
+  if (e.target === e.currentTarget) hideUserModal();
+});
+
 $("#btn-logout").addEventListener("click", async () => {
   await api("/api/logout", { method: "POST", body: {} });
+  hideUserModal();
   showLogin(true);
 });
 
@@ -2100,6 +2129,9 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
     $("#search").value = "";
     applyVisibility();
+    $("#user-modal").classList.add("hidden");
+    $("#intro-modal").classList.add("hidden");
+    $("#invite-modal").classList.add("hidden");
   }
 });
 
