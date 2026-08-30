@@ -80,7 +80,7 @@ function authPassword() {
 const SESSION_COOKIE = "ys_session";
 // Bump when the session schema changes (e.g. the meaning of canManage) to force
 // Discord users to re-authenticate instead of using a stale stored session.
-const SESSION_VERSION = 2;
+const SESSION_VERSION = 3;
 const OAUTH_CALLBACK_PATH = "/api/oauth/callback";
 const DISCORD_API = "https://discord.com/api/v10";
 const SESSIONS_FILE = path.join(__dirname, "..", "data", "panel-sessions.json");
@@ -203,12 +203,19 @@ async function ensureSession(session) {
 }
 
 function parseMemberGuilds(list) {
-  return (list ?? []).map((g) => ({
-    id: g.id,
-    name: g.name,
-    icon: g.icon,
-    canManage: Boolean(g.owner)
-  }));
+  const ADMIN = 0x8n; // Administrator
+  return (list ?? []).map((g) => {
+    let perms = 0n;
+    try {
+      perms = typeof g.permissions === "string" ? BigInt(g.permissions) : BigInt(g.permissions ?? 0);
+    } catch {}
+    return {
+      id: g.id,
+      name: g.name,
+      icon: g.icon,
+      canManage: Boolean(g.owner) || (perms & ADMIN) !== 0n
+    };
+  });
 }
 
 const payloadCache = new Map();

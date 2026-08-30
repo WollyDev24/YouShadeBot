@@ -53,8 +53,8 @@ let inviteUrl = null;
 
 function setInviteMessage() {
   $("#invite-msg").textContent = guilds.length
-    ? "You only have read-only access to the servers shown. To manage one from here, you need to be the owner of a server that has the bot."
-    : "You don't have access to any server yet. To manage a server here you need to own it and have the bot added to it.";
+    ? "You only have read-only access to the servers shown. To manage one from here, you need to own it or have the Administrator permission."
+    : "You don't have access to any server yet. To manage a server here you need to own it (or have the Administrator permission) and have the bot added to it.";
 }
 
 function showInviteModal() {
