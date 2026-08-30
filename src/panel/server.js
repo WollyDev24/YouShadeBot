@@ -619,15 +619,21 @@ export function startPanel(client) {
 
   app.get("/api/guilds", requireAuth, async (req, res) => {
     const auth = getAuth(req);
-    // Discord session: only servers the user is in (and that the bot is in).
+    // Discord session: only servers the user is in, the bot is in, AND that the
+    // user can manage. Read-only servers are hidden so users only manage what
+    // they have access to.
     const access =
       auth.kind === "discord" ? new Map(auth.session.guilds.map((g) => [g.id, g])) : null;
     const out = [];
     for (const guild of client.guilds.cache.values()) {
-      const acc = access ? access.get(guild.id) : { canManage: true };
-      if (!acc) continue; // skip servers the Discord user isn't a member of
+      if (!access) {
+        out.push({ ...(await guildPayload(client, guild)), canManage: true });
+        continue;
+      }
+      const acc = access.get(guild.id);
+      if (!acc?.canManage) continue; // skip non-member or read-only servers
       const payload = await guildPayload(client, guild);
-      out.push({ ...payload, canManage: acc.canManage });
+      out.push({ ...payload, canManage: true });
     }
     return res.json(out.sort((a, b) => a.name.localeCompare(b.name)));
   });
@@ -636,8 +642,10 @@ export function startPanel(client) {
     const guild = client.guilds.cache.get(req.params.id);
     if (!guild) return res.status(404).json({ error: "guild not found" });
     const auth = getAuth(req);
-    if (auth.kind === "discord" && !memberAccess(auth.session, guild.id))
-      return res.status(404).json({ error: "guild not found" });
+    if (auth.kind === "discord") {
+      const acc = memberAccess(auth.session, guild.id);
+      if (!acc?.canManage) return res.status(404).json({ error: "guild not found" });
+    }
     return res.json({ ...(await guildPayload(client, guild)), canManage: canManage(req, guild.id) });
   });
 
@@ -648,9 +656,8 @@ export function startPanel(client) {
     if (!auth) return res.status(401).json({ error: "unauthorized" });
     if (auth.kind === "password") return next();
     const acc = memberAccess(auth.session, req.params.id);
-    if (!acc) return res.status(404).json({ error: "guild not found" });
-    if (!acc.canManage)
-      return res.status(403).json({ error: "You need the Manage Server permission here to change settings." });
+    if (!acc?.canManage)
+      return res.status(404).json({ error: "guild not found" });
     return next();
   };
   app.use("/api/guilds/:id", requireGuildManage);
