@@ -78,6 +78,9 @@ function authPassword() {
 /* ---------- Discord OAuth / sessions ---------- */
 
 const SESSION_COOKIE = "ys_session";
+// Bump when the session schema changes (e.g. the meaning of canManage) to force
+// Discord users to re-authenticate instead of using a stale stored session.
+const SESSION_VERSION = 2;
 const OAUTH_CALLBACK_PATH = "/api/oauth/callback";
 const DISCORD_API = "https://discord.com/api/v10";
 const SESSIONS_FILE = path.join(__dirname, "..", "data", "panel-sessions.json");
@@ -200,20 +203,12 @@ async function ensureSession(session) {
 }
 
 function parseMemberGuilds(list) {
-  const MANAGER = 0x20n; // Manage Server
-  const ADMIN = 0x8n; // Administrator
-  return (list ?? []).map((g) => {
-    let perms = 0n;
-    try {
-      perms = typeof g.permissions === "string" ? BigInt(g.permissions) : BigInt(g.permissions ?? 0);
-    } catch {}
-    return {
-      id: g.id,
-      name: g.name,
-      icon: g.icon,
-      canManage: Boolean(g.owner) || (perms & (MANAGER | ADMIN)) !== 0n
-    };
-  });
+  return (list ?? []).map((g) => ({
+    id: g.id,
+    name: g.name,
+    icon: g.icon,
+    canManage: Boolean(g.owner)
+  }));
 }
 
 const payloadCache = new Map();
@@ -482,7 +477,8 @@ export function startPanel(client) {
   const getAuth = (req) => {
     if (oauthConfig().enabled) {
       const session = getSession(req);
-      return session ? { kind: "discord", session } : null;
+      if (!session || session.v !== SESSION_VERSION) return null;
+      return { kind: "discord", session };
     }
     if (req.cookies?.[AUTH_COOKIE] === authPassword()) return { kind: "password" };
     return null;
@@ -580,6 +576,7 @@ export function startPanel(client) {
     }
     const u = me.data;
     const sessionId = newSession({
+      v: SESSION_VERSION,
       kind: "discord",
       userId: u.id,
       name: u.global_name ?? u.username,
