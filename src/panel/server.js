@@ -92,6 +92,10 @@ function oauthConfig() {
 
 // Discord user IDs granted full panel admin rights (full access to every server,
 // "Re-register commands" and update checks). Set via PANEL_ADMIN_USERS="id1,id2".
+// Permission integer for the bot invite link (matches README: Manage Channels,
+// Manage Messages, Moderate Members, Move Members, View Channel, Send Messages).
+const INVITE_PERMISSIONS = 1099528416272;
+
 const adminUserIds = () =>
   new Set((process.env.PANEL_ADMIN_USERS || "").split(",").map((s) => s.trim()).filter(Boolean));
 
@@ -608,6 +612,7 @@ export function startPanel(client) {
       frontendRev: FRONTEND_REV,
       superuser: isSuperuser(auth),
       oauthEnabled: oauthConfig().enabled,
+      inviteUrl: `https://discord.com/oauth2/authorize?client_id=${client.user.id}&scope=bot%20applications.commands&permissions=${INVITE_PERMISSIONS}`,
       user: auth?.kind === "discord" ? { name: auth.session.name, avatar: auth.session.avatar } : null
     });
   });

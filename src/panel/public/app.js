@@ -49,6 +49,24 @@ function fmtUptime(sec) {
 }
 
 let panelRev = null;
+let inviteUrl = null;
+
+function setInviteMessage() {
+  $("#invite-msg").textContent = guilds.length
+    ? "You only have read-only access to the servers shown. To manage one from here, add the bot to a server you manage, or ask an admin for the Manage Server permission."
+    : "You don't have access to any server yet. Add the bot to a server you manage.";
+}
+
+function showInviteModal() {
+  setInviteMessage();
+  $("#invite-modal").classList.remove("hidden");
+}
+
+function hideInviteModal() {
+  $("#invite-modal").classList.add("hidden");
+}
+
+$("#btn-invite-close").addEventListener("click", hideInviteModal);
 
 async function loadStatus() {
   try {
@@ -62,6 +80,10 @@ async function loadStatus() {
     }
     $("#status-dot").className = `dot ${st.online ? "online" : "offline"}`;
     $("#status-text").textContent = st.online ? st.tag : "offline";
+    if (st.inviteUrl) {
+      inviteUrl = st.inviteUrl;
+      $("#btn-invite").href = st.inviteUrl;
+    }
     $("#status-meta").textContent = st.online
       ? `Ping ${st.ping}ms · up ${fmtUptime(st.uptime)} · ${st.guildCount} servers · ${st.totalMembers} members`
       : "";
@@ -120,6 +142,9 @@ async function loadGuilds() {
   } else if (guilds.length) {
     selectGuild(guilds[0].id);
   }
+
+  if (guilds.some((g) => g.canManage !== false)) hideInviteModal();
+  else showInviteModal();
 }
 
 function selectGuild(id) {
