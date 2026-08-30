@@ -544,11 +544,10 @@ label.check input { accent-color: var(--accent); }
 .guild-view.readonly .card { pointer-events: none; opacity: 0.55; }
 .guild-view.readonly .guild-header { pointer-events: auto; opacity: 1; }
 
-/* Fullscreen "add the bot" overlay */
-.invite-modal {
+/* Fullscreen overlays */
+.invite-modal, .intro-modal {
   position: fixed;
   inset: 0;
-  z-index: 100;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -556,6 +555,8 @@ label.check input { accent-color: var(--accent); }
   background: rgba(0, 0, 0, 0.65);
   backdrop-filter: blur(3px);
 }
+.invite-modal { z-index: 100; }
+.intro-modal { z-index: 90; }
 .invite-card {
   width: 100%;
   max-width: 420px;
@@ -566,6 +567,28 @@ label.check input { accent-color: var(--accent); }
   background: var(--card);
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
 }
+.intro-card {
+  width: 100%;
+  max-width: 520px;
+  max-height: 85vh;
+  overflow-y: auto;
+  padding: 28px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+  text-align: left;
+}
+.intro-ico { font-size: 2.4rem; text-align: center; margin-bottom: 8px; }
+.intro-sub {
+  margin: 18px 0 6px;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+.intro-list { margin: 0; padding-left: 18px; line-height: 1.6; font-size: 0.9rem; }
+.intro-list li { margin-bottom: 4px; }
 .invite-ico { font-size: 2.4rem; margin-bottom: 8px; }
 .invite-actions { display: flex; flex-direction: column; gap: 10px; margin-top: 18px; }
 

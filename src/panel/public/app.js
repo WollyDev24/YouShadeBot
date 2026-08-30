@@ -68,6 +68,20 @@ function hideInviteModal() {
 
 $("#btn-invite-close").addEventListener("click", hideInviteModal);
 
+function maybeShowIntro() {
+  if (localStorage.getItem("ys_intro_seen")) return;
+  if (!$("#invite-modal").classList.contains("hidden")) return;
+  $("#intro-modal").classList.remove("hidden");
+}
+
+function dismissIntro() {
+  try { localStorage.setItem("ys_intro_seen", "1"); } catch {}
+  $("#intro-modal").classList.add("hidden");
+}
+
+$("#btn-intro-done").addEventListener("click", dismissIntro);
+$("#btn-intro-skip").addEventListener("click", dismissIntro);
+
 async function loadStatus() {
   try {
     const st = await api("/api/status");
@@ -1760,6 +1774,7 @@ $("#login-form").addEventListener("submit", async (e) => {
     showLogin(false);
     $("#password").value = "";
     await refreshAll();
+    maybeShowIntro();
   } catch (err) {
     $("#login-error").textContent = "Wrong password";
     $("#login-error").classList.remove("hidden");
@@ -1996,6 +2011,7 @@ async function refreshAll() {
     if (st.frontendRev) panelRev = st.frontendRev;
     showLogin(false);
     await refreshAll();
+    maybeShowIntro();
   } catch {
     showLogin(true);
     if (oauthParam === "error") toast("Discord sign-in failed — please try again.", true);
