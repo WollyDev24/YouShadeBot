@@ -60,11 +60,12 @@ export function deleteRoleMenu(guildId, messageId) {
   return true;
 }
 
-export function buildMenuText(config) {
+export function buildMenuText(config, guild) {
   if (!config.roles.length) return [];
   const lines = config.roles.map((r) => {
-    const name = r.label || "role";
-    return `• ${name} — <@&${r.roleId}>`;
+    const role = guild?.roles.cache.get(r.roleId);
+    const name = r.label || role?.name || "Deleted role";
+    return `• ${name}`;
   });
   return lines;
 }
@@ -79,7 +80,7 @@ export function buildMenuPayload(guild, config) {
     .setCustomId(`rolemenu:${config.id}`)
     .setPlaceholder(config.mode === "unique" ? "Pick one role" : "Choose your roles");
 
-  const lines = buildMenuText(config);
+  const lines = buildMenuText(config, guild);
   embed.setFooter({ text: lines.length ? lines.join("\n") : "No roles configured yet." });
 
   for (const r of config.roles) {
