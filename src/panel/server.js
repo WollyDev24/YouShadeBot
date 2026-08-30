@@ -3,6 +3,7 @@ import cookieParser from "cookie-parser";
 import path from "node:path";
 import os from "node:os";
 import crypto from "node:crypto";
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { ChannelType, EmbedBuilder } from "../lib/discord.js";
 import { getData, save, saveKey } from "../utils/db.js";
@@ -58,6 +59,16 @@ import {
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC = path.join(__dirname, "public");
+
+const FRONTEND_REV = crypto
+  .createHash("sha1")
+  .update(
+    ["index.html", "app.js", "style.css"]
+      .map((f) => readFileSync(path.join(PUBLIC, f)))
+      .join("")
+  )
+  .digest("hex")
+  .slice(0, 12);
 
 function authPassword() {
   const pw = process.env.PANEL_PASSWORD || "admin";
@@ -345,7 +356,8 @@ export function startPanel(client) {
       ping: Math.round(client.ws.ping),
       uptime: Math.floor(process.uptime()),
       guildCount: guilds.size,
-      totalMembers: guilds.reduce((n, g) => n + g.memberCount, 0)
+      totalMembers: guilds.reduce((n, g) => n + g.memberCount, 0),
+      frontendRev: FRONTEND_REV
     });
   });
 

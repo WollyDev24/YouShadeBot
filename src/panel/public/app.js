@@ -39,9 +39,18 @@ function fmtUptime(sec) {
   return `${d}d ${h}h ${m}m`;
 }
 
+let panelRev = null;
+
 async function loadStatus() {
   try {
     const st = await api("/api/status");
+    if (st.frontendRev) {
+      if (panelRev && panelRev !== st.frontendRev) {
+        location.reload();
+        return;
+      }
+      panelRev = st.frontendRev;
+    }
     $("#status-dot").className = `dot ${st.online ? "online" : "offline"}`;
     $("#status-text").textContent = st.online ? st.tag : "offline";
     $("#status-meta").textContent = st.online
@@ -1760,13 +1769,10 @@ function applyVisibility() {
   let count = 0;
 
   for (const card of tabSections()) {
-    if (card.dataset.tab === "overview") {
-      card.classList.toggle("hidden", q.length > 0);
-      if (q.length && sectionSearchText(card).includes(q)) count++;
-      continue;
-    }
     let visible;
-    if (q) {
+    if (card.dataset.tab === "overview") {
+      visible = q ? sectionSearchText(card).includes(q) : activeTab === "overview";
+    } else if (q) {
       visible = sectionSearchText(card).includes(q);
     } else {
       visible = card.dataset.tab === activeTab;
@@ -1915,7 +1921,8 @@ async function refreshAll() {
 
 (async function init() {
   try {
-    await api("/api/status");
+    const st = await api("/api/status");
+    if (st.frontendRev) panelRev = st.frontendRev;
     showLogin(false);
     await refreshAll();
   } catch {
