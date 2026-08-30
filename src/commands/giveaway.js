@@ -6,6 +6,7 @@ import {
   endGiveaway,
   rerollGiveaway
 } from "../utils/giveaways.js";
+import { parseDuration } from "../utils/reminders.js";
 
 export default {
   data: new SlashCommandBuilder()
@@ -17,7 +18,7 @@ export default {
         .setDescription("Start a giveaway in this channel")
         .addStringOption((o) => o.setName("title").setDescription("What are you giving away?").setRequired(true).setMaxLength(200))
         .addStringOption((o) => o.setName("description").setDescription("Description of the content").setRequired(true).setMaxLength(1500))
-        .addIntegerOption((o) => o.setName("minutes").setDescription("Duration in minutes").setRequired(true).setMinValue(1).setMaxValue(43200))
+        .addStringOption((o) => o.setName("duration").setDescription("How long it runs, e.g. 30s, 5m, 2h, 1d, 1h30m").setRequired(true).setMaxLength(20))
         .addIntegerOption((o) => o.setName("winners").setDescription("How many winners").setRequired(true).setMinValue(1).setMaxValue(20))
         .addStringOption((o) => o.setName("link").setDescription("Optional link to the content").setMaxLength(500))
         .addStringOption((o) => o.setName("code").setDescription("Optional code DM'd to the winners").setMaxLength(100))
@@ -45,6 +46,13 @@ export default {
         return interaction.editReply({ content: "The link must start with http:// or https://" });
       }
 
+      const durationMs = parseDuration(interaction.options.getString("duration"));
+      if (!durationMs) {
+        return interaction.editReply({
+          content: "Couldn't parse the duration. Use a format like `30s`, `5m`, `2h`, `1d`, or `1h30m`."
+        });
+      }
+
       const gw = createGiveaway(guild.id, {
         channelId: interaction.channelId,
         title: interaction.options.getString("title"),
@@ -52,7 +60,7 @@ export default {
         link,
         code: interaction.options.getString("code"),
         winners: interaction.options.getInteger("winners"),
-        endsAt: Date.now() + interaction.options.getInteger("minutes") * 60_000,
+        endsAt: Date.now() + durationMs,
         hostId: interaction.user.id,
         hostName: interaction.user.username
       });

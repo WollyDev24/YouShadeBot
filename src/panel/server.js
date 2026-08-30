@@ -21,6 +21,7 @@ import {
   endGiveaway,
   rerollGiveaway
 } from "../utils/giveaways.js";
+import { parseDuration } from "../utils/reminders.js";
 import { getLogChannel, setLogChannel, checkForUpdates } from "../utils/updater.js";
 import { getStarboardConfig, setStarboard, disableStarboard } from "../utils/starboard.js";
 import { getPanelConfig, setPanelRole } from "../utils/panel.js";
@@ -767,9 +768,11 @@ export function startPanel(client) {
     if (!String(body.title ?? "").trim()) return res.status(400).json({ error: "Title cannot be empty." });
     if (!String(body.description ?? "").trim())
       return res.status(400).json({ error: "Description cannot be empty." });
-    const minutes = Number(body.minutes);
-    if (!Number.isFinite(minutes) || minutes < 1)
-      return res.status(400).json({ error: "Duration must be at least 1 minute." });
+    const durationMs = parseDuration(String(body.duration ?? ""));
+    if (!durationMs)
+      return res
+        .status(400)
+        .json({ error: "Couldn't parse the duration. Use a format like 30s, 5m, 2h, 1d, or 1h30m." });
     const winners = Number(body.winners);
     if (!Number.isFinite(winners) || winners < 1 || winners > 20)
       return res.status(400).json({ error: "Winners must be between 1 and 20." });
@@ -781,7 +784,7 @@ export function startPanel(client) {
       link: String(body.link ?? "").trim(),
       code: body.code,
       winners,
-      endsAt: Date.now() + minutes * 60_000,
+      endsAt: Date.now() + durationMs,
       hostName: "Dashboard"
     });
 

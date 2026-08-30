@@ -1418,10 +1418,11 @@ $("#btn-gw-create").addEventListener("click", async (e) => {
   const btn = e.currentTarget;
   const title = $("#gw-title").value.trim();
   const description = $("#gw-description").value.trim();
-  const minutes = Number($("#gw-minutes").value);
+  const duration = $("#gw-duration").value.trim();
   const winners = Number($("#gw-winners").value);
   if (!title || !description) return toast("Fill in title and description first.", true);
-  if (!Number.isFinite(minutes) || minutes < 1) return toast("Duration must be at least 1 minute.", true);
+  if (!/^\d+\s*(?:min|[smhdw])(?:\d*\s*(?:min|[smhdw]))?$/i.test(duration))
+    return toast("Couldn't parse the duration. Try something like 30s, 5m, 2h, 1d, or 1h30m.", true);
 
   await withGuild(
     "giveaways/create",
@@ -1431,7 +1432,7 @@ $("#btn-gw-create").addEventListener("click", async (e) => {
       description,
       link: $("#gw-link").value.trim(),
       code: $("#gw-code").value.trim(),
-      minutes,
+      duration,
       winners
     },
     btn
