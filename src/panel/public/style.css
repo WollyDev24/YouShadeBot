@@ -606,10 +606,8 @@ label.check input { accent-color: var(--accent); }
   background: var(--card-2);
   white-space: nowrap;
 }
-.intro-body { margin-top: 10px; }
+.intro-body { margin-top: 10px; overflow: hidden; transition: height 0.25s ease; }
 .intro-body select { width: 100%; }
-.intro-feature-list { margin: 0; padding-left: 18px; line-height: 1.6; font-size: 0.9rem; }
-.intro-feature-list li { margin-bottom: 4px; }
 .intro-status { margin-top: 10px; font-size: 0.85rem; }
 .intro-actions {
   display: flex;

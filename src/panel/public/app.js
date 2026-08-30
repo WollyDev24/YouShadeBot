@@ -75,18 +75,7 @@ const INTRO_STEPS = [
     title: "Welcome",
     desc: "Manage your servers from one place — pick a server on the left and configure everything visually.",
     render() {
-      const b = $("#intro-body");
-      b.innerHTML = "";
-      const ul = document.createElement("ul");
-      ul.className = "intro-feature-list";
-      ul.innerHTML = `
-        <li><b>🎟️ Tickets</b> — ticket panels that open support channels</li>
-        <li><b>👋 Messaging</b> — welcome messages, auto-responses, announcements, reminders, embeds</li>
-        <li><b>🔊 Channels</b> — temporary voice rooms, live server stats, sticky messages</li>
-        <li><b>🎭 Roles</b> — reaction roles, role menus, auto-join roles, leveling</li>
-        <li><b>🛡️ Moderation</b> — automod, lockdown, command toggles</li>
-        <li><b>🎉 Community</b> — giveaways, polls, surveys, starboard, counting</li>`;
-      b.appendChild(ul);
+      $("#intro-body").innerHTML = "";
     }
   },
   {
@@ -233,7 +222,18 @@ function renderIntro() {
   $("#intro-bar").style.width = `${((introStep + 1) / INTRO_STEPS.length) * 100}%`;
   $("#btn-intro-back").disabled = introStep === 0;
   $("#btn-intro-next").textContent = introStep === INTRO_STEPS.length - 1 ? "Finish" : "Next";
+  const body = $("#intro-body");
+  const oldHeight = body.offsetHeight;
+  body.style.height = `${oldHeight}px`;
   st.render();
+  const newHeight = body.scrollHeight;
+  if (newHeight === oldHeight) {
+    body.style.height = "auto";
+  } else {
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      body.style.height = `${newHeight}px`;
+    }));
+  }
 }
 
 function maybeShowIntro() {
@@ -248,10 +248,14 @@ function maybeShowIntro() {
 
 function dismissIntro() {
   try { localStorage.setItem("ys_intro_seen", "1"); } catch {}
+  $("#intro-body").style.height = "auto";
   $("#intro-modal").classList.add("hidden");
 }
 
 $("#btn-intro-skip").addEventListener("click", dismissIntro);
+$("#intro-body").addEventListener("transitionend", (e) => {
+  if (e.propertyName === "height") e.currentTarget.style.height = "auto";
+});
 $("#btn-intro-back").addEventListener("click", () => {
   if (introStep > 0) {
     introStep--;
