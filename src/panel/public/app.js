@@ -38,6 +38,7 @@ async function loadOauthConfig() {
     const cfg = await api("/api/oauth/config");
     $("#btn-oauth").classList.toggle("hidden", !cfg.enabled);
     $("#oauth-divider").classList.toggle("hidden", !cfg.enabled);
+    $("#pw-fields").classList.toggle("hidden", cfg.enabled);
   } catch {}
 }
 
@@ -76,6 +77,7 @@ async function loadStatus() {
       userBox.classList.add("hidden");
     }
     $("#btn-commands").classList.toggle("hidden", st.superuser === false);
+    $("#btn-up-check").classList.toggle("hidden", st.superuser === false);
   } catch {}
 }
 

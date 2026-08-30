@@ -16,8 +16,10 @@
         Sign in with Discord
       </a>
       <div id="oauth-divider" class="oauth-divider hidden"><span>or use the panel password</span></div>
-      <input type="password" id="password" placeholder="Panel password" autocomplete="current-password" required />
-      <button type="submit" class="btn primary">Sign in</button>
+      <div id="pw-fields">
+        <input type="password" id="password" placeholder="Panel password" autocomplete="current-password" required />
+        <button type="submit" class="btn primary">Sign in</button>
+      </div>
       <p id="login-error" class="error hidden"></p>
       <p class="muted small"><a class="muted-link" href="/privacy.html" target="_blank" rel="noopener">Privacy Policy</a></p>
     </form>

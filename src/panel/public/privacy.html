@@ -131,11 +131,14 @@
     <div class="card">
       <h2>4. Who can access the dashboard and what can they do</h2>
       <p>
-        If you sign in with the password, you are treated as a full administrator. If you sign in
-        through Discord, you can only <b>view</b> servers you and the bot both are in, and you can
-        only <b>change</b> settings on servers where you have the Discord
-        <b>Manage Server</b> permission. Nobody else can see or edit a server's settings through DNS
-        unless they are signed in and satisfy the same checks.
+        When Discord OAuth is <b>not</b> configured, signing in with the panel password makes you a
+        full administrator. When Discord OAuth <b>is</b> configured, the password sign-in is disabled
+        and only Discord sign-in is available: you can <b>view</b> servers you and the bot both are
+        in, and you can only <b>change</b> settings on servers where you have the Discord
+        <b>Manage Server</b> permission. The panel owner may grant full administrator rights to
+        specific Discord accounts (via the <code>PANEL_ADMIN_USERS</code> setting); those accounts
+        can manage every server. Nobody else can see or edit a server's settings unless they are
+        signed in and satisfy the same checks.
       </p>
     </div>
 

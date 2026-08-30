@@ -90,6 +90,15 @@ function oauthConfig() {
   };
 }
 
+// Discord user IDs granted full panel admin rights (full access to every server,
+// "Re-register commands" and update checks). Set via PANEL_ADMIN_USERS="id1,id2".
+const adminUserIds = () =>
+  new Set((process.env.PANEL_ADMIN_USERS || "").split(",").map((s) => s.trim()).filter(Boolean));
+
+const isSuperuser = (auth) =>
+  auth?.kind === "password" ||
+  (auth?.kind === "discord" && adminUserIds().has(auth.session.userId));
+
 function oauthRedirect(req) {
   const base = process.env.PANEL_PUBLIC_URL || `${req.protocol}://${req.get("host")}`;
   return `${base}${OAUTH_CALLBACK_PATH}`;
@@ -467,10 +476,12 @@ export function startPanel(client) {
   const AUTH_COOKIE = "ys_panel";
 
   const getAuth = (req) => {
+    if (oauthConfig().enabled) {
+      const session = getSession(req);
+      return session ? { kind: "discord", session } : null;
+    }
     if (req.cookies?.[AUTH_COOKIE] === authPassword()) return { kind: "password" };
-    if (!oauthConfig().enabled) return null;
-    const session = getSession(req);
-    return session ? { kind: "discord", session } : null;
+    return null;
   };
 
   const canManage = (req, guildId) => {
@@ -497,11 +508,14 @@ export function startPanel(client) {
   };
 
   const requireSuperuser = (req, res, next) => {
-    if (getAuth(req)?.kind === "password") return next();
-    return res.status(403).json({ error: "This action requires the panel admin password." });
+    if (!isSuperuser(getAuth(req)))
+      return res.status(403).json({ error: "This action requires the panel admin password or an admin Discord account." });
+    return next();
   };
 
   app.post("/api/login", (req, res) => {
+    if (oauthConfig().enabled)
+      return res.status(403).json({ error: "Password sign-in is disabled because Discord OAuth is configured." });
     const { password } = req.body ?? {};
     if (crypto.createHash("sha256").update(String(password)).digest("hex") !== authPassword()) {
       return res.status(401).json({ error: "wrong password" });
@@ -592,7 +606,7 @@ export function startPanel(client) {
       guildCount: guilds.size,
       totalMembers: guilds.reduce((n, g) => n + g.memberCount, 0),
       frontendRev: FRONTEND_REV,
-      superuser: auth?.kind === "password",
+      superuser: isSuperuser(auth),
       oauthEnabled: oauthConfig().enabled,
       user: auth?.kind === "discord" ? { name: auth.session.name, avatar: auth.session.avatar } : null
     });
