@@ -149,7 +149,8 @@ async function guildPayload(client, guild) {
         closedCategoryId: t.closedCategoryId,
         staffRoleId: t.staffRoleId,
         logChannelId: t.logChannelId,
-        panelChannelId: t.panelChannelId
+        panelChannelId: t.panelChannelId,
+        buttonColor: t.buttonColor ?? "Primary"
       })),
       combinedChannelId: tickets.combinedChannelId
     },
@@ -451,7 +452,10 @@ export function startPanel(client) {
       closedCategoryId: chan(body.closedCategoryId),
       staffRoleId: role(body.staffRoleId),
       logChannelId: chan(body.logChannelId),
-      panelChannelId: chan(body.panelChannelId)
+      panelChannelId: chan(body.panelChannelId),
+      buttonColor: ["Primary", "Secondary", "Success", "Danger"].includes(body.buttonColor)
+        ? body.buttonColor
+        : "Primary"
     });
 
     return res.json({

@@ -19,7 +19,8 @@ const TYPE_DEFAULTS = {
   staffRoleId: null,
   logChannelId: null,
   panelChannelId: null,
-  panelMessageId: null
+  panelMessageId: null,
+  buttonColor: "Primary"
 };
 
 export function getTickets(guildId) {
@@ -81,12 +82,14 @@ export function deleteType(guildId, id) {
 
 /* ---------- panels ---------- */
 
+const BUTTON_COLORS = { Primary: ButtonStyle.Primary, Secondary: ButtonStyle.Secondary, Success: ButtonStyle.Success, Danger: ButtonStyle.Danger };
+
 function typeButton(type) {
   const button = new ButtonBuilder()
     .setCustomId(`yst_open:${type.id}`)
     .setLabel(type.name.slice(0, 80))
     .setEmoji("\uD83D\uDCAC")
-    .setStyle(ButtonStyle.Primary);
+    .setStyle(BUTTON_COLORS[type.buttonColor] ?? ButtonStyle.Primary);
   if (!type.enabled) button.setDisabled(true);
   return button;
 }

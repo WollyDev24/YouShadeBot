@@ -370,6 +370,19 @@ function buildTypeCard(g, t) {
     mkSel(`tkc-${t.id}-panel`, g.channels.filter((c) => c.type === 0), t.panelChannelId, true)
   );
 
+  const colorSel = mkRow("Button color", (() => {
+    const sel = document.createElement("select");
+    sel.id = `tkc-${t.id}-color`;
+    for (const c of ["Primary", "Secondary", "Success", "Danger"]) {
+      const o = document.createElement("option");
+      o.value = c;
+      o.textContent = c;
+      sel.append(o);
+    }
+    sel.value = t.buttonColor ?? "Primary";
+    return sel;
+  })());
+
   const actions = document.createElement("div");
   actions.className = "field-row";
 
@@ -396,7 +409,8 @@ function buildTypeCard(g, t) {
     closedCategoryId: closedSel.value || null,
     staffRoleId: roleSel.value || null,
     logChannelId: logSel.value || null,
-    panelChannelId: panelSel.value || null
+    panelChannelId: panelSel.value || null,
+    buttonColor: colorSel.value || "Primary"
   });
 
   const save = async (btn) => withGuild("tickets/types/save", collect(), btn);
