@@ -37,7 +37,6 @@ async function loadOauthConfig() {
   try {
     const cfg = await api("/api/oauth/config");
     $("#btn-oauth").classList.toggle("hidden", !cfg.enabled);
-    $("#oauth-divider").classList.toggle("hidden", !cfg.enabled);
     $("#pw-fields").classList.toggle("hidden", cfg.enabled);
   } catch {}
 }

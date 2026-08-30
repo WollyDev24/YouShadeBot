@@ -501,19 +501,6 @@ label.check input { accent-color: var(--accent); }
 .btn.discord:hover { background: #4752c4; border-color: transparent; color: #fff; }
 .discord-ico { width: 18px; height: 18px; flex-shrink: 0; }
 
-.oauth-divider {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin: 6px 0 0;
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--muted);
-}
-.oauth-divider::before,
-.oauth-divider::after { content: ""; flex: 1; height: 1px; background: var(--border); }
-
 .muted-link { color: var(--accent); text-decoration: none; }
 .muted-link:hover { text-decoration: underline; }
 
