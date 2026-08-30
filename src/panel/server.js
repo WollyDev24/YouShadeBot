@@ -3,7 +3,7 @@ import cookieParser from "cookie-parser";
 import path from "node:path";
 import os from "node:os";
 import crypto from "node:crypto";
-import { readFileSync } from "node:fs";
+import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import { ChannelType, EmbedBuilder } from "../lib/discord.js";
 import { getData, save, saveKey } from "../utils/db.js";
@@ -63,8 +63,8 @@ const PUBLIC = path.join(__dirname, "public");
 const FRONTEND_REV = crypto
   .createHash("sha1")
   .update(
-    ["index.html", "app.js", "style.css"]
-      .map((f) => readFileSync(path.join(PUBLIC, f)))
+    ["index.html", "app.js", "style.css", "privacy.html"]
+      .map((f) => fs.readFileSync(path.join(PUBLIC, f)))
       .join("")
   )
   .digest("hex")
@@ -73,6 +73,134 @@ const FRONTEND_REV = crypto
 function authPassword() {
   const pw = process.env.PANEL_PASSWORD || "admin";
   return crypto.createHash("sha256").update(pw).digest("hex");
+}
+
+/* ---------- Discord OAuth / sessions ---------- */
+
+const SESSION_COOKIE = "ys_session";
+const OAUTH_CALLBACK_PATH = "/api/oauth/callback";
+const DISCORD_API = "https://discord.com/api/v10";
+const SESSIONS_FILE = path.join(__dirname, "..", "data", "panel-sessions.json");
+
+function oauthConfig() {
+  return {
+    enabled: Boolean(process.env.DISCORD_CLIENT_ID && process.env.DISCORD_CLIENT_SECRET),
+    clientId: process.env.DISCORD_CLIENT_ID || "",
+    clientSecret: process.env.DISCORD_CLIENT_SECRET || ""
+  };
+}
+
+function oauthRedirect(req) {
+  const base = process.env.PANEL_PUBLIC_URL || `${req.protocol}://${req.get("host")}`;
+  return `${base}${OAUTH_CALLBACK_PATH}`;
+}
+
+const sessions = new Map();
+try {
+  if (fs.existsSync(SESSIONS_FILE)) {
+    const stored = JSON.parse(fs.readFileSync(SESSIONS_FILE, "utf8"));
+    for (const [k, v] of Object.entries(stored)) sessions.set(k, v);
+  }
+} catch (err) {
+  console.error("[panel] could not load panel sessions:", err.message);
+}
+
+function persistSessions() {
+  try {
+    fs.writeFileSync(SESSIONS_FILE, JSON.stringify(Object.fromEntries(sessions)));
+  } catch (err) {
+    console.error("[panel] could not persist panel sessions:", err.message);
+  }
+}
+
+function newSession(sess) {
+  const token = crypto.randomBytes(32).toString("hex");
+  sessions.set(token, sess);
+  persistSessions();
+  return token;
+}
+
+function getSession(req) {
+  return sessions.get(req.cookies?.[SESSION_COOKIE] ?? "") ?? null;
+}
+
+function deleteSession(req) {
+  const token = req.cookies?.[SESSION_COOKIE];
+  if (token && sessions.delete(token)) persistSessions();
+}
+
+async function discordRequest(path, { token, method = "GET", body } = {}) {
+  const headers = { "Content-Type": "application/json" };
+  if (token) headers.Authorization = `Bearer ${token}`;
+  const opts = { method, headers };
+  if (body) opts.body = JSON.stringify(body);
+  const res = await fetch(`${DISCORD_API}${path}`, opts);
+  const data = await res.json().catch(() => ({}));
+  return { ok: res.ok, status: res.status, data };
+}
+
+async function exchangeCode(code, redirectUri) {
+  const res = await fetch(`${DISCORD_API}/oauth2/token`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      client_id: process.env.DISCORD_CLIENT_ID,
+      client_secret: process.env.DISCORD_CLIENT_SECRET,
+      grant_type: "authorization_code",
+      code,
+      redirect_uri: redirectUri
+    })
+  });
+  const data = await res.json().catch(() => ({}));
+  return res.ok ? data : null;
+}
+
+async function refreshOauthToken(refreshToken) {
+  const res = await fetch(`${DISCORD_API}/oauth2/token`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      client_id: process.env.DISCORD_CLIENT_ID,
+      client_secret: process.env.DISCORD_CLIENT_SECRET,
+      grant_type: "refresh_token",
+      refresh_token: refreshToken
+    })
+  });
+  const data = await res.json().catch(() => ({}));
+  return res.ok ? data : null;
+}
+
+async function ensureSession(session) {
+  if (Date.now() < session.tokenExpires) return session;
+  if (!session.refreshToken) return null;
+  try {
+    const tok = await refreshOauthToken(session.refreshToken);
+    if (!tok) return null;
+    session.accessToken = tok.access_token;
+    session.refreshToken = tok.refresh_token ?? session.refreshToken;
+    session.tokenExpires = Date.now() + (tok.expires_in ?? 0) * 1000;
+    persistSessions();
+    return session;
+  } catch {
+    return null;
+  }
+}
+
+function parseMemberGuilds(list) {
+  const MANAGER = 0x20n; // Manage Server
+  const ADMIN = 0x8n; // Administrator
+  return (list ?? []).map((g) => {
+    let perms = 0n;
+    try {
+      perms = typeof g.permissions === "string" ? BigInt(g.permissions) : BigInt(g.permissions ?? 0);
+    } catch {}
+    return {
+      id: g.id,
+      name: g.name,
+      icon: g.icon,
+      canManage: Boolean(g.owner) || (perms & (MANAGER | ADMIN)) !== 0n
+    };
+  });
 }
 
 const payloadCache = new Map();
@@ -322,11 +450,55 @@ export function startPanel(client) {
     next();
   });
 
+  // Decorate every guild payload served to this request with the viewer's
+  // manage permission (Discord OAuth users can only edit servers where they
+  // have the "Manage Server" permission; password logins are full admins).
+  app.use((req, res, next) => {
+    const json = res.json.bind(res);
+    res.json = (body) => {
+      if (body && typeof body === "object" && body.payload && body.payload.id) {
+        body.payload = { ...body.payload, canManage: canManage(req, body.payload.id) };
+      }
+      return json(body);
+    };
+    next();
+  });
+
   const AUTH_COOKIE = "ys_panel";
 
-  const requireAuth = (req, res, next) => {
-    if (req.cookies?.[AUTH_COOKIE] === authPassword()) return next();
-    return res.status(401).json({ error: "unauthorized" });
+  const getAuth = (req) => {
+    if (req.cookies?.[AUTH_COOKIE] === authPassword()) return { kind: "password" };
+    if (!oauthConfig().enabled) return null;
+    const session = getSession(req);
+    return session ? { kind: "discord", session } : null;
+  };
+
+  const canManage = (req, guildId) => {
+    const auth = getAuth(req);
+    if (!auth) return false;
+    if (auth.kind === "password") return true;
+    return memberAccess(auth.session, guildId)?.canManage ?? false;
+  };
+
+  const memberAccess = (session, guildId) => session.guilds.find((g) => g.id === guildId) ?? null;
+
+  const requireAuth = async (req, res, next) => {
+    const auth = getAuth(req);
+    if (!auth) return res.status(401).json({ error: "unauthorized" });
+    if (auth.kind === "discord") {
+      const ok = await ensureSession(auth.session);
+      if (!ok) {
+        deleteSession(req);
+        res.clearCookie(SESSION_COOKIE);
+        return res.status(401).json({ error: "session expired — sign in again" });
+      }
+    }
+    return next();
+  };
+
+  const requireSuperuser = (req, res, next) => {
+    if (getAuth(req)?.kind === "password") return next();
+    return res.status(403).json({ error: "This action requires the panel admin password." });
   };
 
   app.post("/api/login", (req, res) => {
@@ -334,6 +506,7 @@ export function startPanel(client) {
     if (crypto.createHash("sha256").update(String(password)).digest("hex") !== authPassword()) {
       return res.status(401).json({ error: "wrong password" });
     }
+    res.clearCookie(SESSION_COOKIE);
     res.cookie(AUTH_COOKIE, authPassword(), {
       httpOnly: true,
       sameSite: "strict",
@@ -343,13 +516,73 @@ export function startPanel(client) {
   });
 
   app.post("/api/logout", (req, res) => {
+    deleteSession(req);
     res.clearCookie(AUTH_COOKIE);
+    res.clearCookie(SESSION_COOKIE);
     return res.json({ ok: true });
+  });
+
+  /* --- Discord OAuth --- */
+
+  app.get("/api/oauth/config", (req, res) => {
+    const cfg = oauthConfig();
+    return res.json({ enabled: cfg.enabled });
+  });
+
+  app.get("/api/oauth/start", (req, res) => {
+    const cfg = oauthConfig();
+    if (!cfg.enabled) return res.status(400).json({ error: "Discord OAuth is not configured" });
+    const state = crypto.randomBytes(16).toString("hex");
+    const redirectUri = encodeURIComponent(oauthRedirect(req));
+    res.cookie("ys_oauth_state", state, { httpOnly: true, sameSite: "lax", maxAge: 10 * 60 * 1000 });
+    return res.redirect(
+      `https://discord.com/api/oauth2/authorize?client_id=${cfg.clientId}` +
+        `&redirect_uri=${redirectUri}&response_type=code&scope=identify%20guilds&state=${state}`
+    );
+  });
+
+  app.get(OAUTH_CALLBACK_PATH, async (req, res) => {
+    const cfg = oauthConfig();
+    if (!cfg.enabled) return res.status(400).json({ error: "Discord OAuth is not configured" });
+    const { code, state } = req.query;
+    if (!code || !state || state !== req.cookies?.ys_oauth_state) {
+      return res.redirect("/?oauth=error");
+    }
+    res.clearCookie("ys_oauth_state");
+    const token = await exchangeCode(code, oauthRedirect(req));
+    if (!token) {
+      console.error("[panel] Discord OAuth token exchange failed");
+      return res.redirect("/?oauth=error");
+    }
+    const me = await discordRequest("/users/@me", { token: token.access_token });
+    const gs = await discordRequest("/users/@me/guilds", { token: token.access_token });
+    if (!me.ok || !gs.ok) {
+      console.error("[panel] Discord OAuth profile fetch failed");
+      return res.redirect("/?oauth=error");
+    }
+    const u = me.data;
+    const sessionId = newSession({
+      kind: "discord",
+      userId: u.id,
+      name: u.global_name ?? u.username,
+      avatar: u.avatar ? `https://cdn.discordapp.com/avatars/${u.id}/${u.avatar}.png?size=64` : null,
+      guilds: parseMemberGuilds(gs.data),
+      accessToken: token.access_token,
+      refreshToken: token.refresh_token,
+      tokenExpires: Date.now() + (token.expires_in ?? 0) * 1000
+    });
+    res.cookie(SESSION_COOKIE, sessionId, {
+      httpOnly: true,
+      sameSite: "strict",
+      maxAge: 30 * 24 * 60 * 60 * 1000
+    });
+    return res.redirect("/");
   });
 
   app.get("/api/status", requireAuth, async (req, res) => {
     if (!client.user) return res.json({ online: false });
     const guilds = client.guilds.cache;
+    const auth = getAuth(req);
     return res.json({
       online: true,
       tag: client.user.tag,
@@ -358,24 +591,50 @@ export function startPanel(client) {
       uptime: Math.floor(process.uptime()),
       guildCount: guilds.size,
       totalMembers: guilds.reduce((n, g) => n + g.memberCount, 0),
-      frontendRev: FRONTEND_REV
+      frontendRev: FRONTEND_REV,
+      superuser: auth?.kind === "password",
+      oauthEnabled: oauthConfig().enabled,
+      user: auth?.kind === "discord" ? { name: auth.session.name, avatar: auth.session.avatar } : null
     });
   });
 
   app.get("/api/guilds", requireAuth, async (req, res) => {
-    const guilds = client.guilds.cache;
-    if (!guilds.size) return res.json([]);
-    const out = await Promise.all(
-      [...guilds.values()].map((g) => guildPayload(client, g))
-    );
+    const auth = getAuth(req);
+    // Discord session: only servers the user is in (and that the bot is in).
+    const access =
+      auth.kind === "discord" ? new Map(auth.session.guilds.map((g) => [g.id, g])) : null;
+    const out = [];
+    for (const guild of client.guilds.cache.values()) {
+      const acc = access ? access.get(guild.id) : { canManage: true };
+      if (!acc) continue; // skip servers the Discord user isn't a member of
+      const payload = await guildPayload(client, guild);
+      out.push({ ...payload, canManage: acc.canManage });
+    }
     return res.json(out.sort((a, b) => a.name.localeCompare(b.name)));
   });
 
   app.get("/api/guilds/:id", requireAuth, async (req, res) => {
     const guild = client.guilds.cache.get(req.params.id);
     if (!guild) return res.status(404).json({ error: "guild not found" });
-    return res.json(await guildPayload(client, guild));
+    const auth = getAuth(req);
+    if (auth.kind === "discord" && !memberAccess(auth.session, guild.id))
+      return res.status(404).json({ error: "guild not found" });
+    return res.json({ ...(await guildPayload(client, guild)), canManage: canManage(req, guild.id) });
   });
+
+  // Gate every per-guild action endpoint: Discord-authenticated users must be a
+  // member AND have the "Manage Server" permission on the target server.
+  const requireGuildManage = async (req, res, next) => {
+    const auth = getAuth(req);
+    if (!auth) return res.status(401).json({ error: "unauthorized" });
+    if (auth.kind === "password") return next();
+    const acc = memberAccess(auth.session, req.params.id);
+    if (!acc) return res.status(404).json({ error: "guild not found" });
+    if (!acc.canManage)
+      return res.status(403).json({ error: "You need the Manage Server permission here to change settings." });
+    return next();
+  };
+  app.use("/api/guilds/:id", requireGuildManage);
 
   app.post("/api/guilds/:id/temp/setup", requireAuth, async (req, res) => {
     const guild = client.guilds.cache.get(req.params.id);
@@ -427,7 +686,7 @@ export function startPanel(client) {
     return res.json({ ok: true, payload: await guildPayload(client, guild) });
   });
 
-  app.post("/api/commands/register", requireAuth, async (req, res) => {
+  app.post("/api/commands/register", requireAuth, requireSuperuser, async (req, res) => {
     try {
       await registerCommands(client);
       return res.json({ ok: true });
@@ -1454,7 +1713,7 @@ export function startPanel(client) {
     return res.json({ ok: true, payload: await guildPayload(client, guild) });
   });
 
-  app.post("/api/update/check", requireAuth, async (req, res) => {
+  app.post("/api/update/check", requireAuth, requireSuperuser, async (req, res) => {
     const result = await checkForUpdates(client);
     return res.json(result);
   });

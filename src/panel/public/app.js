@@ -30,6 +30,15 @@ function toast(msg, isError = false) {
 function showLogin(show) {
   $("#login-screen").classList.toggle("hidden", !show);
   $("#app").classList.toggle("hidden", show);
+  if (show) loadOauthConfig();
+}
+
+async function loadOauthConfig() {
+  try {
+    const cfg = await api("/api/oauth/config");
+    $("#btn-oauth").classList.toggle("hidden", !cfg.enabled);
+    $("#oauth-divider").classList.toggle("hidden", !cfg.enabled);
+  } catch {}
 }
 
 function fmtUptime(sec) {
@@ -56,6 +65,17 @@ async function loadStatus() {
     $("#status-meta").textContent = st.online
       ? `Ping ${st.ping}ms · up ${fmtUptime(st.uptime)} · ${st.guildCount} servers · ${st.totalMembers} members`
       : "";
+
+    const userBox = $("#user-box");
+    if (st.user) {
+      userBox.classList.remove("hidden");
+      $("#user-avatar").src = st.user.avatar || "";
+      $("#user-avatar").style.display = st.user.avatar ? "" : "none";
+      $("#user-name").textContent = st.user.name;
+    } else {
+      userBox.classList.add("hidden");
+    }
+    $("#btn-commands").classList.toggle("hidden", st.superuser === false);
   } catch {}
 }
 
@@ -82,6 +102,13 @@ async function loadGuilds() {
     const name = document.createElement("span");
     name.className = "g-name";
     name.textContent = g.name;
+    if (g.canManage === false) {
+      const lock = document.createElement("span");
+      lock.className = "g-lock";
+      lock.textContent = "🔒";
+      lock.title = "Read-only — you don't manage this server on Discord";
+      name.append(lock);
+    }
 
     li.append(avatar, name);
     li.addEventListener("click", () => selectGuild(g.id));
@@ -104,6 +131,9 @@ function selectGuild(id) {
 
 function renderGuild(g) {
   if (!g) return;
+  const managed = g.canManage !== false;
+  $("#guild-view").classList.toggle("readonly", !managed);
+  $("#ro-banner").classList.toggle("hidden", managed);
   const icon = $("#guild-icon");
   if (g.icon) {
     icon.src = g.icon;
@@ -1934,6 +1964,7 @@ async function refreshAll() {
 }
 
 (async function init() {
+  const oauthParam = new URLSearchParams(location.search).get("oauth");
   try {
     const st = await api("/api/status");
     if (st.frontendRev) panelRev = st.frontendRev;
@@ -1941,6 +1972,7 @@ async function refreshAll() {
     await refreshAll();
   } catch {
     showLogin(true);
+    if (oauthParam === "error") toast("Discord sign-in failed — please try again.", true);
   }
   setInterval(loadStatus, 30_000);
 })();

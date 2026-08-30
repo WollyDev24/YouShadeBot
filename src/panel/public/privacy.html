@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Privacy Policy — YouShade Bot</title>
+  <style>
+    :root {
+      --bg: #0b0d13;
+      --bg-soft: #12141d;
+      --card: rgba(255, 255, 255, 0.04);
+      --card-2: rgba(255, 255, 255, 0.07);
+      --border: rgba(255, 255, 255, 0.09);
+      --border-strong: rgba(255, 255, 255, 0.16);
+      --text: #e8eaf2;
+      --muted: #9aa1b5;
+      --accent: #6c7cff;
+      --accent-2: #8a5cf6;
+      --green: #41e8a8;
+      --red: #ff5c61;
+      --radius: 14px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      background: radial-gradient(1200px 600px at 20% -10%, #141a2a 0%, var(--bg) 55%);
+      color: var(--text);
+      line-height: 1.6;
+    }
+    .wrap { max-width: 760px; margin: 0 auto; padding: 48px 22px 80px; }
+    a { color: var(--accent); }
+    .brand {
+      display: flex; align-items: center; gap: 12px; margin-bottom: 26px;
+      background: linear-gradient(135deg, #6c7cff, #8a5cf6);
+      -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    .brand-logo {
+      width: 40px; height: 40px; flex-shrink: 0;
+      border-radius: 12px;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.1rem; font-weight: 700; color: #fff;
+      box-shadow: 0 4px 14px rgba(108, 124, 255, 0.4);
+      -webkit-text-fill-color: #fff;
+    }
+    h1 { font-size: 1.9rem; margin: 0 0 4px; }
+    .updated { color: var(--muted); font-size: 0.85rem; margin: 0 0 6px; }
+    .card {
+      background: linear-gradient(180deg, var(--card), var(--card-2));
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 22px 24px;
+      margin: 18px 0;
+    }
+    .card::before { content: none; }
+    h2 {
+      font-size: 1.15rem;
+      margin: 0 0 10px;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    p { margin: 0 0 12px; }
+    ul { margin: 0 0 12px; padding-left: 20px; }
+    .muted { color: var(--muted); }
+    code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      background: var(--bg-soft);
+      border: 1px solid var(--border);
+      padding: 1px 6px;
+      border-radius: 6px;
+      font-size: 0.9em;
+    }
+    .foot { color: var(--muted); font-size: 0.85rem; text-align: center; margin-top: 40px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="brand">
+      <div class="brand-logo">YS</div>
+      <h1>YouShade Bot — Privacy Policy</h1>
+    </div>
+    <p class="updated">Last updated: August 2026</p>
+
+    <div class="card">
+      <p>
+        This policy explains what data the YouShade bot and its web dashboard collect, why it is
+        collected, how long it is kept, and the choices you have. The bot and dashboard are run by
+        the server owner who installed them.
+      </p>
+    </div>
+
+    <div class="card">
+      <h2>1. Data collected when you sign in to the dashboard with Discord</h2>
+      <p>When you use <b>Sign in with Discord</b>, the bot asks Discord for permission to read
+        your profile and your servers. This includes:</p>
+      <ul>
+        <li>Your Discord user ID, username, display name and avatar.</li>
+        <li>The list of servers you are a member of (used only to show the servers in the panel that you share with the bot).</li>
+      </ul>
+      <p>The bot does <b>not</b> read your messages, email address, phone number, or anything else
+        from your Discord account. Only the scopes <code>identify</code> and <code>guilds</code>
+        are requested. Discord shows you exactly what is being requested before you approve it.</p>
+    </div>
+
+    <div class="card">
+      <h2>2. Data stored by the bot's features</h2>
+      <p>The bot stores the settings you configure through the dashboard or Discord commands.
+        Depending on which features you use, examples are:</p>
+      <ul>
+        <li>Server and channel IDs for features such as temporary channels, ticket panels, stats and logs.</li>
+        <li>Contents you configure, such as welcome messages, sticky messages, auto-responses, announcements, giveaways and reminders.</li>
+        <li>Moderation records: automod cases, word filters, spam settings, lockdown records, warn/ban/mute actions.</li>
+        <li>Participation data: giveaway entries, poll votes, survey responses, counting stats, leveling XP and roles.</li>
+      </ul>
+      <p>Discord user IDs and usernames may be recorded where a feature needs to attribute something
+        (for example who entered a giveaway or answered a survey).</p>
+    </div>
+
+    <div class="card">
+      <h2>3. Where data is stored and who can see it</h2>
+      <ul>
+        <li>All data is stored locally on the machine that runs the bot, in the bot's own data directory.</li>
+        <li>The panel password is stored only as a one-way hash — the plaintext password can never be recovered from it.</li>
+        <li>Discord sign-in sessions keep a small session token in your browser as an <code>httpOnly</code> cookie. The server keeps the Discord access/refresh tokens needed to keep you signed in in a local sessions file.</li>
+        <li>Data is <b>not</b> sold, shared with advertisers, or sent to any third party. Discord OAuth tokens are never logged.</li>
+        <li>There are no analytics or tracking pixels of any kind.</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h2>4. Who can access the dashboard and what can they do</h2>
+      <p>
+        If you sign in with the password, you are treated as a full administrator. If you sign in
+        through Discord, you can only <b>view</b> servers you and the bot both are in, and you can
+        only <b>change</b> settings on servers where you have the Discord
+        <b>Manage Server</b> permission. Nobody else can see or edit a server's settings through DNS
+        unless they are signed in and satisfy the same checks.
+      </p>
+    </div>
+
+    <div class="card">
+      <h2>5. Retention and deletion</h2>
+      <ul>
+        <li>Feature data (welcome messages, filters, etc.) is kept until you disable or delete the
+          feature, or until the bot is removed from your server.</li>
+        <li>Discord sign-in sessions last up to 30 days or until you press "Log out" — whichever comes first.</li>
+        <li>To stop the bot collecting any more data, remove it from your server or uninstall it.
+          To delete stored data, ask the server owner to wipe the bot's data directory or disable the relevant features.</li>
+      </ul>
+      <p>
+        Because an instance of this bot is self-hosted, the server owner ultimately controls its data.
+        If you have questions about a specific deployment, contact the person who runs that instance.
+      </p>
+    </div>
+
+    <div class="card">
+      <h2>6. Changes to this policy</h2>
+      <p>
+        This page may be updated if features change the data that is collected. The "Last updated"
+        date at the top reflects the most recent revision.
+      </p>
+    </div>
+
+    <p class="foot"><a href="/" class="muted-link">← Back to the panel</a></p>
+  </div>
+</body>
+</html>
