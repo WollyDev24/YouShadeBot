@@ -85,10 +85,14 @@ const OAUTH_CALLBACK_PATH = "/api/oauth/callback";
 const DISCORD_API = "https://discord.com/api/v10";
 const SESSIONS_FILE = path.join(__dirname, "..", "data", "panel-sessions.json");
 
+// Discord application (bot) ID used for both the OAuth sign-in link and the
+// "add the bot to your server" link. A DISCORD_CLIENT_ID env var overrides it.
+const PANEL_CLIENT_ID = process.env.DISCORD_CLIENT_ID || "1539983823280934952";
+
 function oauthConfig() {
   return {
-    enabled: Boolean(process.env.DISCORD_CLIENT_ID && process.env.DISCORD_CLIENT_SECRET),
-    clientId: process.env.DISCORD_CLIENT_ID || "",
+    enabled: Boolean(process.env.DISCORD_CLIENT_SECRET),
+    clientId: PANEL_CLIENT_ID,
     clientSecret: process.env.DISCORD_CLIENT_SECRET || ""
   };
 }
@@ -160,7 +164,7 @@ async function exchangeCode(code, redirectUri) {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
-      client_id: process.env.DISCORD_CLIENT_ID,
+      client_id: PANEL_CLIENT_ID,
       client_secret: process.env.DISCORD_CLIENT_SECRET,
       grant_type: "authorization_code",
       code,
@@ -176,7 +180,7 @@ async function refreshOauthToken(refreshToken) {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
-      client_id: process.env.DISCORD_CLIENT_ID,
+      client_id: PANEL_CLIENT_ID,
       client_secret: process.env.DISCORD_CLIENT_SECRET,
       grant_type: "refresh_token",
       refresh_token: refreshToken
@@ -623,9 +627,7 @@ export function startPanel(client) {
       uptime: Math.floor(process.uptime()),
       guildCount: guilds.size,
       totalMembers: guilds.reduce((n, g) => n + g.memberCount, 0),
-      inviteUrl: client.user?.id
-        ? `https://discord.com/oauth2/authorize?client_id=${client.user.id}&scope=bot%20applications.commands&permissions=${INVITE_PERMISSIONS}`
-        : null
+      inviteUrl: `https://discord.com/oauth2/authorize?client_id=${PANEL_CLIENT_ID}&scope=bot%20applications.commands&permissions=${INVITE_PERMISSIONS}`
     });
   });
 
