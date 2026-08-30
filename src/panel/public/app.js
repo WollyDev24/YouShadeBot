@@ -2056,7 +2056,7 @@ $("#btn-commands").addEventListener("click", async (e) => {
 
 /* --- tabs & search --- */
 
-const TABS = ["overview", "channels", "messaging", "tickets", "roles", "automod", "moderation"];
+const TABS = ["overview", "channels", "messaging", "tickets", "roles", "safety"];
 let activeTab = null;
 
 function tabSections() {
@@ -2120,6 +2120,11 @@ $("#search").addEventListener("input", applyVisibility);
 document.querySelectorAll("#tabs .tab").forEach((btn) =>
   btn.addEventListener("click", () => applyTab(btn.dataset.tab))
 );
+
+$("#guild-view").addEventListener("click", (e) => {
+  const h = e.target.closest(".card h3");
+  if (h) h.closest(".card").classList.toggle("collapsed");
+});
 
 document.addEventListener("keydown", (e) => {
   if (e.key === "/" && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) {
@@ -2198,12 +2203,12 @@ function renderOverview(g) {
       g.stats.enabled ? "Live channels on" : "Off", g.stats.enabled ? "on" : "off"),
     ovTile("📌", "channels", "sec-sticky", "Sticky messages",
       `${g.sticky.length} active`, g.sticky.length ? "on" : "off"),
-    ovTile("🛡️", "automod", "sec-automod", "Automod",
+    ovTile("🛡️", "safety", "sec-automod", "Automod",
       g.automod.enabled ? `On · ${g.automod.caseCount} case(s)` : "Off",
       g.automod.enabled ? "on" : "off"),
-    ovTile("🚧", "moderation", "sec-lockdown", "Lockdown",
+    ovTile("🚧", "safety", "sec-lockdown", "Lockdown",
       `${g.lockdowns.length} locked`, g.lockdowns.length ? "warn" : "off"),
-    ovTile("⚡", "moderation", "sec-update", "Auto-update",
+    ovTile("⚡", "safety", "sec-update", "Auto-update",
       g.logChannelId ? `Logging → #${channelName(g.logChannelId) || "(deleted)"}` : "No logging channel",
       g.logChannelId ? "on" : "off"),
     ovTile("🎭", "roles", "sec-reactionroles", "Reaction roles",
@@ -2216,10 +2221,10 @@ function renderOverview(g) {
     ovTile("🏆", "roles", "sec-leveling", "Leveling",
       g.leveling.enabled ? `On · ${g.leveling.userCount} member(s)` : "Off",
       g.leveling.enabled ? "on" : "off"),
-    ovTile("🧰", "moderation", "sec-commands", "Command toggles",
+    ovTile("🧰", "safety", "sec-commands", "Command toggles",
       g.disabledCommands.length ? `${g.disabledCommands.length} disabled` : "All enabled",
       g.disabledCommands.length ? "warn" : "on"),
-    ovTile("🖥️", "moderation", "sec-panel", "Discord panel",
+    ovTile("🖥️", "safety", "sec-panel", "Discord panel",
       g.panelRoleId ? "Role restricted" : "Manage Server only",
       g.panelRoleId ? "on" : "off")
   ];

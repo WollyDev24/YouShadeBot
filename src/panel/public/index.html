@@ -74,15 +74,17 @@
           </div>
         </div>
 
-        <nav id="tabs" class="tabs">
-          <button type="button" class="tab" data-tab="overview"><span class="tab-ico">🏠</span>Overview</button>
-          <button type="button" class="tab" data-tab="channels"><span class="tab-ico">🔊</span>Channels</button>
-          <button type="button" class="tab" data-tab="messaging"><span class="tab-ico">💬</span>Messaging</button>
-          <button type="button" class="tab" data-tab="tickets"><span class="tab-ico">🎫</span>Tickets</button>
-          <button type="button" class="tab" data-tab="roles"><span class="tab-ico">🎭</span>Roles</button>
-          <button type="button" class="tab" data-tab="automod"><span class="tab-ico">🛡️</span>Automod</button>
-          <button type="button" class="tab" data-tab="moderation"><span class="tab-ico">⚙️</span>Moderation</button>
-        </nav>
+<nav id="tabs" class="tabs">
+        <span class="tab-group">Workspace</span>
+        <button type="button" class="tab" data-tab="overview"><span class="tab-ico">🏠</span>Overview</button>
+        <button type="button" class="tab" data-tab="channels"><span class="tab-ico">🔊</span>Channels</button>
+        <span class="tab-group">Community</span>
+        <button type="button" class="tab" data-tab="messaging"><span class="tab-ico">💬</span>Messaging</button>
+        <button type="button" class="tab" data-tab="tickets"><span class="tab-ico">🎫</span>Tickets</button>
+        <button type="button" class="tab" data-tab="roles"><span class="tab-ico">🎭</span>Roles</button>
+        <span class="tab-group">Protection</span>
+        <button type="button" class="tab" data-tab="safety"><span class="tab-ico">🛡️</span>Safety</button>
+      </nav>
 
         <div class="toolbar">
           <div class="search-box">
@@ -386,7 +388,7 @@
           <div id="gw-list" class="ann-list"></div>
         </section>
 
-        <section class="card" data-tab="automod" id="sec-automod">
+        <section class="card" data-tab="safety" id="sec-automod">
           <h3>Automod</h3>
           <p class="muted small">
             Automatically moderate messages. Configure filters below, then enable the master toggle.
@@ -402,7 +404,7 @@
           </div>
         </section>
 
-        <section class="card" data-tab="automod" id="sec-automod-word">
+        <section class="card" data-tab="safety" id="sec-automod-word">
           <h3>Word Filter</h3>
           <p class="muted small">Block messages containing specific words. Case-insensitive, whole-word match.</p>
           <div class="field-row">
@@ -430,7 +432,7 @@
           </div>
         </section>
 
-        <section class="card" data-tab="automod" id="sec-automod-spam">
+        <section class="card" data-tab="safety" id="sec-automod-spam">
           <h3>Spam Detection</h3>
           <p class="muted small">Detects users sending too many messages in a short window.</p>
           <div class="field-row">
@@ -451,7 +453,7 @@
           <button id="btn-am-spam-save" class="btn primary">Save spam settings</button>
         </section>
 
-        <section class="card" data-tab="automod" id="sec-automod-mention">
+        <section class="card" data-tab="safety" id="sec-automod-mention">
           <h3>Mass Mention Detection</h3>
           <p class="muted small">Block messages with too many user/role mentions.</p>
           <div class="field-row">
@@ -470,7 +472,7 @@
           <button id="btn-am-mention-save" class="btn primary">Save</button>
         </section>
 
-        <section class="card" data-tab="automod" id="sec-automod-invite">
+        <section class="card" data-tab="safety" id="sec-automod-invite">
           <h3>Invite Link Blocking</h3>
           <p class="muted small">Block Discord invite links (discord.gg, etc).</p>
           <div class="field-row">
@@ -487,7 +489,7 @@
           <button id="btn-am-invite-save" class="btn primary">Save</button>
         </section>
 
-        <section class="card" data-tab="automod" id="sec-automod-cases">
+        <section class="card" data-tab="safety" id="sec-automod-cases">
           <h3>Case History</h3>
           <p class="muted small">Every automod action is logged here.</p>
           <div class="field-row">
@@ -496,7 +498,7 @@
           <div id="am-case-list" class="ann-list"></div>
         </section>
 
-        <section class="card" data-tab="moderation" id="sec-commands">
+        <section class="card" data-tab="safety" id="sec-commands">
           <h3>Commands</h3>
           <p class="muted small">
             Disable slash commands you don't want available on this server.
@@ -531,7 +533,7 @@
           <p id="ar-status" class="hint"></p>
         </section>
 
-        <section class="card" data-tab="moderation" id="sec-panel">
+        <section class="card" data-tab="safety" id="sec-panel">
           <h3>Discord Panel</h3>
           <p class="muted small">
             The <code>/panel</code> command opens an interactive management menu inside Discord.
@@ -546,7 +548,7 @@
           <p id="pn-status" class="hint"></p>
         </section>
 
-        <section class="card" data-tab="moderation" id="sec-lockdown">
+        <section class="card" data-tab="safety" id="sec-lockdown">
           <h3>Lockdown</h3>
           <p class="muted small">
             Quickly lock channels to prevent members from sending messages. Locked channels are listed below.
@@ -595,7 +597,7 @@
           <div id="rr-mapping-list" class="ann-list"></div>
         </section>
 
-        <section class="card" data-tab="moderation" id="sec-update">
+        <section class="card" data-tab="safety" id="sec-update">
           <h3>Auto-update</h3>
           <p class="muted small">
             Every hour the bot checks GitHub for new commits. If there are any it pulls them,
