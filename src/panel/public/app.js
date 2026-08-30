@@ -68,9 +68,181 @@ function hideInviteModal() {
 
 $("#btn-invite-close").addEventListener("click", hideInviteModal);
 
+/* --- welcome wizard --- */
+
+const INTRO_STEPS = [
+  {
+    title: "Welcome",
+    desc: "Manage your servers from one place — pick a server on the left and configure everything visually.",
+    render() {
+      const b = $("#intro-body");
+      b.innerHTML = "";
+      const ul = document.createElement("ul");
+      ul.className = "intro-feature-list";
+      ul.innerHTML = `
+        <li><b>🎟️ Tickets</b> — ticket panels that open support channels</li>
+        <li><b>👋 Messaging</b> — welcome messages, auto-responses, announcements, reminders, embeds</li>
+        <li><b>🔊 Channels</b> — temporary voice rooms, live server stats, sticky messages</li>
+        <li><b>🎭 Roles</b> — reaction roles, role menus, auto-join roles, leveling</li>
+        <li><b>🛡️ Moderation</b> — automod, lockdown, command toggles</li>
+        <li><b>🎉 Community</b> — giveaways, polls, surveys, starboard, counting</li>`;
+      b.appendChild(ul);
+    }
+  },
+  {
+    title: "Pick your server",
+    desc: "Choose the server to focus on. The panel uses it for the next steps.",
+    render() {
+      const b = $("#intro-body");
+      b.innerHTML = "";
+      if (!guilds.length) {
+        const hint = document.createElement("p");
+        hint.className = "intro-status muted";
+        hint.textContent = "No servers available yet. Add the bot to a server you own or are admin in.";
+        b.appendChild(hint);
+        const a = document.createElement("a");
+        a.className = "btn discord full";
+        a.href = inviteUrl || "#";
+        a.target = "_blank";
+        a.rel = "noopener";
+        a.textContent = "Invite the bot";
+        b.appendChild(a);
+        return;
+      }
+      if (!guilds.some((g) => g.id === introServerId)) introServerId = guilds[0].id;
+      const sel = document.createElement("select");
+      sel.id = "intro-server";
+      sel.className = "full";
+      for (const g of guilds) {
+        const o = document.createElement("option");
+        o.value = g.id;
+        o.textContent = g.name;
+        sel.append(o);
+      }
+      sel.value = introServerId;
+      sel.addEventListener("change", () => {
+        introServerId = sel.value;
+        introChannelId = guilds.find((g) => g.id === introServerId)?.logChannelId ?? "";
+        selectGuild(introServerId);
+      });
+      b.appendChild(sel);
+    }
+  },
+  {
+    title: "Register commands",
+    desc: "Make sure every slash command works on your server and old ones are cleaned up.",
+    render() {
+      const b = $("#intro-body");
+      b.innerHTML = "";
+      const p = document.createElement("p");
+      p.className = "muted small";
+      p.textContent = "This pushes the full command list to Discord. Re-run it any time from the sidebar.";
+      b.appendChild(p);
+
+      const status = document.createElement("p");
+      status.className = "intro-status muted";
+      b.appendChild(status);
+
+      const btn = document.createElement("button");
+      btn.className = "btn primary";
+      btn.textContent = "Register slash commands";
+      btn.addEventListener("click", async () => {
+        btn.disabled = true;
+        btn.textContent = "Registering…";
+        try {
+          await api("/api/commands/register", { method: "POST", body: {} });
+          status.textContent = "✅ Commands are registered.";
+          status.classList.remove("error");
+        } catch (err) {
+          status.textContent = `❌ ${err.message}`;
+          status.classList.add("error");
+        } finally {
+          btn.disabled = false;
+          btn.textContent = "Register slash commands";
+        }
+      });
+      b.appendChild(btn);
+    }
+  },
+  {
+    title: "Update announcements",
+    desc: "Pick a channel where the bot announces its own updates and restarts.",
+    render() {
+      const b = $("#intro-body");
+      b.innerHTML = "";
+      const g = guilds.find((x) => x.id === introServerId);
+      if (!g) {
+        const p = document.createElement("p");
+        p.className = "intro-status muted";
+        p.textContent = "Pick a server on the previous step first.";
+        b.appendChild(p);
+        return;
+      }
+      const wrap = document.createElement("div");
+      wrap.className = "field-row";
+      const label = document.createElement("label");
+      label.textContent = g.name;
+      label.htmlFor = "intro-update-channel";
+      const sel = document.createElement("select");
+      sel.id = "intro-update-channel";
+      fillSelect(sel, g.channels.filter((c) => c.type === 0), "", "No text channels", true);
+      if (introChannelId && g.channels.some((c) => c.id === introChannelId)) sel.value = introChannelId;
+      else if (!introChannelId) introChannelId = sel.value;
+      sel.addEventListener("change", () => { introChannelId = sel.value; });
+      wrap.append(label, sel);
+      b.appendChild(wrap);
+
+      const status = document.createElement("p");
+      status.className = "intro-status muted";
+      b.appendChild(status);
+
+      const btn = document.createElement("button");
+      btn.className = "btn primary";
+      btn.textContent = "Save update channel";
+      btn.addEventListener("click", async () => {
+        btn.disabled = true;
+        btn.textContent = "Saving…";
+        try {
+          await api(`/api/guilds/${g.id}/logging/save`, { method: "POST", body: { channelId: sel.value || null } });
+          const idx = guilds.findIndex((x) => x.id === g.id);
+          if (idx !== -1) guilds[idx].logChannelId = sel.value || null;
+          status.textContent = sel.value ? "✅ Update announcements will go here." : "✅ Updates will stay silent.";
+          status.classList.remove("error");
+        } catch (err) {
+          status.textContent = `❌ ${err.message}`;
+          status.classList.add("error");
+        } finally {
+          btn.disabled = false;
+          btn.textContent = "Save update channel";
+        }
+      });
+      b.appendChild(btn);
+    }
+  }
+];
+
+let introStep = 0;
+let introServerId = null;
+let introChannelId = "";
+
+function renderIntro() {
+  $("#intro-step").textContent = `${introStep + 1}/${INTRO_STEPS.length}`;
+  const st = INTRO_STEPS[introStep];
+  $("#intro-title").textContent = st.title;
+  $("#intro-desc").textContent = st.desc;
+  $("#intro-bar").style.width = `${((introStep + 1) / INTRO_STEPS.length) * 100}%`;
+  $("#btn-intro-back").disabled = introStep === 0;
+  $("#btn-intro-next").textContent = introStep === INTRO_STEPS.length - 1 ? "Finish" : "Next";
+  st.render();
+}
+
 function maybeShowIntro() {
   if (localStorage.getItem("ys_intro_seen")) return;
   if (!$("#invite-modal").classList.contains("hidden")) return;
+  introStep = 0;
+  introServerId = selectedGuildId || guilds[0]?.id || null;
+  introChannelId = guilds.find((g) => g.id === introServerId)?.logChannelId ?? "";
+  renderIntro();
   $("#intro-modal").classList.remove("hidden");
 }
 
@@ -79,8 +251,21 @@ function dismissIntro() {
   $("#intro-modal").classList.add("hidden");
 }
 
-$("#btn-intro-done").addEventListener("click", dismissIntro);
 $("#btn-intro-skip").addEventListener("click", dismissIntro);
+$("#btn-intro-back").addEventListener("click", () => {
+  if (introStep > 0) {
+    introStep--;
+    renderIntro();
+  }
+});
+$("#btn-intro-next").addEventListener("click", () => {
+  if (introStep === INTRO_STEPS.length - 1) {
+    dismissIntro();
+    return;
+  }
+  introStep++;
+  renderIntro();
+});
 
 async function loadStatus() {
   try {
