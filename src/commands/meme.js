@@ -9,7 +9,7 @@ async function fetchMeme(subreddit) {
   const res = await fetch(url, {
     headers: {
       "Accept": "application/json",
-      "User-Agent": "YouShadeBot/1.1 (https://github.com/WollyDev24/YouShadeBot)"
+      "User-Agent": "MonolithBot/1.1 (https://github.com/WollyDev24/Monolith)"
     }
   });
 

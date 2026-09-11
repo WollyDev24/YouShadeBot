@@ -1,6 +1,6 @@
 <div align="center">
 
-# YouShadeBot
+# Monolith
 
 **All-in-one Discord server management bot**
 
@@ -161,8 +161,8 @@ src/
 1. **Clone the repository**
 
    ```bash
-   git clone https://github.com/WollyDev24/YouShadeBot
-   cd YouShadeBot
+   git clone https://github.com/WollyDev24/Monolith
+   cd Monolith
    ```
 
 2. **Install dependencies**

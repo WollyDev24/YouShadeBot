@@ -13,7 +13,7 @@ export default {
     }
 
     const embed = new EmbedBuilder()
-      .setTitle("YouShadeBot Commands")
+      .setTitle("Monolith Commands")
       .setColor(0x5865f2)
       .setDescription("General-purpose Discord management bot.")
       .addFields(
