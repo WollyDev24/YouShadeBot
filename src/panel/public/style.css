@@ -652,7 +652,8 @@ label.check input { accent-color: var(--accent); }
   align-items: center;
   gap: 10px;
   width: 100%;
-  margin: -6px 0 16px;
+  margin-top: auto;
+  flex-shrink: 0;
   padding: 10px 14px;
   border: 1px solid var(--border);
   border-radius: 12px;

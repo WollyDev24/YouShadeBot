@@ -299,18 +299,14 @@ async function loadStatus() {
       : "";
 
     const userBox = $("#user-box");
-    if (st.user) {
-      CUR_USER = Object.assign({}, st.user, { admin: st.superuser === true || st.user.kind === "password" });
-      const isDiscord = st.user.kind === "discord";
-      userBox.classList.remove("hidden");
-      $("#user-avatar").src = st.user.avatar || "";
-      $("#user-avatar").style.display = st.user.avatar ? "" : "none";
-      $("#user-name").textContent = st.user.name;
-      $("#user-sub").textContent = isDiscord ? "signed in via Discord" : "password login";
-    } else {
-      CUR_USER = null;
-      userBox.classList.add("hidden");
-    }
+    const u = st.user || { name: "Administrator", kind: "password" };
+    CUR_USER = Object.assign({}, u, { admin: st.superuser === true || u.kind === "password" });
+    const isDiscord = u.kind === "discord";
+    userBox.classList.remove("hidden");
+    $("#user-avatar").src = u.avatar || "";
+    $("#user-avatar").style.display = u.avatar ? "" : "none";
+    $("#user-name").textContent = u.name;
+    $("#user-sub").textContent = isDiscord ? "signed in via Discord" : "password login";
     $("#btn-commands").classList.toggle("hidden", st.superuser === false);
     $("#btn-up-check").classList.toggle("hidden", st.superuser === false);
     SUPERUSER = st.superuser === true;
