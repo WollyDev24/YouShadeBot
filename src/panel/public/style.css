@@ -883,17 +883,15 @@ label.check input { accent-color: var(--accent); }
   .guild-item { border: 1px solid var(--border); border-radius: 999px; padding: 10px 14px; white-space: nowrap; flex-shrink: 0; min-height: 44px; }
   .guild-item.selected { border-color: var(--accent); }
   .main { max-height: none; padding: 14px 12px; overflow: visible; }
-  .tabs { top: 0; }
   .tab-group { display: none; }
   .tab { padding: 10px 14px; min-height: 42px; }
-  .toolbar { top: 58px; }
+  .toolbar { top: 46px; }
   .guild-header { flex-wrap: wrap; }
   .guild-icon { width: 44px; height: 44px; border-radius: 12px; }
   .ov-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
   .card { padding: 16px; }
   .field-row label { min-width: 100px; }
   .ro-banner { flex-wrap: wrap; }
-  .toolbar { top: 66px; }
 }
 
 @media (max-width: 560px) {
