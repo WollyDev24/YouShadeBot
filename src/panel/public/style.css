@@ -764,6 +764,7 @@ label.check input { accent-color: var(--accent); }
 }
 .user-modal-close:hover { background: var(--card-2); color: var(--text); }
 .user-modal-section { margin-top: 18px; }
+.user-modal-section .btn + .btn { margin-top: 10px; }
 .user-modal-section h4 {
   margin: 0 0 10px;
   font-size: 0.72rem;
@@ -871,13 +872,52 @@ label.check input { accent-color: var(--accent); }
     border-bottom: 1px solid var(--border);
     padding: 12px 14px;
   }
-  .status-box { margin: 0; flex: 1 1 auto; min-width: 220px; }
+  .brand { padding: 0; }
+  .brand-logo { width: 38px; height: 38px; border-radius: 12px; font-size: 1.05rem; }
+  .brand h1 { font-size: 1.05rem; }
+  .status-box { margin: 0; flex: 1 1 auto; min-width: 0; padding: 8px 12px; }
+  .status-box .dot { width: 9px; height: 9px; }
+  .user-box { width: auto; margin: 0; padding: 8px 12px; flex-shrink: 0; }
   .sidebar-title { display: none; }
-  .guild-list { display: flex; gap: 8px; overflow-x: auto; flex: 1 1 100%; margin: 0; padding-bottom: 4px; }
-  .guild-item { border: 1px solid var(--border); border-radius: 999px; padding-right: 14px; white-space: nowrap; flex-shrink: 0; }
+  .guild-list { display: flex; gap: 8px; overflow-x: auto; flex: 1 1 100%; margin: 0; padding-bottom: 2px; }
+  .guild-item { border: 1px solid var(--border); border-radius: 999px; padding: 10px 14px; white-space: nowrap; flex-shrink: 0; min-height: 44px; }
   .guild-item.selected { border-color: var(--accent); }
   .main { max-height: none; padding: 14px 12px; overflow: visible; }
   .tabs { top: 0; }
+  .tab-group { display: none; }
+  .tab { padding: 10px 14px; min-height: 42px; }
+  .toolbar { top: 58px; }
+  .guild-header { flex-wrap: wrap; }
   .guild-icon { width: 44px; height: 44px; border-radius: 12px; }
-  .ov-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
+  .ov-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+  .card { padding: 16px; }
+  .field-row label { min-width: 100px; }
+  .ro-banner { flex-wrap: wrap; }
+  .toolbar { top: 66px; }
+}
+
+@media (max-width: 560px) {
+  .sidebar { padding: 10px; gap: 8px; }
+  .brand span { display: none; }
+  .brand-logo { width: 34px; height: 34px; border-radius: 10px; font-size: 0.95rem; }
+  .brand h1 { font-size: 0.98rem; }
+  .status-box { padding: 6px 10px; font-size: 0.85rem; }
+  #status-meta { display: none; }
+  .user-box { padding: 6px 10px; }
+  .user-box-info { max-width: 80px; }
+  .main { padding: 10px; }
+  .guild-header { padding: 14px; gap: 12px; }
+  .guild-header h2 { font-size: 1.15rem; }
+  #guild-meta { font-size: 0.72rem; margin-top: 6px; }
+  .guild-icon { width: 40px; height: 40px; }
+  .card { padding: 14px 15px; }
+  .ov-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+  .ov-tile { padding: 13px; }
+  .tab { padding: 9px 12px; font-size: 0.84rem; gap: 5px; }
+  .tab .tab-ico { font-size: 0.88rem; }
+  .search-box { padding: 0 12px; }
+  .search-box input { padding: 10px 0; }
+  .intro-modal, .invite-modal, .user-modal { padding: 14px; }
+  .field-row label { min-width: 0; }
+  .check-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
 }
