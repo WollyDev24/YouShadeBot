@@ -63,7 +63,7 @@ const PUBLIC = path.join(__dirname, "public");
 const FRONTEND_REV = crypto
   .createHash("sha1")
   .update(
-    ["index.html", "app.js", "style.css", "privacy.html"]
+    ["index.html", "app.js", "style.css", "privacy.html", "landing.html"]
       .map((f) => fs.readFileSync(path.join(PUBLIC, f)))
       .join("")
   )
@@ -105,6 +105,9 @@ const INVITE_PERMISSIONS = 1099528416272;
 
 const adminUserIds = () =>
   new Set((process.env.PANEL_ADMIN_USERS || "").split(",").map((s) => s.trim()).filter(Boolean));
+
+const inviteUrl = () =>
+  `https://discord.com/oauth2/authorize?client_id=${PANEL_CLIENT_ID}&scope=bot%20applications.commands&permissions=${INVITE_PERMISSIONS}`;
 
 const isSuperuser = (auth) =>
   auth?.kind === "password" ||
@@ -571,19 +574,19 @@ export function startPanel(client) {
     if (!cfg.enabled) return res.status(400).json({ error: "Discord OAuth is not configured" });
     const { code, state } = req.query;
     if (!code || !state || state !== req.cookies?.ys_oauth_state) {
-      return res.redirect("/?oauth=error");
+      return res.redirect("/dashboard?oauth=error");
     }
     res.clearCookie("ys_oauth_state");
     const token = await exchangeCode(code, oauthRedirect(req));
     if (!token) {
       console.error("[panel] Discord OAuth token exchange failed");
-      return res.redirect("/?oauth=error");
+      return res.redirect("/dashboard?oauth=error");
     }
     const me = await discordRequest("/users/@me", { token: token.access_token });
     const gs = await discordRequest("/users/@me/guilds", { token: token.access_token });
     if (!me.ok || !gs.ok) {
       console.error("[panel] Discord OAuth profile fetch failed");
-      return res.redirect("/?oauth=error");
+      return res.redirect("/dashboard?oauth=error");
     }
     const u = me.data;
     const sessionId = newSession({
@@ -602,7 +605,7 @@ export function startPanel(client) {
       sameSite: "strict",
       maxAge: 30 * 24 * 60 * 60 * 1000
     });
-    return res.redirect("/");
+    return res.redirect("/dashboard");
   });
 
   app.get("/api/status", requireAuth, async (req, res) => {
@@ -629,7 +632,7 @@ export function startPanel(client) {
       uptime: Math.floor(process.uptime()),
       guildCount: guilds.size,
       totalMembers: guilds.reduce((n, g) => n + g.memberCount, 0),
-      inviteUrl: `https://discord.com/oauth2/authorize?client_id=${PANEL_CLIENT_ID}&scope=bot%20applications.commands&permissions=${INVITE_PERMISSIONS}`
+      inviteUrl: inviteUrl()
     });
   });
 
@@ -1768,6 +1771,14 @@ export function startPanel(client) {
     next();
   });
   app.get("/", (req, res) => {
+    const html = fs.readFileSync(path.join(PUBLIC, "landing.html"), "utf8");
+    res.set("Content-Type", "text/html; charset=utf-8").send(
+      html
+        .replace('href="/style.css"', `href="/style.css?v=${FRONTEND_REV}"`)
+        .replaceAll("{{INVITE_URL}}", inviteUrl())
+    );
+  });
+  app.get("/dashboard", (req, res) => {
     const html = fs.readFileSync(path.join(PUBLIC, "index.html"), "utf8");
     res.set("Content-Type", "text/html; charset=utf-8").send(
       html
