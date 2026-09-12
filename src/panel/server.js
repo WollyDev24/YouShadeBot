@@ -618,9 +618,12 @@ export function startPanel(client) {
         ? { id: auth.session.userId, name: auth.session.name, avatar: auth.session.avatar, kind: "discord" }
         : auth?.kind === "password" ? { name: "Administrator", kind: "password" } : null
     };
-    // Report the bot online state from the ready flag, not client.user: on some
-    // discord.js versions client.user can be unset even while the gateway is up.
-    const online = typeof client.isReady === "function" ? client.isReady() : Boolean(client.user);
+    // Report the bot online state from the websocket ready flag OR the logged-in
+    // user object. Some discord.js versions can leave client.user unset briefly
+    // while the gateway is up (and vice versa), so check both instead of one.
+    const online =
+      Boolean(client.user) ||
+      (typeof client.isReady === "function" ? client.isReady() : false);
     if (!online) return res.json({ ...base, online: false });
     const guilds = client.guilds.cache;
     return res.json({
