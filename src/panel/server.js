@@ -43,6 +43,7 @@ import {
 } from "../utils/sticky.js";
 import { registerCommands } from "../utils/register.js";
 import { getAutomodConfig } from "../utils/automod.js";
+import { getAiConfig } from "../utils/aichat.js";
 import { getReactionRoles } from "../utils/reactionRoles.js";
 import { isLocked, getStatus, getAllLockdowns, lockChannel, unlockChannel, cleanup } from "../utils/lockdown.js";
 import { getPolls } from "../utils/polls.js";
@@ -387,6 +388,10 @@ async function guildPayload(client, guild) {
         inviteBlocking: { ...a.inviteBlocking },
         caseCount: (a.cases ?? []).length
       };
+    })(),
+    aichat: (() => {
+      const a = getAiConfig(guild.id);
+      return { enabled: a.enabled === true, channels: [...(a.channels ?? [])], model: a.model ?? "gemini-2.5-flash" };
     })(),
     reactionRoles: (() => {
       const rrs = getReactionRoles(guild.id);
@@ -1518,6 +1523,7 @@ export function startPanel(client) {
     const feature = body.feature;
     if (!["wordFilter", "spamDetection", "massMention", "inviteBlocking"].includes(feature))
       return res.status(400).json({ error: "Invalid feature." });
+    if (body.enabled !== undefined) cfg[feature].enabled = Boolean(body.enabled);
     if (body.action) cfg[feature].action = body.action;
     if (body.muteDuration !== undefined) cfg[feature].muteDuration = Number(body.muteDuration);
     if (body.messagesPerWindow !== undefined) cfg[feature].messagesPerWindow = Number(body.messagesPerWindow);
@@ -1577,6 +1583,24 @@ export function startPanel(client) {
     cfg.cases = [];
     cfg.caseCounter = 0;
     saveKey("automod");
+    return res.json({ ok: true, payload: await guildPayload(client, guild) });
+  });
+
+  app.post("/api/guilds/:id/aichat/config", requireAuth, async (req, res) => {
+    const guild = client.guilds.cache.get(req.params.id);
+    if (!guild) return res.status(404).json({ error: "guild not found" });
+    const { getAiConfig: gaic, setAiModel } = await import("../utils/aichat.js");
+    const { saveKey } = await import("../utils/db.js");
+    const body = req.body ?? {};
+    const cfg = gaic(guild.id);
+    if (body.enabled !== undefined) cfg.enabled = Boolean(body.enabled);
+    if (Array.isArray(body.channels)) {
+      cfg.channels = body.channels
+        .filter((id) => typeof id === "string" && guild.channels.cache.has(id))
+        .slice(0, 20);
+    }
+    if (typeof body.model === "string" && body.model.trim()) setAiModel(guild.id, body.model);
+    saveKey("aichat");
     return res.json({ ok: true, payload: await guildPayload(client, guild) });
   });
 

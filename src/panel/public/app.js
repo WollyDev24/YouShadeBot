@@ -428,6 +428,7 @@ function renderGuild(g) {
   renderPolls(g);
   renderReminders(g);
   renderAutomod(g);
+  renderAiChat(g, textChannels);
   renderReactionRoles(g);
   renderLockdown(g);
   renderLeveling(g);
@@ -1404,6 +1405,39 @@ $("#btn-am-cases-clear").addEventListener("click", async (e) => {
   await withGuild("automod/cases/clear", {}, e.currentTarget);
 });
 
+/* --- ai chat --- */
+
+function renderAiChat(g, textChannels) {
+  const cfg = g.aichat ?? { enabled: false, channels: [], model: "gemini-2.5-flash" };
+  $("#ai-enabled").checked = !!cfg.enabled;
+  $("#ai-model").value = cfg.model ?? "";
+
+  const select = $("#ai-channels");
+  select.innerHTML = "";
+  const list = textChannels.length ? textChannels : g.channels.filter((c) => c.type === 0);
+  for (const c of list) {
+    const opt = document.createElement("option");
+    opt.value = c.id;
+    opt.textContent = `#${c.name}`;
+    if ((cfg.channels ?? []).includes(c.id)) opt.selected = true;
+    select.appendChild(opt);
+  }
+
+  $("#ai-status").textContent = cfg.enabled
+    ? cfg.channels.length
+      ? `ON — answering in ${cfg.channels.length} channel(s).`
+      : "Enabled but no channels whitelisted yet."
+    : "Off — enable and pick at least one channel to start.";
+}
+
+$("#btn-ai-save").addEventListener("click", (e) =>
+  withGuild("aichat/config", {
+    enabled: $("#ai-enabled").checked,
+    channels: [...$("#ai-channels").selectedOptions].map((o) => o.value),
+    model: $("#ai-model").value.trim()
+  }, e.currentTarget)
+);
+
 /* --- reaction roles --- */
 
 function renderReactionRoles(g) {
@@ -2140,6 +2174,10 @@ document.addEventListener("keydown", (e) => {
 
 applyTab((() => { try { return localStorage.getItem("ys_tab"); } catch { return null; } })());
 
+tabSections().forEach((card) => {
+  if (card.id !== "sec-overview") card.classList.add("collapsed");
+});
+
 /* --- overview --- */
 
 function ovTile(icon, tab, targetId, name, state, stateClass = "") {
@@ -2157,6 +2195,7 @@ function gotoFeature(tab, targetId) {
   applyTab(tab);
   const card = document.getElementById(targetId);
   if (card) {
+    card.classList.remove("collapsed");
     card.scrollIntoView({ behavior: "smooth", block: "center" });
     card.classList.remove("flash");
     void card.offsetWidth;
@@ -2204,6 +2243,9 @@ function renderOverview(g) {
     ovTile("shield", "safety", "sec-automod", "Automod",
       g.automod.enabled ? `On · ${g.automod.caseCount} case(s)` : "Off",
       g.automod.enabled ? "on" : "off"),
+    ovTile("smart_toy", "safety", "sec-aichat", "AI chat",
+      (g.aichat?.enabled && g.aichat.channels.length) ? `On · ${g.aichat.channels.length} channel(s)` : "Off",
+      g.aichat?.enabled && g.aichat.channels.length ? "on" : "off"),
     ovTile("lock", "safety", "sec-lockdown", "Lockdown",
       `${g.lockdowns.length} locked`, g.lockdowns.length ? "warn" : "off"),
     ovTile("system_update", "safety", "sec-update", "Auto-update",

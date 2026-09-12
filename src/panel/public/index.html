@@ -518,6 +518,29 @@
           <div id="am-case-list" class="ann-list"></div>
         </section>
 
+        <section class="card" data-tab="safety" id="sec-aichat">
+          <h3>AI Chat</h3>
+          <p class="muted small">
+            Monolith answers via Gemini when you mention it or reply to its messages in a whitelisted channel.
+          </p>
+          <div class="field-row">
+            <label class="check"><input type="checkbox" id="ai-enabled" /> enabled</label>
+            <label for="ai-model">Gemini model</label>
+            <input type="text" id="ai-model" maxlength="60" placeholder="gemini-2.5-flash" style="width:200px" />
+          </div>
+          <div class="field-row col">
+            <label for="ai-channels">Whitelisted channels (ctrl-click to select multiple)</label>
+            <select id="ai-channels" multiple size="6"></select>
+          </div>
+          <div class="field-row">
+            <button id="btn-ai-save" class="btn primary">Save AI settings</button>
+          </div>
+          <p id="ai-status" class="hint"></p>
+          <p class="muted small">
+            Limits: <strong>5</strong>/day per user, <strong>15</strong>/day for boosters, unlimited for admins.
+          </p>
+        </section>
+
         <section class="card" data-tab="safety" id="sec-commands">
           <h3>Commands</h3>
           <p class="muted small">
