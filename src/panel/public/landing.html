@@ -167,5 +167,32 @@
       </nav>
     </div>
   </footer>
+  <script>
+    // Smooth-scroll to in-page anchors, accounting for the sticky landing
+    // header. Native hash navigation + scroll-behavior:smooth causes a
+    // visible two-phase jump right after the click, so we drive the scroll
+    // ourselves and only update the URL hash without scrolling.
+    (function () {
+      var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      var navs = document.querySelectorAll(".lnd-navlinks a[href^='#'], .lnd-footer-links a[href^='#']");
+      navs.forEach(function (a) {
+        a.addEventListener("click", function (e) {
+          var id = a.getAttribute("href").slice(1);
+          var target = document.getElementById(id);
+          if (!target) return;
+          e.preventDefault();
+          var header = document.querySelector(".lnd-header");
+          var offset = header ? header.getBoundingClientRect().height + 18 : 0;
+          var top = target.getBoundingClientRect().top + window.scrollY - offset;
+          if (reduce) {
+            window.scrollTo(0, top);
+          } else {
+            window.scrollTo({ top: top, behavior: "smooth" });
+          }
+          history.replaceState(null, "", "#" + id);
+        });
+      });
+    })();
+  </script>
 </body>
 </html>
