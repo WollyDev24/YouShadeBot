@@ -507,6 +507,7 @@ export function startPanel(client) {
     const auth = getAuth(req);
     if (!auth) return false;
     if (auth.kind === "password") return true;
+    if (isSuperuser(auth)) return true;
     return memberAccess(auth.session, guildId)?.canManage ?? false;
   };
 
@@ -647,10 +648,25 @@ export function startPanel(client) {
   app.get("/api/guilds", requireAuth, async (req, res) => {
     const auth = getAuth(req);
     const out = [];
-    if (auth.kind === "password") {
-      // Superuser view: every guild the bot is in, fully manageable.
+    if (auth.kind === "password" || isSuperuser(auth)) {
+      // Superuser view: every guild the bot is in, fully manageable. Bot admins
+      // (PANEL_ADMIN_USERS) also still see their own addable non-bot servers.
+      const seen = new Set();
       for (const guild of client.guilds.cache.values()) {
+        seen.add(guild.id);
         out.push({ ...(await guildPayload(client, guild)), canManage: true, inBot: true });
+      }
+      if (auth.kind === "discord") {
+        for (const g of auth.session.guilds ?? []) {
+          if (!g.canManage || seen.has(g.id)) continue;
+          out.push({
+            id: g.id,
+            name: g.name,
+            icon: g.icon ? `https://cdn.discordapp.com/icons/${g.id}/${g.icon}.png?size=128` : null,
+            canManage: true,
+            inBot: false
+          });
+        }
       }
     } else {
       // Discord view: every guild the user can manage — including ones Monolith
@@ -702,7 +718,7 @@ export function startPanel(client) {
   const requireGuildManage = async (req, res, next) => {
     const auth = getAuth(req);
     if (!auth) return res.status(401).json({ error: "unauthorized" });
-    if (auth.kind === "password") return next();
+    if (auth.kind === "password" || isSuperuser(auth)) return next();
     const acc = memberAccess(auth.session, req.params.id);
     if (!acc?.canManage)
       return res.status(404).json({ error: "guild not found" });
