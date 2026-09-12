@@ -2231,7 +2231,11 @@ function applyTab(name) {
   });
   const mainScroller = document.querySelector(".main");
   if (mainScroller) mainScroller.scrollTop = 0;
+  const root = document.documentElement;
+  const resumed = root.style.scrollBehavior;
+  root.style.scrollBehavior = "auto";
   window.scrollTo(0, 0);
+  root.style.scrollBehavior = resumed;
 }
 
 function toggleCard(card) {

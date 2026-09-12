@@ -37,7 +37,7 @@
 
 * { box-sizing: border-box; }
 
-html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; scroll-padding-top: 84px; }
+html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; scroll-padding-top: 84px; overflow-anchor: none; }
 
 body {
   margin: 0;
@@ -164,8 +164,8 @@ code, kbd, pre {
 }
 
 @keyframes cardIn {
-  from { opacity: 0; transform: translateY(4px); }
-  to { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 @keyframes gradientShift {
@@ -405,7 +405,7 @@ code, kbd, pre {
 }
 
 /* Main */
-.main { padding: 24px 30px; overflow-y: auto; max-height: 100vh; }
+.main { padding: 24px 30px; overflow-y: auto; max-height: 100vh; overflow-anchor: none; scrollbar-gutter: stable; }
 .main-inner { max-width: 1120px; margin: 0 auto; min-width: 0; }
 
 .empty { text-align: center; padding-top: 90px; }
@@ -1125,7 +1125,7 @@ label.check input { accent-color: var(--accent); }
 .invite-actions { display: flex; flex-direction: column; gap: 10px; margin-top: 18px; }
 
 @media (max-width: 980px), (max-width: 1280px) and (pointer: coarse), (max-width: 1280px) and (hover: none) {
-  .app { grid-template-columns: 1fr; }
+  .app { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); height: 100vh; height: 100dvh; min-height: 0; }
   .sidebar {
     flex-direction: row;
     flex-wrap: wrap;
@@ -1146,7 +1146,7 @@ label.check input { accent-color: var(--accent); }
   .guild-list { display: flex; gap: 8px; overflow-x: auto; flex: 1 1 100%; margin: 0; padding-bottom: 2px; }
   .guild-item { border: 1px solid var(--border); border-radius: 999px; padding: 10px 14px; white-space: nowrap; flex-shrink: 0; min-height: 46px; }
   .guild-item.selected { border-color: var(--accent); }
-  .main { max-height: none; padding: 14px 12px; overflow: visible; }
+  .main { max-height: none; min-height: 0; padding: 14px 12px; overflow-y: auto; overflow-anchor: none; scrollbar-gutter: stable; }
   .main-inner { min-width: 0; width: 100%; }
   #guild-view { min-width: 0; overflow-x: hidden; }
   .tab-group { display: none; }
