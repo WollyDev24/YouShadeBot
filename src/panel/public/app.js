@@ -2229,6 +2229,9 @@ function applyTab(name) {
     void sec.offsetWidth;
     sec.classList.add("anim-in");
   });
+  const mainScroller = document.querySelector(".main");
+  if (mainScroller) mainScroller.scrollTop = 0;
+  window.scrollTo(0, 0);
 }
 
 function toggleCard(card) {
