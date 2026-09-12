@@ -273,7 +273,7 @@ body {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 9px 10px;
+  padding: 9px 16px;
   border-radius: 12px;
   cursor: pointer;
   border: 1px solid transparent;
