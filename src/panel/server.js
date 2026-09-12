@@ -391,7 +391,7 @@ async function guildPayload(client, guild) {
     })(),
     aichat: (() => {
       const a = getAiConfig(guild.id);
-      return { enabled: a.enabled === true, channels: [...(a.channels ?? [])], model: a.model ?? "gemini-2.5-flash" };
+      return { enabled: a.enabled === true, channels: [...(a.channels ?? [])], model: a.model ?? "gemini-3.6-flash" };
     })(),
     reactionRoles: (() => {
       const rrs = getReactionRoles(guild.id);

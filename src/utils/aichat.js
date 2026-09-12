@@ -1,7 +1,7 @@
 import { PermissionsBitField } from "../lib/discord.js";
 import { getData, saveKey } from "./db.js";
 
-export const DEFAULT_MODEL = "gemini-2.5-flash";
+export const DEFAULT_MODEL = "gemini-3.6-flash";
 export const BASE_LIMIT = 5;
 export const BOOST_LIMIT = 15;
 

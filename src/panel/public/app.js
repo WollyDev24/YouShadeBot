@@ -1408,7 +1408,7 @@ $("#btn-am-cases-clear").addEventListener("click", async (e) => {
 /* --- ai chat --- */
 
 function renderAiChat(g, textChannels) {
-  const cfg = g.aichat ?? { enabled: false, channels: [], model: "gemini-2.5-flash" };
+  const cfg = g.aichat ?? { enabled: false, channels: [], model: "gemini-3.6-flash" };
   $("#ai-enabled").checked = !!cfg.enabled;
   $("#ai-model").value = cfg.model ?? "";
 
