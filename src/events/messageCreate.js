@@ -2,6 +2,7 @@ import { getGuildCounting, incrementCount, resetCount, upsertStatus, checkReward
 import { findMatch, renderResponse } from "../utils/autores.js";
 import { getAutomodConfig, checkWordFilter, checkSpam, checkMassMention, checkInviteLink, executeAction, addCase, buildCaseEmbed } from "../utils/automod.js";
 import { grantXp, canEarnXp, getLeveling } from "../utils/leveling.js";
+import { handleAiMessage } from "../utils/aichat.js";
 
 const MILESTONES = new Set([69, 100, 200, 300, 400, 500, 1000, 1500, 2000]);
 const replyCooldowns = new Map();
@@ -108,6 +109,7 @@ export default {
     if (!guild) return;
 
     await runAutomod(client, message);
+    await handleAiMessage(client, message);
 
     const rule = findMatch(guild.id, message.content);
     let replied = false;

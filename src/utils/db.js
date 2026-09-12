@@ -30,7 +30,8 @@ const DEFAULTS = {
   polls: {},
   reminders: {},
   leveling: {},
-  roleMenus: {}
+  roleMenus: {},
+  aichat: {}
 };
 
 let store;
