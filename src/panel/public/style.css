@@ -22,7 +22,7 @@
 
 * { box-sizing: border-box; }
 
-html { scroll-behavior: smooth; }
+html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
 
 body {
   margin: 0;
@@ -35,6 +35,11 @@ body {
   background-attachment: fixed;
   color: var(--text);
   min-height: 100vh;
+  overflow-x: hidden;
+}
+
+@media (max-width: 980px) {
+  body { background-attachment: scroll; }
 }
 
 ::selection { background: rgba(108, 124, 255, 0.35); }
@@ -901,11 +906,13 @@ label.check input { accent-color: var(--accent); }
   .user-box { width: auto; margin: 0; padding: 8px 12px; flex-shrink: 0; }
   .sidebar-title { display: none; }
   .guild-list { display: flex; gap: 8px; overflow-x: auto; flex: 1 1 100%; margin: 0; padding-bottom: 2px; }
-  .guild-item { border: 1px solid var(--border); border-radius: 999px; padding: 10px 14px; white-space: nowrap; flex-shrink: 0; min-height: 44px; }
+  .guild-item { border: 1px solid var(--border); border-radius: 999px; padding: 10px 14px; white-space: nowrap; flex-shrink: 0; min-height: 46px; }
   .guild-item.selected { border-color: var(--accent); }
   .main { max-height: none; padding: 14px 12px; overflow: visible; }
+  .main-inner { min-width: 0; width: 100%; }
+  #guild-view { min-width: 0; overflow-x: hidden; }
   .tab-group { display: none; }
-  .tab { padding: 10px 14px; min-height: 42px; }
+  .tab { padding: 10px 14px; min-height: 44px; }
   .toolbar { top: 46px; }
   .guild-header { flex-wrap: wrap; }
   .guild-icon { width: 44px; height: 44px; border-radius: 12px; }
@@ -915,30 +922,53 @@ label.check input { accent-color: var(--accent); }
   .ro-banner { flex-wrap: wrap; }
 }
 
-@media (max-width: 560px) {
+/* Compact / stacked forms for phones and small tablets */
+@media (max-width: 640px) {
   .sidebar { padding: 10px; gap: 8px; }
+  .status-box { font-size: 0.85rem; }
+  .main { padding: 12px 10px 24px; }
+  .tabs { padding: 8px 0 10px; gap: 6px; }
+  .tab { font-size: 0.84rem; gap: 5px; min-height: 44px; }
+  .tab .tab-ico { font-size: 1.05rem; }
+  #guild-meta { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .card { padding: 14px 15px; margin-bottom: 12px; }
+  .field-row { flex-direction: column; align-items: stretch; gap: 8px; }
+  .field-row label { min-width: 0; font-size: 0.88rem; }
+  .field-row label.check { align-self: flex-start; }
+  .field-row select,
+  .field-row input[type="text"],
+  .field-row input[type="number"],
+  .field-row input.grow {
+    width: 100%;
+    min-width: 0;
+    padding: 11px 12px;
+  }
+  .field-row input[type="color"] { width: 56px; height: 44px; }
+  .field-row .btn { min-height: 44px; justify-content: center; }
+  .ov-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+  .ov-tile { padding: 13px; }
+  .check-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+  .user-box-info { max-width: 90px; }
+}
+
+@media (max-width: 560px) {
   .brand span { display: none; }
   .brand-logo { width: 34px; height: 34px; border-radius: 10px; font-size: 0.95rem; }
   .brand h1 { font-size: 0.98rem; }
-  .status-box { padding: 6px 10px; font-size: 0.85rem; }
+  .status-box { padding: 6px 10px; }
   #status-meta { display: none; }
   .user-box { padding: 6px 10px; }
-  .user-box-info { max-width: 80px; }
-  .main { padding: 10px; }
   .guild-header { padding: 14px; gap: 12px; }
   .guild-header h2 { font-size: 1.15rem; }
   #guild-meta { font-size: 0.72rem; margin-top: 6px; }
   .guild-icon { width: 40px; height: 40px; }
-  .card { padding: 14px 15px; }
-  .ov-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
-  .ov-tile { padding: 13px; }
-  .tab { padding: 9px 12px; font-size: 0.84rem; gap: 5px; }
-  .tab .tab-ico { font-size: 1.05rem; }
+  .card h3 { font-size: 1rem; }
   .search-box { padding: 0 12px; }
-  .search-box input { padding: 10px 0; }
-  .intro-modal, .invite-modal, .user-modal { padding: 14px; }
-  .field-row label { min-width: 0; }
-  .check-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+  .search-box input { padding: 12px 0; font-size: 0.92rem; }
+  .intro-modal, .invite-modal, .user-modal { padding: 12px; }
+  .intro-card, .invite-card, .user-card { padding: 18px; }
+  .btn:not(.small) { min-height: 44px; }
+  .toast { left: 12px; right: 12px; transform: none; text-align: center; }
 }
 
 /* ================= Landing page ================= */
