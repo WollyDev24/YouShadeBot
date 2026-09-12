@@ -646,23 +646,44 @@ export function startPanel(client) {
 
   app.get("/api/guilds", requireAuth, async (req, res) => {
     const auth = getAuth(req);
-    // Discord session: only servers the user is in, the bot is in, AND that the
-    // user can manage. Read-only servers are hidden so users only manage what
-    // they have access to.
-    const access =
-      auth.kind === "discord" ? new Map(auth.session.guilds.map((g) => [g.id, g])) : null;
     const out = [];
-    for (const guild of client.guilds.cache.values()) {
-      if (!access) {
-        out.push({ ...(await guildPayload(client, guild)), canManage: true });
-        continue;
+    if (auth.kind === "password") {
+      // Superuser view: every guild the bot is in, fully manageable.
+      for (const guild of client.guilds.cache.values()) {
+        out.push({ ...(await guildPayload(client, guild)), canManage: true, inBot: true });
       }
-      const acc = access.get(guild.id);
-      if (!acc?.canManage) continue; // skip non-member or read-only servers
-      const payload = await guildPayload(client, guild);
-      out.push({ ...payload, canManage: true });
+    } else {
+      // Discord view: every guild the user can manage — including ones Monolith
+      // isn't in yet. Those show grayed out and let the user add the bot.
+      const botGuilds = client.guilds.cache;
+      const seen = new Set();
+      for (const g of auth.session.guilds ?? []) {
+        if (!g.canManage) continue;
+        const guild = botGuilds.get(g.id);
+        if (guild) {
+          seen.add(g.id);
+          out.push({ ...(await guildPayload(client, guild)), canManage: true, inBot: true });
+        } else {
+          out.push({
+            id: g.id,
+            name: g.name,
+            icon: g.icon ? `https://cdn.discordapp.com/icons/${g.id}/${g.icon}.png?size=128` : null,
+            canManage: true,
+            inBot: false
+          });
+        }
+      }
+      // Union: bot guilds this user can manage but that were missing from the
+      // OAuth snapshot (e.g. snapshot taken before they joined). 
+      for (const guild of botGuilds.values()) {
+        if (seen.has(guild.id)) continue;
+        const acc = auth.session.guilds?.find((x) => x.id === guild.id);
+        if (!acc?.canManage) continue;
+        seen.add(guild.id);
+        out.push({ ...(await guildPayload(client, guild)), canManage: true, inBot: true });
+      }
     }
-    return res.json(out.sort((a, b) => a.name.localeCompare(b.name)));
+    return res.json(out.sort((a, b) => (b.inBot - a.inBot) || a.name.localeCompare(b.name)));
   });
 
   app.get("/api/guilds/:id", requireAuth, async (req, res) => {

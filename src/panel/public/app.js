@@ -389,6 +389,15 @@ async function loadGuilds() {
       name.append(lock);
     }
 
+    if (g.inBot === false) {
+      li.classList.add("addable");
+      const plus = document.createElement("span");
+      plus.className = "g-plus mat-icon";
+      plus.innerHTML = "add";
+      plus.title = "Monolith isn't in this server yet — click to add it";
+      li.append(plus);
+    }
+
     li.append(avatar, name);
     li.addEventListener("click", () => selectGuild(g.id));
     list.appendChild(li);
@@ -407,8 +416,29 @@ function selectGuild(id) {
   selectedGuildId = id;
   document.querySelectorAll(".guild-item").forEach((it) => it.classList.toggle("selected", it.dataset.id === id));
   $("#empty-state").classList.add("hidden");
+  const g = guilds.find((x) => x.id === id);
+  if (g && g.inBot === false) {
+    showAddBot(g);
+    return;
+  }
+  $("#sec-addbot").classList.add("hidden");
   $("#guild-view").classList.remove("hidden");
-  renderGuild(guilds.find((g) => g.id === id));
+  renderGuild(g);
+}
+
+function showAddBot(g) {
+  $("#guild-view").classList.add("hidden");
+  $("#sec-addbot").classList.remove("hidden");
+  const icon = $("#addbot-icon");
+  if (g.icon) {
+    icon.src = g.icon;
+    icon.style.display = "";
+  } else {
+    icon.style.display = "none";
+  }
+  $("#addbot-name").textContent = g.name;
+  $("#addbot-status").textContent = "";
+  $("#btn-addbot").href = `${inviteUrl || "https://discord.com/oauth2/authorize"}&guild_id=${encodeURIComponent(g.id)}`;
 }
 
 function renderGuild(g) {
