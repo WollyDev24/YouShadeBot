@@ -46,6 +46,26 @@ body {
 
 .hidden { display: none !important; }
 
+.mat-icon {
+  font-family: "Material Symbols Rounded";
+  font-weight: normal;
+  font-style: normal;
+  font-size: inherit;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  user-select: none;
+  vertical-align: middle;
+}
+.mat-icon.filled { font-variation-settings: "FILL" 1, "wght" 400, "GRAD" 0, "opsz" 24; }
+
 .muted { color: var(--muted); }
 .small { font-size: 0.85rem; }
 .error { color: var(--red); }
@@ -393,7 +413,7 @@ body {
   white-space: nowrap;
   transition: all 0.18s;
 }
-.tab .tab-ico { font-size: 0.95rem; }
+.tab .tab-ico { font-size: 1.15rem; }
 .tab:hover { background: rgba(255, 255, 255, 0.07); color: var(--text); border-color: var(--border-strong); transform: translateY(-1px); }
 .tab.active {
   background: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%);
@@ -454,7 +474,7 @@ body.searching .tabs { opacity: 0.45; }
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.05rem;
+  font-size: 1.25rem;
   border-radius: 10px;
   background: rgba(91, 140, 255, 0.14);
   border: 1px solid rgba(91, 140, 255, 0.3);
@@ -676,10 +696,10 @@ label.check input { accent-color: var(--accent); }
   flex-shrink: 0;
   background: linear-gradient(135deg, var(--accent), var(--accent-2));
 }
-.user-box-gear { opacity: 0.6; font-size: 0.95rem; flex-shrink: 0; }
+.user-box-gear { opacity: 0.6; font-size: 1.15rem; flex-shrink: 0; }
 .user-box:hover .user-box-gear { opacity: 1; }
 
-.g-lock { margin-left: 5px; font-size: 0.8rem; opacity: 0.9; }
+.g-lock { margin-left: 5px; font-size: 0.9rem; opacity: 0.9; }
 
 /* Read-only (no Manage Server on Discord) */
 .ro-banner {
@@ -849,6 +869,7 @@ label.check input { accent-color: var(--accent); }
   color: var(--text);
 }
 .intro-status { margin-top: 10px; font-size: 0.85rem; }
+.intro-status-ico { font-size: 1.1rem; vertical-align: -3px; margin-right: 2px; }
 .intro-actions {
   display: flex;
   align-items: center;
@@ -912,7 +933,7 @@ label.check input { accent-color: var(--accent); }
   .ov-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
   .ov-tile { padding: 13px; }
   .tab { padding: 9px 12px; font-size: 0.84rem; gap: 5px; }
-  .tab .tab-ico { font-size: 0.88rem; }
+  .tab .tab-ico { font-size: 1.05rem; }
   .search-box { padding: 0 12px; }
   .search-box input { padding: 10px 0; }
   .intro-modal, .invite-modal, .user-modal { padding: 14px; }

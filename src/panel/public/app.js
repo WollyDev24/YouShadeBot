@@ -141,10 +141,10 @@ const INTRO_STEPS = [
         btn.textContent = "Registering…";
         try {
           await api("/api/commands/register", { method: "POST", body: {} });
-          status.textContent = "✅ Commands are registered.";
+          status.innerHTML = `<span class="mat-icon intro-status-ico">check_circle</span> Commands are registered.`;
           status.classList.remove("error");
         } catch (err) {
-          status.textContent = `❌ ${err.message}`;
+          status.innerHTML = `<span class="mat-icon intro-status-ico">cancel</span> ${escapeHtml(err.message)}`;
           status.classList.add("error");
         } finally {
           btn.disabled = false;
@@ -196,10 +196,12 @@ const INTRO_STEPS = [
           await api(`/api/guilds/${g.id}/logging/save`, { method: "POST", body: { channelId: sel.value || null } });
           const idx = guilds.findIndex((x) => x.id === g.id);
           if (idx !== -1) guilds[idx].logChannelId = sel.value || null;
-          status.textContent = sel.value ? "✅ Update announcements will go here." : "✅ Updates will stay silent.";
+          status.innerHTML = `<span class="mat-icon intro-status-ico">check_circle</span> ${
+            sel.value ? "Update announcements will go here." : "Updates will stay silent."
+          }`;
           status.classList.remove("error");
         } catch (err) {
-          status.textContent = `❌ ${err.message}`;
+          status.innerHTML = `<span class="mat-icon intro-status-ico">cancel</span> ${escapeHtml(err.message)}`;
           status.classList.add("error");
         } finally {
           btn.disabled = false;
@@ -338,8 +340,8 @@ async function loadGuilds() {
     name.textContent = g.name;
     if (g.canManage === false) {
       const lock = document.createElement("span");
-      lock.className = "g-lock";
-      lock.textContent = "🔒";
+      lock.className = "g-lock mat-icon";
+      lock.innerHTML = "lock";
       lock.title = "Read-only — you don't manage this server on Discord";
       name.append(lock);
     }
@@ -2144,7 +2146,7 @@ function ovTile(icon, tab, targetId, name, state, stateClass = "") {
   const t = document.createElement("div");
   t.className = `ov-tile ${stateClass}`;
   t.innerHTML = `
-    <div class="ov-tile-head"><span class="ov-tile-ico">${icon}</span><span class="ov-tile-name">${escapeHtml(name)}</span></div>
+    <div class="ov-tile-head"><span class="ov-tile-ico mat-icon" aria-hidden="true">${icon}</span><span class="ov-tile-name">${escapeHtml(name)}</span></div>
     <div class="ov-tile-foot"><span class="dot"></span><span>${escapeHtml(state)}</span></div>
   `;
   t.addEventListener("click", () => gotoFeature(tab, targetId));
@@ -2167,60 +2169,60 @@ function renderOverview(g) {
   grid.innerHTML = "";
   const channelName = (id) => g.channels.find((c) => c.id === id)?.name ?? "";
   const tiles = [
-    ovTile("🎟️", "tickets", "sec-tickets", "Tickets",
+    ovTile("confirmation_number", "tickets", "sec-tickets", "Tickets",
       `${g.tickets.types.length} type(s) · ${g.tickets.openCount} open`, g.tickets.types.length ? "on" : "off"),
-    ovTile("💬", "messaging", "sec-welcome", "Welcome messages",
+    ovTile("waving_hand", "messaging", "sec-welcome", "Welcome messages",
       g.welcome.enabled ? `On → ${channelName(g.welcome.channelId) || "(no channel)"}` : "Off",
       g.welcome.enabled ? "on" : "off"),
-    ovTile("👋", "messaging", "sec-autoresponses", "Auto-responses",
+    ovTile("auto_awesome", "messaging", "sec-autoresponses", "Auto-responses",
       `${g.filters.length} rule(s)`, g.filters.length ? "on" : "off"),
-    ovTile("🎁", "messaging", "sec-giveaways", "Giveaways",
+    ovTile("card_giftcard", "messaging", "sec-giveaways", "Giveaways",
       `${g.giveaways.filter((x) => !x.ended).length} running`, g.giveaways.some((x) => !x.ended) ? "on" : "off"),
-    ovTile("📊", "messaging", "sec-polls", "Polls",
+    ovTile("how_to_vote", "messaging", "sec-polls", "Polls",
       `${g.polls.length} total`, g.polls.length ? "on" : "off"),
-    ovTile("⏰", "messaging", "sec-reminders", "Reminders",
+    ovTile("alarm", "messaging", "sec-reminders", "Reminders",
       `${g.reminders.length} set`, g.reminders.length ? "on" : "off"),
-    ovTile("📣", "messaging", "sec-announcements", "Announcements",
+    ovTile("campaign", "messaging", "sec-announcements", "Announcements",
       `${g.announcements.length} scheduled`, g.announcements.length ? "on" : "off"),
-    ovTile("📨", "messaging", "sec-embedsender", "Embed sender",
+    ovTile("send", "messaging", "sec-embedsender", "Embed sender",
       "Send a message or embed", "off"),
-    ovTile("⭐", "messaging", "sec-starboard", "Starboard",
+    ovTile("star", "messaging", "sec-starboard", "Starboard",
       g.starboard.enabled ? `On → ${channelName(g.starboard.channelId) || "(no channel)"}` : "Off",
       g.starboard.enabled ? "on" : "off"),
-    ovTile("🔢", "messaging", "sec-counting", "Counting",
+    ovTile("123", "messaging", "sec-counting", "Counting",
       g.counting.channelId ? `Active · reward: ${g.counting.rewardRoleId ? "set" : "none"}` : "Not set up",
       g.counting.channelId ? "on" : "off"),
-    ovTile("📋", "messaging", "sec-surveys", "Surveys",
+    ovTile("checklist", "messaging", "sec-surveys", "Surveys",
       `${g.surveys.length} created`, g.surveys.length ? "on" : "off"),
-    ovTile("🔊", "channels", "sec-temp", "Temp channels",
+    ovTile("volume_up", "channels", "sec-temp", "Temp channels",
       g.temp.enabled ? `On → ${channelName(g.temp.triggerId) || "(no trigger)"}` : "Off",
       g.temp.enabled ? "on" : "off"),
-    ovTile("📈", "channels", "sec-stats", "Server stats",
+    ovTile("monitoring", "channels", "sec-stats", "Server stats",
       g.stats.enabled ? "Live channels on" : "Off", g.stats.enabled ? "on" : "off"),
-    ovTile("📌", "channels", "sec-sticky", "Sticky messages",
+    ovTile("push_pin", "channels", "sec-sticky", "Sticky messages",
       `${g.sticky.length} active`, g.sticky.length ? "on" : "off"),
-    ovTile("🛡️", "safety", "sec-automod", "Automod",
+    ovTile("shield", "safety", "sec-automod", "Automod",
       g.automod.enabled ? `On · ${g.automod.caseCount} case(s)` : "Off",
       g.automod.enabled ? "on" : "off"),
-    ovTile("🚧", "safety", "sec-lockdown", "Lockdown",
+    ovTile("lock", "safety", "sec-lockdown", "Lockdown",
       `${g.lockdowns.length} locked`, g.lockdowns.length ? "warn" : "off"),
-    ovTile("⚡", "safety", "sec-update", "Auto-update",
+    ovTile("system_update", "safety", "sec-update", "Auto-update",
       g.logChannelId ? `Logging → #${channelName(g.logChannelId) || "(deleted)"}` : "No logging channel",
       g.logChannelId ? "on" : "off"),
-    ovTile("🎭", "roles", "sec-reactionroles", "Reaction roles",
+    ovTile("theater_comedy", "roles", "sec-reactionroles", "Reaction roles",
       `${g.reactionRoles.length} message(s)`, g.reactionRoles.length ? "on" : "off"),
-    ovTile("📚", "roles", "sec-rolemenus", "Role menus",
+    ovTile("menu_book", "roles", "sec-rolemenus", "Role menus",
       `${g.roleMenus.length} menu(s)`, g.roleMenus.length ? "on" : "off"),
-    ovTile("🧑‍🤝‍🧑", "roles", "sec-autoroles", "Auto-join roles",
+    ovTile("group_add", "roles", "sec-autoroles", "Auto-join roles",
       g.autoRoles.humanRoleId || g.autoRoles.botRoleId ? "Set" : "Off",
       g.autoRoles.humanRoleId || g.autoRoles.botRoleId ? "on" : "off"),
-    ovTile("🏆", "roles", "sec-leveling", "Leveling",
+    ovTile("emoji_events", "roles", "sec-leveling", "Leveling",
       g.leveling.enabled ? `On · ${g.leveling.userCount} member(s)` : "Off",
       g.leveling.enabled ? "on" : "off"),
-    ovTile("🧰", "safety", "sec-commands", "Command toggles",
+    ovTile("tune", "safety", "sec-commands", "Command toggles",
       g.disabledCommands.length ? `${g.disabledCommands.length} disabled` : "All enabled",
       g.disabledCommands.length ? "warn" : "on"),
-    ovTile("🖥️", "safety", "sec-panel", "Discord panel",
+    ovTile("apps", "safety", "sec-panel", "Discord panel",
       g.panelRoleId ? "Role restricted" : "Manage Server only",
       g.panelRoleId ? "on" : "off")
   ];

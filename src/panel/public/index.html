@@ -22,6 +22,9 @@
     })();
   </script>
   <title>Monolith Bot Panel</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=block" rel="stylesheet" />
   <link rel="stylesheet" href="/style.css" />
 </head>
 <body>
@@ -63,7 +66,7 @@
           <span id="user-name" class="user-name"></span>
           <span id="user-sub" class="muted small">Account</span>
         </span>
-        <span class="user-box-gear" aria-hidden="true">⚙️</span>
+        <span class="user-box-gear mat-icon" aria-hidden="true">settings</span>
       </button>
     </aside>
 
@@ -84,7 +87,7 @@
         </header>
 
         <div id="ro-banner" class="ro-banner hidden">
-          <span class="ro-banner-ico">👁️</span>
+          <span class="ro-banner-ico mat-icon" aria-hidden="true">visibility</span>
           <div>
             <b>Read-only view.</b> You're logged in via Discord but don't have the
             <b>Manage Server</b> permission on this server, so changes are disabled here.
@@ -93,14 +96,14 @@
 
 <nav id="tabs" class="tabs">
         <span class="tab-group">Workspace</span>
-        <button type="button" class="tab" data-tab="overview"><span class="tab-ico">🏠</span>Overview</button>
-        <button type="button" class="tab" data-tab="channels"><span class="tab-ico">🔊</span>Channels</button>
+        <button type="button" class="tab" data-tab="overview"><span class="tab-ico mat-icon" aria-hidden="true">home</span>Overview</button>
+        <button type="button" class="tab" data-tab="channels"><span class="tab-ico mat-icon" aria-hidden="true">volume_up</span>Channels</button>
         <span class="tab-group">Community</span>
-        <button type="button" class="tab" data-tab="messaging"><span class="tab-ico">💬</span>Messaging</button>
-        <button type="button" class="tab" data-tab="tickets"><span class="tab-ico">🎫</span>Tickets</button>
-        <button type="button" class="tab" data-tab="roles"><span class="tab-ico">🎭</span>Roles</button>
+        <button type="button" class="tab" data-tab="messaging"><span class="tab-ico mat-icon" aria-hidden="true">forum</span>Messaging</button>
+        <button type="button" class="tab" data-tab="tickets"><span class="tab-ico mat-icon" aria-hidden="true">confirmation_number</span>Tickets</button>
+        <button type="button" class="tab" data-tab="roles"><span class="tab-ico mat-icon" aria-hidden="true">groups</span>Roles</button>
         <span class="tab-group">Protection</span>
-        <button type="button" class="tab" data-tab="safety"><span class="tab-ico">🛡️</span>Safety</button>
+        <button type="button" class="tab" data-tab="safety"><span class="tab-ico mat-icon" aria-hidden="true">shield</span>Safety</button>
       </nav>
 
         <div class="toolbar">
@@ -604,7 +607,7 @@
           <div class="field-row">
             <label for="rr-emoji">Emoji</label>
             <input type="text" id="rr-emoji" maxlength="32" style="width:100px" />
-            <button type="button" class="emoji-trigger" data-target="rr-emoji">😀</button>
+            <button type="button" class="emoji-trigger" data-target="rr-emoji" aria-label="Pick emoji"><span class="mat-icon" aria-hidden="true">mood</span></button>
             <label for="rr-role">Role</label>
             <select id="rr-role"></select>
             <label for="rr-label">Label</label>
@@ -747,7 +750,7 @@
             <input type="number" id="sb-threshold" min="1" max="50" value="3" />
             <label for="sb-emoji">Emoji</label>
             <input type="text" id="sb-emoji" maxlength="32" value="⭐" style="width:100px" />
-            <button type="button" class="emoji-trigger" data-target="sb-emoji">😀</button>
+            <button type="button" class="emoji-trigger" data-target="sb-emoji" aria-label="Pick emoji"><span class="mat-icon" aria-hidden="true">mood</span></button>
           </div>
 
           <div class="field-row">
@@ -767,13 +770,13 @@
           <div class="field-row">
             <label for="ct-correct">Correct count</label>
             <input type="text" id="ct-correct" maxlength="32" value="✅" style="width:100px" />
-            <button type="button" class="emoji-trigger" data-target="ct-correct">😀</button>
+            <button type="button" class="emoji-trigger" data-target="ct-correct" aria-label="Pick emoji"><span class="mat-icon" aria-hidden="true">mood</span></button>
             <label for="ct-milestone">Milestone</label>
             <input type="text" id="ct-milestone" maxlength="32" value="🎉" style="width:100px" />
-            <button type="button" class="emoji-trigger" data-target="ct-milestone">😀</button>
+            <button type="button" class="emoji-trigger" data-target="ct-milestone" aria-label="Pick emoji"><span class="mat-icon" aria-hidden="true">mood</span></button>
             <label for="ct-69">69</label>
             <input type="text" id="ct-69" maxlength="32" value="🔥" style="width:100px" />
-            <button type="button" class="emoji-trigger" data-target="ct-69">😀</button>
+            <button type="button" class="emoji-trigger" data-target="ct-69" aria-label="Pick emoji"><span class="mat-icon" aria-hidden="true">mood</span></button>
           </div>
 
           <div class="field-row">
@@ -819,7 +822,7 @@
             <input type="text" id="sv-label" maxlength="80" value="Take Survey" style="width:140px" />
             <label for="sv-emoji">Button emoji</label>
             <input type="text" id="sv-emoji" maxlength="32" value="📋" style="width:100px" />
-            <button type="button" class="emoji-trigger" data-target="sv-emoji">😀</button>
+            <button type="button" class="emoji-trigger" data-target="sv-emoji" aria-label="Pick emoji"><span class="mat-icon" aria-hidden="true">mood</span></button>
           </div>
           <div class="field-row">
             <label for="sv-color">Embed color</label>
@@ -864,7 +867,7 @@
           <h3 id="user-modal-name"></h3>
           <span id="user-modal-sub" class="muted small"></span>
         </div>
-        <button id="btn-user-close" class="user-modal-close" type="button" aria-label="Close">✕</button>
+        <button id="btn-user-close" class="user-modal-close" type="button" aria-label="Close"><span class="mat-icon" aria-hidden="true">close</span></button>
       </div>
       <div class="user-modal-section">
         <h4>Account</h4>
@@ -882,7 +885,7 @@
 
   <div id="invite-modal" class="invite-modal hidden">
     <div class="invite-card">
-      <div class="invite-ico">🤖</div>
+      <div class="invite-ico mat-icon" aria-hidden="true">smart_toy</div>
       <h2>Add the bot to your server</h2>
       <p class="muted" id="invite-msg">
         You don't have access to any server yet. To manage a server here you need to own it (or have the Administrator permission) and have the bot added to it.
