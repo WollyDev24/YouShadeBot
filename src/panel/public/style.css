@@ -37,7 +37,7 @@
 
 * { box-sizing: border-box; }
 
-html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; scroll-padding-top: 84px; }
 
 body {
   margin: 0;
@@ -1293,6 +1293,7 @@ body.landing {
 .btn.discord.lnd-btn { box-shadow: 0 2px 14px rgba(88, 101, 242, 0.35); }
 
 /* Hero */
+.lnd-features, .lnd-dash { scroll-margin-top: 84px; }
 .lnd-hero { position: relative; padding: 96px 0 72px; overflow: hidden; }
 .lnd-hero-grid { display: grid; grid-template-columns: 1fr 340px; gap: 40px; align-items: center; }
 .lnd-hero-copy { min-width: 0; }
