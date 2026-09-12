@@ -38,7 +38,7 @@ body {
   overflow-x: hidden;
 }
 
-@media (max-width: 980px) {
+@media (max-width: 980px), (max-width: 1280px) and (pointer: coarse), (max-width: 1280px) and (hover: none) {
   body { background-attachment: scroll; }
 }
 
@@ -886,7 +886,7 @@ label.check input { accent-color: var(--accent); }
 .invite-ico { font-size: 2.4rem; margin-bottom: 8px; }
 .invite-actions { display: flex; flex-direction: column; gap: 10px; margin-top: 18px; }
 
-@media (max-width: 980px) {
+@media (max-width: 980px), (max-width: 1280px) and (pointer: coarse), (max-width: 1280px) and (hover: none) {
   .app { grid-template-columns: 1fr; }
   .sidebar {
     flex-direction: row;
@@ -922,8 +922,10 @@ label.check input { accent-color: var(--accent); }
   .ro-banner { flex-wrap: wrap; }
 }
 
-/* Compact / stacked forms for phones and small tablets */
-@media (max-width: 640px) {
+/* Compact / stacked forms for phones and small tablets. On coarse-pointer
+   (touch) devices the stacked form layout is forced up to 1280px so phones
+   that render at desktop width still get usable full-width controls. */
+@media (max-width: 640px), (max-width: 1280px) and (pointer: coarse), (max-width: 1280px) and (hover: none) {
   .sidebar { padding: 10px; gap: 8px; }
   .status-box { font-size: 0.85rem; }
   .main { padding: 12px 10px 24px; }

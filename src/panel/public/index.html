@@ -4,20 +4,25 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <script>
-    // When a narrow phone renders the page at desktop width (viewport meta
-    // ignored/overridden, e.g. "Request Desktop Website"), force the mobile
-    // viewport back on and reload once so the responsive layout applies.
+    // Some mobile browsers/embedded webviews ignore the viewport meta and
+    // render at desktop width (e.g. "Request Desktop Website"). When that
+    // happens the responsive CSS never kicks in and the panel looks like a
+    // tiny desktop app. Detect touch devices, tag the root with .is-touch so
+    // the stylesheet can force the mobile layout, and reload once to apply it.
     (function () {
-      var tries = Number(sessionStorage.getItem("panel-vp-fix") || 0);
-      if (
-        tries < 2 &&
-        typeof window.innerWidth === "number" &&
-        window.innerWidth <= 500 &&
-        document.documentElement.clientWidth > 900
-      ) {
-        sessionStorage.setItem("panel-vp-fix", String(tries + 1));
-        document.querySelector("meta[name=viewport]")?.setAttribute("content", "width=device-width, initial-scale=1");
-        location.reload();
+      var isTouch =
+        /Android|iPhone|iPad|iPod|Mobile|Opera Mini|IEMobile|Windows Phone/i.test(navigator.userAgent) ||
+        navigator.maxTouchPoints > 1 ||
+        (typeof window.ontouchstart !== "undefined");
+      var root = document.documentElement;
+      if (isTouch) {
+        root.classList.add("is-touch");
+        var tries = Number(sessionStorage.getItem("panel-vp-fix") || 0);
+        if (tries < 2 && document.documentElement.clientWidth > 900) {
+          sessionStorage.setItem("panel-vp-fix", String(tries + 1));
+          document.querySelector("meta[name=viewport]")?.setAttribute("content", "width=device-width, initial-scale=1");
+          location.reload();
+        }
       }
     })();
   </script>
