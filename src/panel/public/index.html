@@ -89,6 +89,7 @@
             <h2 id="guild-name"></h2>
             <p class="muted small" id="guild-meta"></p>
           </div>
+          <div id="guild-chips" class="guild-chips"></div>
         </header>
 
         <div id="ro-banner" class="ro-banner hidden">
@@ -101,14 +102,14 @@
 
 <nav id="tabs" class="tabs">
         <span class="tab-group">Workspace</span>
-        <button type="button" class="tab" data-tab="overview"><span class="tab-ico mat-icon" aria-hidden="true">home</span>Overview</button>
-        <button type="button" class="tab" data-tab="channels"><span class="tab-ico mat-icon" aria-hidden="true">volume_up</span>Channels</button>
+        <button type="button" class="tab" data-tab="overview"><span class="tab-ico mat-icon" aria-hidden="true">home</span>Overview<span class="tab-badge" data-badge="overview"></span></button>
+        <button type="button" class="tab" data-tab="channels"><span class="tab-ico mat-icon" aria-hidden="true">volume_up</span>Channels<span class="tab-badge" data-badge="channels"></span></button>
         <span class="tab-group">Community</span>
-        <button type="button" class="tab" data-tab="messaging"><span class="tab-ico mat-icon" aria-hidden="true">forum</span>Messaging</button>
-        <button type="button" class="tab" data-tab="tickets"><span class="tab-ico mat-icon" aria-hidden="true">confirmation_number</span>Tickets</button>
-        <button type="button" class="tab" data-tab="roles"><span class="tab-ico mat-icon" aria-hidden="true">groups</span>Roles</button>
+        <button type="button" class="tab" data-tab="messaging"><span class="tab-ico mat-icon" aria-hidden="true">forum</span>Messaging<span class="tab-badge" data-badge="messaging"></span></button>
+        <button type="button" class="tab" data-tab="tickets"><span class="tab-ico mat-icon" aria-hidden="true">confirmation_number</span>Tickets<span class="tab-badge" data-badge="tickets"></span></button>
+        <button type="button" class="tab" data-tab="roles"><span class="tab-ico mat-icon" aria-hidden="true">groups</span>Roles<span class="tab-badge" data-badge="roles"></span></button>
         <span class="tab-group">Protection</span>
-        <button type="button" class="tab" data-tab="safety"><span class="tab-ico mat-icon" aria-hidden="true">shield</span>Safety</button>
+        <button type="button" class="tab" data-tab="safety"><span class="tab-ico mat-icon" aria-hidden="true">shield</span>Safety<span class="tab-badge" data-badge="safety"></span></button>
       </nav>
 
         <div class="toolbar">
@@ -118,6 +119,38 @@
             <span id="search-count" class="search-count"></span>
           </div>
         </div>
+
+        <section class="card" data-tab="overview" id="sec-health">
+          <h3>Bot Health</h3>
+          <p class="muted small">Live status of the Monolith bot across all servers.</p>
+          <div class="health-grid">
+            <div class="h-stat">
+              <span class="h-ico mat-icon" aria-hidden="true">bolt</span>
+              <span class="h-label">Status</span>
+              <b class="h-value"><span class="dot" id="h-status-dot"></span><span id="h-status-text">—</span></b>
+            </div>
+            <div class="h-stat">
+              <span class="h-ico mat-icon" aria-hidden="true">network_ping</span>
+              <span class="h-label">Ping</span>
+              <b class="h-value" id="h-ping">—</b>
+            </div>
+            <div class="h-stat">
+              <span class="h-ico mat-icon" aria-hidden="true">schedule</span>
+              <span class="h-label">Uptime</span>
+              <b class="h-value" id="h-uptime">—</b>
+            </div>
+            <div class="h-stat">
+              <span class="h-ico mat-icon" aria-hidden="true">dns</span>
+              <span class="h-label">Servers</span>
+              <b class="h-value" id="h-guilds">—</b>
+            </div>
+            <div class="h-stat">
+              <span class="h-ico mat-icon" aria-hidden="true">group</span>
+              <span class="h-label">Members</span>
+              <b class="h-value" id="h-members">—</b>
+            </div>
+          </div>
+        </section>
 
         <section class="card" data-tab="overview" id="sec-overview">
           <h3>Overview</h3>

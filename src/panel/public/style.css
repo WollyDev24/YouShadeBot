@@ -380,6 +380,28 @@ body {
   color: var(--muted);
   font-size: 0.8rem;
 }
+.guild-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+.g-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 11px;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  background: rgba(5, 6, 11, 0.45);
+  color: var(--text);
+  font-size: 0.78rem;
+}
+.g-chip .mat-icon { font-size: 0.95rem; color: var(--muted); }
+.g-chip.chip-good { border-color: rgba(52, 232, 164, 0.4); background: rgba(52, 232, 164, 0.08); }
+.g-chip.chip-good .mat-icon { color: var(--green); }
+.g-chip.chip-warn { border-color: rgba(255, 196, 92, 0.45); background: rgba(255, 196, 92, 0.08); }
+.g-chip.chip-warn .mat-icon { color: var(--amber); }
 
 /* Tabs */
 .tabs {
@@ -419,6 +441,27 @@ body {
   transition: all 0.18s;
 }
 .tab .tab-ico { font-size: 1.15rem; }
+.tab .tab-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: rgba(91, 140, 255, 0.18);
+  border: 1px solid rgba(91, 140, 255, 0.45);
+  color: var(--accent-2);
+  font-size: 0.66rem;
+  font-weight: 700;
+  line-height: 1;
+}
+.tab:hover .tab-badge { color: #fff; background: rgba(91, 140, 255, 0.32); }
+.tab.active .tab-badge {
+  background: rgba(255, 255, 255, 0.22);
+  border-color: rgba(255, 255, 255, 0.5);
+  color: #fff;
+}
 .tab:hover { background: rgba(255, 255, 255, 0.07); color: var(--text); border-color: var(--border-strong); transform: translateY(-1px); }
 .tab.active {
   background: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%);
@@ -494,6 +537,36 @@ body.searching .tabs { opacity: 0.45; }
 .ov-tile.off .dot { background: var(--muted); box-shadow: none; }
 .ov-tile.warn .dot { background: var(--amber); box-shadow: 0 0 8px rgba(255, 196, 92, 0.5); animation: none; }
 .ov-tile.off .ov-tile-name { color: var(--muted); }
+
+/* Health card */
+.health-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 10px;
+  margin-top: 16px;
+}
+.h-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.025);
+}
+.h-ico { font-size: 1.3rem; color: var(--accent-2); width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; border-radius: 9px; background: rgba(91, 140, 255, 0.12); border: 1px solid rgba(91, 140, 255, 0.3); }
+.h-label { font-size: 0.72rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.07em; }
+.h-value { display: inline-flex; align-items: center; gap: 7px; font-size: 1.15rem; color: var(--text); }
+.h-value .dot { width: 9px; height: 9px; }
+.h-value.ok { color: var(--green); }
+.h-value.bad { color: var(--red); }
+@media (max-width: 1150px), (max-width: 1280px) and (pointer: coarse), (max-width: 1280px) and (hover: none) {
+  .health-grid { grid-template-columns: repeat(3, 1fr); }
+}
+@media (max-width: 980px), (max-width: 1280px) and (pointer: coarse), (max-width: 1280px) and (hover: none) {
+  .health-grid { grid-template-columns: repeat(2, 1fr); }
+}
 
 /* Fields */
 .field-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 14px; }

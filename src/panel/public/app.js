@@ -280,6 +280,18 @@ $("#btn-intro-next").addEventListener("click", () => {
   renderIntro();
 });
 
+function refreshHealth(st) {
+  const on = !!st.online;
+  const statusDot = $("#h-status-dot");
+  if (statusDot) statusDot.className = `dot ${on ? "online" : "offline"}`;
+  $("#h-status-text").textContent = on ? st.tag : "offline";
+  $("#h-status-text").className = on ? "ok" : "bad";
+  $("#h-ping").textContent = on ? `${st.ping} ms` : "—";
+  $("#h-uptime").textContent = on ? fmtUptime(st.uptime) : "—";
+  $("#h-guilds").textContent = on ? String(st.guildCount) : "—";
+  $("#h-members").textContent = on ? Number(st.totalMembers ?? 0).toLocaleString() : "—";
+}
+
 async function loadStatus() {
   try {
     const st = await api("/api/status");
@@ -299,6 +311,7 @@ async function loadStatus() {
     $("#status-meta").textContent = st.online
       ? `Ping ${st.ping}ms · up ${fmtUptime(st.uptime)} · ${st.guildCount} servers · ${st.totalMembers} members`
       : "";
+    refreshHealth(st);
 
     const userBox = $("#user-box");
     const u = st.user || { name: "Administrator", kind: "password" };
@@ -382,6 +395,16 @@ function renderGuild(g) {
   }
   $("#guild-name").textContent = g.name;
   $("#guild-meta").textContent = `${g.memberCount} members · ${g.channels.length} text/voice channels`;
+
+  const textCh = g.channels.filter((c) => c.type === 0).length;
+  const voiceCh = g.channels.filter((c) => c.type === 2).length;
+  $("#guild-chips").innerHTML = `
+    <span class="g-chip"><span class="mat-icon" aria-hidden="true">group</span>${Number(g.memberCount ?? 0).toLocaleString()} members</span>
+    <span class="g-chip"><span class="mat-icon" aria-hidden="true">forum</span>${textCh} text</span>
+    <span class="g-chip"><span class="mat-icon" aria-hidden="true">volume_up</span>${voiceCh} voice</span>
+    <span class="g-chip ${managed ? "chip-good" : "chip-warn"}"><span class="mat-icon" aria-hidden="true">${managed ? "admin_panel_settings" : "visibility"}</span>${managed ? "Managed" : "Read-only"}</span>
+  `;
+  renderTabBadges(g);
 
   const select = $("#temp-channel");
   select.innerHTML = "";
@@ -2175,7 +2198,7 @@ document.addEventListener("keydown", (e) => {
 applyTab((() => { try { return localStorage.getItem("ys_tab"); } catch { return null; } })());
 
 tabSections().forEach((card) => {
-  if (card.id !== "sec-overview") card.classList.add("collapsed");
+  if (card.id !== "sec-overview" && card.id !== "sec-health") card.classList.add("collapsed");
 });
 
 /* --- overview --- */
@@ -2203,74 +2226,94 @@ function gotoFeature(tab, targetId) {
   }
 }
 
+function overviewTiles(g) {
+  const channelName = (id) => g.channels.find((c) => c.id === id)?.name ?? "";
+  return [
+    { icon: "confirmation_number", tab: "tickets", id: "sec-tickets", name: "Tickets",
+      state: `${g.tickets.types.length} type(s) · ${g.tickets.openCount} open`, cls: g.tickets.types.length ? "on" : "off" },
+    { icon: "waving_hand", tab: "messaging", id: "sec-welcome", name: "Welcome messages",
+      state: g.welcome.enabled ? `On → ${channelName(g.welcome.channelId) || "(no channel)"}` : "Off",
+      cls: g.welcome.enabled ? "on" : "off" },
+    { icon: "auto_awesome", tab: "messaging", id: "sec-autoresponses", name: "Auto-responses",
+      state: `${g.filters.length} rule(s)`, cls: g.filters.length ? "on" : "off" },
+    { icon: "card_giftcard", tab: "messaging", id: "sec-giveaways", name: "Giveaways",
+      state: `${g.giveaways.filter((x) => !x.ended).length} running`, cls: g.giveaways.some((x) => !x.ended) ? "on" : "off" },
+    { icon: "how_to_vote", tab: "messaging", id: "sec-polls", name: "Polls",
+      state: `${g.polls.length} total`, cls: g.polls.length ? "on" : "off" },
+    { icon: "alarm", tab: "messaging", id: "sec-reminders", name: "Reminders",
+      state: `${g.reminders.length} set`, cls: g.reminders.length ? "on" : "off" },
+    { icon: "campaign", tab: "messaging", id: "sec-announcements", name: "Announcements",
+      state: `${g.announcements.length} scheduled`, cls: g.announcements.length ? "on" : "off" },
+    { icon: "send", tab: "messaging", id: "sec-embedsender", name: "Embed sender",
+      state: "Send a message or embed", cls: "off" },
+    { icon: "star", tab: "messaging", id: "sec-starboard", name: "Starboard",
+      state: g.starboard.enabled ? `On → ${channelName(g.starboard.channelId) || "(no channel)"}` : "Off",
+      cls: g.starboard.enabled ? "on" : "off" },
+    { icon: "123", tab: "messaging", id: "sec-counting", name: "Counting",
+      state: g.counting.channelId ? `Active · reward: ${g.counting.rewardRoleId ? "set" : "none"}` : "Not set up",
+      cls: g.counting.channelId ? "on" : "off" },
+    { icon: "checklist", tab: "messaging", id: "sec-surveys", name: "Surveys",
+      state: `${g.surveys.length} created`, cls: g.surveys.length ? "on" : "off" },
+    { icon: "volume_up", tab: "channels", id: "sec-temp", name: "Temp channels",
+      state: g.temp.enabled ? `On → ${channelName(g.temp.triggerId) || "(no trigger)"}` : "Off",
+      cls: g.temp.enabled ? "on" : "off" },
+    { icon: "monitoring", tab: "channels", id: "sec-stats", name: "Server stats",
+      state: g.stats.enabled ? "Live channels on" : "Off", cls: g.stats.enabled ? "on" : "off" },
+    { icon: "push_pin", tab: "channels", id: "sec-sticky", name: "Sticky messages",
+      state: `${g.sticky.length} active`, cls: g.sticky.length ? "on" : "off" },
+    { icon: "shield", tab: "safety", id: "sec-automod", name: "Automod",
+      state: g.automod.enabled ? `On · ${g.automod.caseCount} case(s)` : "Off",
+      cls: g.automod.enabled ? "on" : "off" },
+    { icon: "smart_toy", tab: "safety", id: "sec-aichat", name: "AI chat",
+      state: g.aichat?.enabled && g.aichat.channels.length ? `On · ${g.aichat.channels.length} channel(s)` : "Off",
+      cls: g.aichat?.enabled && g.aichat.channels.length ? "on" : "off" },
+    { icon: "lock", tab: "safety", id: "sec-lockdown", name: "Lockdown",
+      state: `${g.lockdowns.length} locked`, cls: g.lockdowns.length ? "warn" : "off" },
+    { icon: "system_update", tab: "safety", id: "sec-update", name: "Auto-update",
+      state: g.logChannelId ? `Logging → #${channelName(g.logChannelId) || "(deleted)"}` : "No logging channel",
+      cls: g.logChannelId ? "on" : "off" },
+    { icon: "theater_comedy", tab: "roles", id: "sec-reactionroles", name: "Reaction roles",
+      state: `${g.reactionRoles.length} message(s)`, cls: g.reactionRoles.length ? "on" : "off" },
+    { icon: "menu_book", tab: "roles", id: "sec-rolemenus", name: "Role menus",
+      state: `${g.roleMenus.length} menu(s)`, cls: g.roleMenus.length ? "on" : "off" },
+    { icon: "group_add", tab: "roles", id: "sec-autoroles", name: "Auto-join roles",
+      state: g.autoRoles.humanRoleId || g.autoRoles.botRoleId ? "Set" : "Off",
+      cls: g.autoRoles.humanRoleId || g.autoRoles.botRoleId ? "on" : "off" },
+    { icon: "emoji_events", tab: "roles", id: "sec-leveling", name: "Leveling",
+      state: g.leveling.enabled ? `On · ${g.leveling.userCount} member(s)` : "Off",
+      cls: g.leveling.enabled ? "on" : "off" },
+    { icon: "tune", tab: "safety", id: "sec-commands", name: "Command toggles",
+      state: g.disabledCommands.length ? `${g.disabledCommands.length} disabled` : "All enabled",
+      cls: g.disabledCommands.length ? "warn" : "on" },
+    { icon: "apps", tab: "safety", id: "sec-panel", name: "Discord panel",
+      state: g.panelRoleId ? "Role restricted" : "Manage Server only",
+      cls: g.panelRoleId ? "on" : "off" }
+  ];
+}
+
 function renderOverview(g) {
   const grid = $("#ov-grid");
   grid.innerHTML = "";
-  const channelName = (id) => g.channels.find((c) => c.id === id)?.name ?? "";
-  const tiles = [
-    ovTile("confirmation_number", "tickets", "sec-tickets", "Tickets",
-      `${g.tickets.types.length} type(s) · ${g.tickets.openCount} open`, g.tickets.types.length ? "on" : "off"),
-    ovTile("waving_hand", "messaging", "sec-welcome", "Welcome messages",
-      g.welcome.enabled ? `On → ${channelName(g.welcome.channelId) || "(no channel)"}` : "Off",
-      g.welcome.enabled ? "on" : "off"),
-    ovTile("auto_awesome", "messaging", "sec-autoresponses", "Auto-responses",
-      `${g.filters.length} rule(s)`, g.filters.length ? "on" : "off"),
-    ovTile("card_giftcard", "messaging", "sec-giveaways", "Giveaways",
-      `${g.giveaways.filter((x) => !x.ended).length} running`, g.giveaways.some((x) => !x.ended) ? "on" : "off"),
-    ovTile("how_to_vote", "messaging", "sec-polls", "Polls",
-      `${g.polls.length} total`, g.polls.length ? "on" : "off"),
-    ovTile("alarm", "messaging", "sec-reminders", "Reminders",
-      `${g.reminders.length} set`, g.reminders.length ? "on" : "off"),
-    ovTile("campaign", "messaging", "sec-announcements", "Announcements",
-      `${g.announcements.length} scheduled`, g.announcements.length ? "on" : "off"),
-    ovTile("send", "messaging", "sec-embedsender", "Embed sender",
-      "Send a message or embed", "off"),
-    ovTile("star", "messaging", "sec-starboard", "Starboard",
-      g.starboard.enabled ? `On → ${channelName(g.starboard.channelId) || "(no channel)"}` : "Off",
-      g.starboard.enabled ? "on" : "off"),
-    ovTile("123", "messaging", "sec-counting", "Counting",
-      g.counting.channelId ? `Active · reward: ${g.counting.rewardRoleId ? "set" : "none"}` : "Not set up",
-      g.counting.channelId ? "on" : "off"),
-    ovTile("checklist", "messaging", "sec-surveys", "Surveys",
-      `${g.surveys.length} created`, g.surveys.length ? "on" : "off"),
-    ovTile("volume_up", "channels", "sec-temp", "Temp channels",
-      g.temp.enabled ? `On → ${channelName(g.temp.triggerId) || "(no trigger)"}` : "Off",
-      g.temp.enabled ? "on" : "off"),
-    ovTile("monitoring", "channels", "sec-stats", "Server stats",
-      g.stats.enabled ? "Live channels on" : "Off", g.stats.enabled ? "on" : "off"),
-    ovTile("push_pin", "channels", "sec-sticky", "Sticky messages",
-      `${g.sticky.length} active`, g.sticky.length ? "on" : "off"),
-    ovTile("shield", "safety", "sec-automod", "Automod",
-      g.automod.enabled ? `On · ${g.automod.caseCount} case(s)` : "Off",
-      g.automod.enabled ? "on" : "off"),
-    ovTile("smart_toy", "safety", "sec-aichat", "AI chat",
-      (g.aichat?.enabled && g.aichat.channels.length) ? `On · ${g.aichat.channels.length} channel(s)` : "Off",
-      g.aichat?.enabled && g.aichat.channels.length ? "on" : "off"),
-    ovTile("lock", "safety", "sec-lockdown", "Lockdown",
-      `${g.lockdowns.length} locked`, g.lockdowns.length ? "warn" : "off"),
-    ovTile("system_update", "safety", "sec-update", "Auto-update",
-      g.logChannelId ? `Logging → #${channelName(g.logChannelId) || "(deleted)"}` : "No logging channel",
-      g.logChannelId ? "on" : "off"),
-    ovTile("theater_comedy", "roles", "sec-reactionroles", "Reaction roles",
-      `${g.reactionRoles.length} message(s)`, g.reactionRoles.length ? "on" : "off"),
-    ovTile("menu_book", "roles", "sec-rolemenus", "Role menus",
-      `${g.roleMenus.length} menu(s)`, g.roleMenus.length ? "on" : "off"),
-    ovTile("group_add", "roles", "sec-autoroles", "Auto-join roles",
-      g.autoRoles.humanRoleId || g.autoRoles.botRoleId ? "Set" : "Off",
-      g.autoRoles.humanRoleId || g.autoRoles.botRoleId ? "on" : "off"),
-    ovTile("emoji_events", "roles", "sec-leveling", "Leveling",
-      g.leveling.enabled ? `On · ${g.leveling.userCount} member(s)` : "Off",
-      g.leveling.enabled ? "on" : "off"),
-    ovTile("tune", "safety", "sec-commands", "Command toggles",
-      g.disabledCommands.length ? `${g.disabledCommands.length} disabled` : "All enabled",
-      g.disabledCommands.length ? "warn" : "on"),
-    ovTile("apps", "safety", "sec-panel", "Discord panel",
-      g.panelRoleId ? "Role restricted" : "Manage Server only",
-      g.panelRoleId ? "on" : "off")
-  ];
-
-  for (const t of tiles) grid.appendChild(t);
+  const tiles = overviewTiles(g);
+  for (const t of tiles) grid.appendChild(ovTile(t.icon, t.tab, t.id, t.name, t.state, t.cls));
   $("#ov-empty").classList.toggle("hidden", tiles.length > 0);
+}
+
+function renderTabBadges(g) {
+  const counts = {};
+  for (const t of overviewTiles(g)) {
+    counts[t.tab] ??= { on: 0 };
+    if (t.cls === "on") counts[t.tab].on += 1;
+  }
+  const total = Object.values(counts).reduce((s, c) => s + c.on, 0);
+  document.querySelectorAll("#tabs .tab").forEach((btn) => {
+    const badge = btn.querySelector(".tab-badge");
+    if (!badge) return;
+    const tab = btn.dataset.tab;
+    const n = tab === "overview" ? total : counts[tab]?.on ?? 0;
+    badge.textContent = String(n);
+    badge.classList.toggle("hidden", n === 0);
+  });
 }
 
 async function refreshAll() {
