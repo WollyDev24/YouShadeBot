@@ -280,6 +280,29 @@ $("#btn-intro-next").addEventListener("click", () => {
   renderIntro();
 });
 
+function countUp(el, to, opts = {}) {
+  const { dur = 700, fmt = (n) => String(n) } = opts;
+  const start = performance.now();
+  const tick = (now) => {
+    const t = Math.min(1, (now - start) / dur);
+    const e = 1 - Math.pow(1 - t, 3);
+    el.textContent = fmt(Math.round(to * e));
+    if (t < 1) requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+}
+
+function popValues() {
+  [...document.querySelectorAll(".health-grid .h-stat")].forEach((stat, i) => {
+    stat.querySelectorAll(".h-value").forEach((v) => {
+      v.style.setProperty("--i", String(i));
+      v.classList.remove("pop");
+      void v.offsetWidth;
+      v.classList.add("pop");
+    });
+  });
+}
+
 function refreshHealth(st) {
   const on = !!st.online;
   const statusDot = $("#h-status-dot");
@@ -288,8 +311,14 @@ function refreshHealth(st) {
   $("#h-status-text").className = on ? "ok" : "bad";
   $("#h-ping").textContent = on ? `${st.ping} ms` : "—";
   $("#h-uptime").textContent = on ? fmtUptime(st.uptime) : "—";
-  $("#h-guilds").textContent = on ? String(st.guildCount) : "—";
-  $("#h-members").textContent = on ? Number(st.totalMembers ?? 0).toLocaleString() : "—";
+  if (on) {
+    countUp($("#h-guilds"), st.guildCount, { fmt: String });
+    countUp($("#h-members"), Number(st.totalMembers ?? 0), { fmt: (n) => n.toLocaleString() });
+  } else {
+    $("#h-guilds").textContent = "—";
+    $("#h-members").textContent = "—";
+  }
+  popValues();
 }
 
 async function loadStatus() {
@@ -332,10 +361,11 @@ async function loadGuilds() {
   guilds = await api("/api/guilds");
   const list = $("#guild-list");
   list.innerHTML = "";
-  for (const g of guilds) {
+  for (const [i, g] of guilds.entries()) {
     const li = document.createElement("li");
     li.className = "guild-item";
     li.dataset.id = g.id;
+    li.style.setProperty("--i", String(i));
 
     const avatar = document.createElement("div");
     avatar.className = "g-avatar";
@@ -2163,6 +2193,23 @@ function applyTab(name) {
   document.querySelectorAll("#tabs .tab").forEach((t) => t.classList.toggle("active", t.dataset.tab === name));
   $("#search").value = "";
   applyVisibility();
+  document.querySelectorAll(`#guild-view section.card[data-tab="${name}"]:not(.hidden)`).forEach((sec, i) => {
+    sec.style.setProperty("--i", String(i));
+    sec.classList.remove("anim-in");
+    void sec.offsetWidth;
+    sec.classList.add("anim-in");
+  });
+}
+
+function toggleCard(card) {
+  const collapsed = card.classList.toggle("collapsed");
+  if (collapsed) return;
+  [...card.children].filter((el) => el.tagName !== "H3").forEach((el, i) => {
+    el.style.setProperty("--i", String(i));
+    el.classList.remove("body-in");
+    void el.offsetWidth;
+    el.classList.add("body-in");
+  });
 }
 
 function focusSearch() {
@@ -2178,7 +2225,7 @@ document.querySelectorAll("#tabs .tab").forEach((btn) =>
 
 $("#guild-view").addEventListener("click", (e) => {
   const h = e.target.closest(".card h3");
-  if (h) h.closest(".card").classList.toggle("collapsed");
+  if (h) toggleCard(h.closest(".card"));
 });
 
 document.addEventListener("keydown", (e) => {
@@ -2296,6 +2343,10 @@ function renderOverview(g) {
   grid.innerHTML = "";
   const tiles = overviewTiles(g);
   for (const t of tiles) grid.appendChild(ovTile(t.icon, t.tab, t.id, t.name, t.state, t.cls));
+  [...grid.children].forEach((el, i) => {
+    el.style.setProperty("--i", String(i));
+    el.classList.add("tile-in");
+  });
   $("#ov-empty").classList.toggle("hidden", tiles.length > 0);
 }
 
@@ -2313,6 +2364,11 @@ function renderTabBadges(g) {
     const n = tab === "overview" ? total : counts[tab]?.on ?? 0;
     badge.textContent = String(n);
     badge.classList.toggle("hidden", n === 0);
+    if (n > 0) {
+      badge.classList.remove("bounce");
+      void badge.offsetWidth;
+      badge.classList.add("bounce");
+    }
   });
 }
 
