@@ -511,6 +511,7 @@ function renderGuild(g) {
   renderPolls(g);
   renderReminders(g);
   renderAutomod(g);
+  renderAntiRaid(g);
   renderAiChat(g, textChannels);
   renderReactionRoles(g);
   renderLockdown(g);
@@ -1488,6 +1489,66 @@ $("#btn-am-cases-clear").addEventListener("click", async (e) => {
   await withGuild("automod/cases/clear", {}, e.currentTarget);
 });
 
+/* --- anti-raid --- */
+
+function renderAntiRaid(g) {
+  const cfg = g.antiraid;
+  const toggle = $("#btn-ra-toggle");
+  toggle.textContent = cfg.enabled ? "Disable anti-raid" : "Enable anti-raid";
+  toggle.className = cfg.enabled ? "btn danger" : "btn primary";
+  $("#ra-status").textContent = cfg.enabled
+    ? `Anti-raid is ON — ${cfg.threshold} joins within ${cfg.windowSeconds}s triggers ${cfg.action}.`
+    : "Anti-raid is OFF — no raid protection.";
+
+  fillSelect($("#ra-log-channel"), g.channels.filter((c) => c.type === 0), cfg.logChannelId, "No text channels", true);
+  $("#ra-threshold").value = cfg.threshold;
+  $("#ra-window").value = cfg.windowSeconds;
+  $("#ra-age").value = cfg.accountAgeHours;
+  $("#ra-action").value = cfg.action;
+  $("#ra-lockchannels").checked = cfg.lockdownChannels !== false;
+
+  const caseList = $("#ra-case-list");
+  caseList.innerHTML = "";
+  const cases = cfg.cases ?? [];
+  if (!cases.length) {
+    caseList.innerHTML = `<span class="muted small">No anti-raid cases yet.</span>`;
+    return;
+  }
+  for (const c of cases) {
+    const row = document.createElement("div");
+    row.className = "ann-item";
+    const age = Math.floor((Date.now() - c.timestamp) / 60000);
+    row.innerHTML = `<span class="dc-mention">#${c.caseNumber}</span> ${escapeHtml(c.type)} burst (${c.count}) → ${c.action}${c.detail ? ` — ${escapeHtml(c.detail)}` : ""} <span class="muted small">${age}m ago</span>`;
+    caseList.appendChild(row);
+  }
+}
+
+$("#btn-ra-toggle").addEventListener("click", (e) => {
+  const enabled = !currentGuild()?.antiraid?.enabled;
+  withGuild("antiraid/config", { enabled }, e.currentTarget);
+});
+
+$("#btn-ra-save").addEventListener("click", (e) =>
+  withGuild("antiraid/config", {
+    threshold: Number($("#ra-threshold").value) || 5,
+    windowSeconds: Number($("#ra-window").value) || 10,
+    accountAgeHours: Number($("#ra-age").value) || 72,
+    action: $("#ra-action").value,
+    lockdownChannels: $("#ra-lockchannels").checked,
+    logChannelId: $("#ra-log-channel").value || null
+  }, e.currentTarget)
+);
+
+$("#btn-ra-trigger").addEventListener("click", (e) => {
+  if (!confirm("Trigger anti-raid now? This locks channels immediately.")) return;
+  withGuild("antiraid/trigger", {}, e.currentTarget);
+});
+
+$("#btn-ra-cases-clear").addEventListener("click", async (e) => {
+  if (!confirm("Clear all anti-raid cases?")) return;
+  await withGuild("antiraid/cases/clear", {}, e.currentTarget);
+});
+
 /* --- ai chat --- */
 
 function renderAiChat(g, textChannels) {
@@ -2348,6 +2409,9 @@ function overviewTiles(g) {
     { icon: "shield", tab: "safety", id: "sec-automod", name: "Automod",
       state: g.automod.enabled ? `On · ${g.automod.caseCount} case(s)` : "Off",
       cls: g.automod.enabled ? "on" : "off" },
+    { icon: "gpp_maybe", tab: "safety", id: "sec-antiraid", name: "Anti-raid",
+      state: g.antiraid.enabled ? `On · ${g.antiraid.caseCount} case(s)` : "Off",
+      cls: g.antiraid.enabled ? "on" : "off" },
     { icon: "smart_toy", tab: "safety", id: "sec-aichat", name: "AI chat",
       state: g.aichat?.enabled && g.aichat.channels.length ? `On · ${g.aichat.channels.length} channel(s)` : "Off",
       cls: g.aichat?.enabled && g.aichat.channels.length ? "on" : "off" },

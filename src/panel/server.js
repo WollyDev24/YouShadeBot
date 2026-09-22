@@ -43,6 +43,7 @@ import {
 } from "../utils/sticky.js";
 import { registerCommands } from "../utils/register.js";
 import { getAutomodConfig } from "../utils/automod.js";
+import { getAntiRaidConfig } from "../utils/antiraid.js";
 import { getAiConfig } from "../utils/aichat.js";
 import { getReactionRoles } from "../utils/reactionRoles.js";
 import { isLocked, getStatus, getAllLockdowns, lockChannel, unlockChannel, cleanup } from "../utils/lockdown.js";
@@ -387,6 +388,23 @@ async function guildPayload(client, guild) {
         massMention: { ...a.massMention },
         inviteBlocking: { ...a.inviteBlocking },
         caseCount: (a.cases ?? []).length
+      };
+    })(),
+    antiraid: (() => {
+      const a = getAntiRaidConfig(guild.id);
+      return {
+        enabled: a.enabled,
+        logChannelId: a.logChannelId,
+        windowSeconds: a.windowSeconds,
+        threshold: a.threshold,
+        accountAgeHours: a.accountAgeHours,
+        action: a.action,
+        lockdownChannels: a.lockdownChannels,
+        caseCount: (a.cases ?? []).length,
+        cases: (a.cases ?? [])
+          .slice(-10)
+          .map((c) => ({ ...c }))
+          .reverse()
       };
     })(),
     aichat: (() => {
@@ -1625,6 +1643,45 @@ export function startPanel(client) {
     cfg.caseCounter = 0;
     saveKey("automod");
     return res.json({ ok: true, payload: await guildPayload(client, guild) });
+  });
+
+  app.post("/api/guilds/:id/antiraid/config", requireAuth, async (req, res) => {
+    const guild = client.guilds.cache.get(req.params.id);
+    if (!guild) return res.status(404).json({ error: "guild not found" });
+    const { getAntiRaidConfig: garc } = await import("../utils/antiraid.js");
+    const { saveKey } = await import("../utils/db.js");
+    const cfg = garc(guild.id);
+    const body = req.body ?? {};
+    if (body.enabled !== undefined) cfg.enabled = Boolean(body.enabled);
+    if (body.windowSeconds !== undefined) cfg.windowSeconds = Math.max(1, Number(body.windowSeconds));
+    if (body.threshold !== undefined) cfg.threshold = Math.max(2, Number(body.threshold));
+    if (body.accountAgeHours !== undefined) cfg.accountAgeHours = Math.max(1, Number(body.accountAgeHours));
+    if (["lockdown", "kick", "ban"].includes(body.action)) cfg.action = body.action;
+    if (body.lockdownChannels !== undefined) cfg.lockdownChannels = Boolean(body.lockdownChannels);
+    if (body.logChannelId !== undefined) cfg.logChannelId = body.logChannelId || null;
+    saveKey("antiraid");
+    return res.json({ ok: true, payload: await guildPayload(client, guild) });
+  });
+
+  app.post("/api/guilds/:id/antiraid/cases/clear", requireAuth, async (req, res) => {
+    const guild = client.guilds.cache.get(req.params.id);
+    if (!guild) return res.status(404).json({ error: "guild not found" });
+    const { clearCases: clearRaidCases } = await import("../utils/antiraid.js");
+    clearRaidCases(guild.id);
+    return res.json({ ok: true, payload: await guildPayload(client, guild) });
+  });
+
+  app.post("/api/guilds/:id/antiraid/trigger", requireAuth, async (req, res) => {
+    const guild = client.guilds.cache.get(req.params.id);
+    if (!guild) return res.status(404).json({ error: "guild not found" });
+    const { executeAntiRaid, getWindowStats } = await import("../utils/antiraid.js");
+    const stats = getWindowStats(guild.id);
+    const result = await executeAntiRaid(client, guild, {
+      type: "manual",
+      count: Math.max(stats.joins, stats.creates, 1)
+    });
+    if (!result) return res.status(400).json({ error: "Anti-raid is disabled or on cooldown." });
+    return res.json({ ok: true, note: `Anti-raid triggered — ${result.detail || "no action"} (case #${result.caseNumber}).`, payload: await guildPayload(client, guild) });
   });
 
   app.post("/api/guilds/:id/aichat/config", requireAuth, async (req, res) => {

@@ -557,6 +557,47 @@
           <div id="am-case-list" class="ann-list"></div>
         </section>
 
+        <section class="card" data-tab="safety" id="sec-antiraid">
+          <h3>Anti-raid</h3>
+          <p class="muted small">
+            Detects join bursts from newly created accounts and channel-spam attacks, then locks down the
+            server or clears out the new accounts automatically.
+          </p>
+          <div class="field-row">
+            <button id="btn-ra-toggle" class="btn">Disable anti-raid</button>
+          </div>
+          <p id="ra-status" class="hint"></p>
+          <div class="field-row">
+            <label for="ra-log-channel">Alert channel</label>
+            <select id="ra-log-channel"></select>
+          </div>
+          <div class="field-row">
+            <label for="ra-threshold">Joins per window</label>
+            <input type="number" id="ra-threshold" min="2" max="50" value="5" style="width:70px" />
+            <label for="ra-window">Window (sec)</label>
+            <input type="number" id="ra-window" min="2" max="300" value="10" style="width:70px" />
+            <label for="ra-age">Max account age (hrs)</label>
+            <input type="number" id="ra-age" min="1" max="720" value="72" style="width:70px" />
+          </div>
+          <div class="field-row">
+            <label for="ra-action">Action</label>
+            <select id="ra-action">
+              <option value="lockdown">Lockdown</option>
+              <option value="kick">Kick new accounts</option>
+              <option value="ban">Ban new accounts</option>
+            </select>
+            <label class="check"><input type="checkbox" id="ra-lockchannels" /> lock channels too</label>
+          </div>
+          <div class="field-row">
+            <button id="btn-ra-save" class="btn primary">Save settings</button>
+            <button id="btn-ra-trigger" class="btn danger">Test trigger</button>
+          </div>
+          <div class="field-row">
+            <button id="btn-ra-cases-clear" class="btn danger small">Clear all cases</button>
+          </div>
+          <div id="ra-case-list" class="ann-list"></div>
+        </section>
+
         <section class="card" data-tab="safety" id="sec-aichat">
           <h3>AI Chat</h3>
           <p class="muted small">
