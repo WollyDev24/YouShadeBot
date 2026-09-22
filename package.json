@@ -16,5 +16,8 @@
     "discord.js": "^14.16.3",
     "dotenv": "^16.4.5",
     "express": "^5.2.1"
+  },
+  "allowScripts": {
+    "better-sqlite3@13.0.3": true
   }
 }

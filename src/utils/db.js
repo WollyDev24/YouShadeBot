@@ -31,7 +31,8 @@ const DEFAULTS = {
   reminders: {},
   leveling: {},
   roleMenus: {},
-  aichat: {}
+  aichat: {},
+  antiraid: {}
 };
 
 let store;

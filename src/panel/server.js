@@ -718,10 +718,14 @@ export function startPanel(client) {
   const requireGuildManage = async (req, res, next) => {
     const auth = getAuth(req);
     if (!auth) return res.status(401).json({ error: "unauthorized" });
-    if (auth.kind === "password" || isSuperuser(auth)) return next();
+    if (auth.kind === "password" || isSuperuser(auth)) {
+      if (req.method === "POST") invalidatePayload(req.params.id);
+      return next();
+    }
     const acc = memberAccess(auth.session, req.params.id);
     if (!acc?.canManage)
       return res.status(404).json({ error: "guild not found" });
+    if (req.method === "POST") invalidatePayload(req.params.id);
     return next();
   };
   app.use("/api/guilds/:id", requireGuildManage);
