@@ -16,7 +16,15 @@ import {
   getUsage,
   DEFAULT_MODEL,
   BASE_LIMIT,
-  BOOST_LIMIT
+  BOOST_LIMIT,
+  getMemories,
+  getMemory,
+  setMemory,
+  updateMemory,
+  deleteMemory,
+  searchMemories,
+  formatMemoriesForContext,
+  isOwner
 } from "../utils/aichat.js";
 
 function quotaLabel(member) {
@@ -76,6 +84,68 @@ export default {
     )
     .addSubcommand((s) => s.setName("status").setDescription("Show AI status and whitelist"))
     .addSubcommand((s) => s.setName("usage").setDescription("Show how many AI requests you have left today"))
+    .addSubcommand((s) =>
+      s
+        .setName("memory")
+        .setDescription("Manage AI memories (owner only)")
+        .addSubcommand((sc) =>
+          sc
+            .setName("add")
+            .setDescription("Add a new memory")
+            .addStringOption((o) =>
+              o.setName("key").setDescription("Memory key").setRequired(true).setMaxLength(100)
+            )
+            .addStringOption((o) =>
+              o.setName("value").setDescription("Memory value").setRequired(true).setMaxLength(2000)
+            )
+        )
+        .addSubcommand((sc) =>
+          sc
+            .setName("get")
+            .setDescription("Get a memory by key")
+            .addStringOption((o) =>
+              o.setName("key").setDescription("Memory key").setRequired(true).setMaxLength(100)
+            )
+        )
+        .addSubcommand((sc) =>
+          sc
+            .setName("update")
+            .setDescription("Update an existing memory")
+            .addStringOption((o) =>
+              o.setName("key").setDescription("Memory key").setRequired(true).setMaxLength(100)
+            )
+            .addStringOption((o) =>
+              o.setName("value").setDescription("New memory value").setRequired(true).setMaxLength(2000)
+            )
+        )
+        .addSubcommand((sc) =>
+          sc
+            .setName("delete")
+            .setDescription("Delete a memory")
+            .addStringOption((o) =>
+              o.setName("key").setDescription("Memory key").setRequired(true).setMaxLength(100)
+            )
+        )
+        .addSubcommand((sc) =>
+          sc
+            .setName("list")
+            .setDescription("List all memories")
+            .addIntegerOption((o) =>
+              o.setName("limit").setDescription("Max memories to show (default 25)").setMinValue(1).setMaxValue(50)
+            )
+        )
+        .addSubcommand((sc) =>
+          sc
+            .setName("search")
+            .setDescription("Search memories by query")
+            .addStringOption((o) =>
+              o.setName("query").setDescription("Search query").setRequired(true).setMaxLength(100)
+            )
+            .addIntegerOption((o) =>
+              o.setName("limit").setDescription("Max results (default 10)").setMinValue(1).setMaxValue(25)
+            )
+        )
+    )
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
 
   async execute(client, interaction) {
@@ -160,6 +230,112 @@ export default {
         content: `Daily AI requests — used: **${used}**, quota: **${quotaLabel(member)}**, left: **${left}**.`,
         flags: MessageFlags.Ephemeral
       });
+    }
+
+    if (sub === "memory") {
+      if (!isOwner(interaction.user.id)) {
+        return interaction.reply({
+          content: "Only the bot owner can manage memories.",
+          flags: MessageFlags.Ephemeral
+        });
+      }
+      const memSub = interaction.options.getSubcommand();
+      if (memSub === "add") {
+        const key = interaction.options.getString("key").trim();
+        const value = interaction.options.getString("value").trim();
+        if (getMemory(guild.id, key)) {
+          return interaction.reply({
+            content: `Memory \`${key}\` already exists. Use \`/ai memory update\` to change it.`,
+            flags: MessageFlags.Ephemeral
+          });
+        }
+        setMemory(guild.id, key, value, interaction.user.id);
+        return interaction.reply({
+          content: `Memory \`${key}\` created.`,
+          flags: MessageFlags.Ephemeral
+        });
+      }
+      if (memSub === "get") {
+        const key = interaction.options.getString("key").trim();
+        const mem = getMemory(guild.id, key);
+        if (!mem) {
+          return interaction.reply({
+            content: `Memory \`${key}\` not found.`,
+            flags: MessageFlags.Ephemeral
+          });
+        }
+        const val = typeof mem === "object" ? mem.value : String(mem);
+        return interaction.reply({
+          content: `**${key}**: ${val}`,
+          flags: MessageFlags.Ephemeral
+        });
+      }
+      if (memSub === "update") {
+        const key = interaction.options.getString("key").trim();
+        const value = interaction.options.getString("value").trim();
+        const updated = updateMemory(guild.id, key, value, interaction.user.id);
+        if (!updated) {
+          return interaction.reply({
+            content: `Memory \`${key}\` not found.`,
+            flags: MessageFlags.Ephemeral
+          });
+        }
+        return interaction.reply({
+          content: `Memory \`${key}\` updated.`,
+          flags: MessageFlags.Ephemeral
+        });
+      }
+      if (memSub === "delete") {
+        const key = interaction.options.getString("key").trim();
+        const deleted = deleteMemory(guild.id, key);
+        if (!deleted) {
+          return interaction.reply({
+            content: `Memory \`${key}\` not found.`,
+            flags: MessageFlags.Ephemeral
+          });
+        }
+        return interaction.reply({
+          content: `Memory \`${key}\` deleted.`,
+          flags: MessageFlags.Ephemeral
+        });
+      }
+      if (memSub === "list") {
+        const limit = interaction.options.getInteger("limit") ?? 25;
+        const memories = getMemories(guild.id);
+        const entries = Object.entries(memories);
+        if (!entries.length) {
+          return interaction.reply({
+            content: "No memories stored.",
+            flags: MessageFlags.Ephemeral
+          });
+        }
+        const lines = entries.slice(0, limit).map(([key, mem]) => {
+          const val = typeof mem === "object" ? mem.value : String(mem);
+          return `\`${key}\`: ${val.slice(0, 100)}${val.length > 100 ? "..." : ""}`;
+        });
+        return interaction.reply({
+          content: `**Memories (${entries.length}):**\n${lines.join("\n")}`,
+          flags: MessageFlags.Ephemeral
+        });
+      }
+      if (memSub === "search") {
+        const query = interaction.options.getString("query").trim();
+        const limit = interaction.options.getInteger("limit") ?? 10;
+        const results = searchMemories(guild.id, query, limit);
+        if (!results.length) {
+          return interaction.reply({
+            content: `No memories found for \`${query}\`.`,
+            flags: MessageFlags.Ephemeral
+          });
+        }
+        const lines = results.map(({ key, value }) =>
+          `\`${key}\`: ${value.slice(0, 100)}${value.length > 100 ? "..." : ""}`
+        );
+        return interaction.reply({
+          content: `**Search results for \`${query}\`:**\n${lines.join("\n")}`,
+          flags: MessageFlags.Ephemeral
+        });
+      }
     }
 
     const channels = cfg.channels.map((id) => `<#${id}>`);

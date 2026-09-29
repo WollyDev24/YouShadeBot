@@ -32,7 +32,8 @@ const DEFAULTS = {
   leveling: {},
   roleMenus: {},
   aichat: {},
-  antiraid: {}
+  antiraid: {},
+  aimemory: {}
 };
 
 let store;
