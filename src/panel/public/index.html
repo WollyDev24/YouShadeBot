@@ -647,12 +647,27 @@
               <mono-select id="ai-channels" multiple size="6"></mono-select>
             </mono-field>
           </div>
+          <div class="field-row col">
+            <mono-field label="Rate limits" hint="0 = unlimited">
+              <div class="field-row">
+                <mono-field label="Per user / day">
+                  <mono-input id="ai-limit-daily" type="number" min="0" max="500" style="width:120px"></mono-input>
+                </mono-field>
+                <mono-field label="Booster / day">
+                  <mono-input id="ai-limit-boost" type="number" min="0" max="500" style="width:120px"></mono-input>
+                </mono-field>
+                <mono-field label="Cooldown (s)">
+                  <mono-input id="ai-limit-cooldown" type="number" min="0" max="60" style="width:120px"></mono-input>
+                </mono-field>
+              </div>
+            </mono-field>
+          </div>
           <div class="field-row">
             <mono-button id="btn-ai-save" variant="primary">Save AI settings</mono-button>
           </div>
           <p id="ai-status" class="hint"></p>
           <p class="muted small">
-            Limits: <strong>5</strong>/day per user, <strong>15</strong>/day for boosters, unlimited for admins.
+            Server admins are always unlimited. Cooldown is per user, per channel.
           </p>
         </section>
 

@@ -866,13 +866,20 @@ fieldTmpl.innerHTML = `
     .body { display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1; }
     :host([col]) .body { width: 100%; }
     ::slotted(*) { min-width: 0; }
+    .hint {
+      flex-basis: 100%;
+      font: 500 12px/1.35 var(--mono-font);
+      color: var(--mono-muted); opacity: 0.85;
+    }
+    .hint[hidden] { display: none; }
   </style>
   <label part="label"><slot name="label"></slot></label>
   <div class="body"><slot></slot></div>
+  <div class="hint" part="hint" hidden></div>
 `;
 
 class MonoField extends MonoElement {
-  static observedAttributes = ["label"];
+  static observedAttributes = ["label", "hint"];
   constructor() {
     super();
     this._root.appendChild(fieldTmpl.content.cloneNode(true));
@@ -882,10 +889,16 @@ class MonoField extends MonoElement {
     const v = this.getAttribute("label");
     if (v !== null) l.textContent = v;
     l.hidden = v === null;
+    const h = this._root.querySelector(".hint");
+    const hv = this.getAttribute("hint");
+    if (hv !== null) h.textContent = hv;
+    h.hidden = hv === null;
   }
   attributeChangedCallback() { this.connectedCallback(); }
   get label() { return this.getAttribute("label") || ""; }
   set label(v) { this.setAttribute("label", v); }
+  get hint() { return this.getAttribute("hint") || ""; }
+  set hint(v) { this.setAttribute("hint", v); }
 }
 define("mono-field", MonoField);
 

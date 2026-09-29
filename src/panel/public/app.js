@@ -1574,6 +1574,11 @@ function renderAiChat(g, textChannels) {
   const cfg = g.aichat ?? { enabled: false, channels: [], model: "gemini-1.5-flash" };
   $("#ai-enabled").checked = !!cfg.enabled;
 
+  const limits = cfg.limits ?? {};
+  $("#ai-limit-daily").value = String(limits.daily ?? 5);
+  $("#ai-limit-boost").value = String(limits.boost ?? 15);
+  $("#ai-limit-cooldown").value = String(limits.cooldownSeconds ?? 4);
+
   const modelSelect = $("#ai-model");
   if (!modelSelect.dataset.loaded) {
     loadAiModels().then((models) => {
@@ -1609,13 +1614,34 @@ function renderAiChat(g, textChannels) {
     : "Off — enable and pick at least one channel to start.";
 }
 
-$("#btn-ai-save").addEventListener("click", (e) =>
+/* Number inputs keep their text while focused, so validate on save rather
+ * than clamping on every keystroke and fighting the user's cursor. */
+function collectLimit(id, min, max) {
+  const raw = $(id).value.trim();
+  const n = Number(raw);
+  if (raw === "" || !Number.isFinite(n)) return null;
+  return Math.min(max, Math.max(min, Math.round(n)));
+}
+
+$("#btn-ai-save").addEventListener("click", (e) => {
+  const daily = collectLimit("#ai-limit-daily", 0, 500);
+  const boost = collectLimit("#ai-limit-boost", 0, 500);
+  const cooldown = collectLimit("#ai-limit-cooldown", 0, 60);
+  const bad = [];
+  if (daily === null) bad.push("Per user / day");
+  if (boost === null) bad.push("Booster / day");
+  if (cooldown === null) bad.push("Cooldown (s)");
+  if (bad.length) {
+    toast(`${bad.join(", ")} must be a number between 0 and the field maximum.`, true);
+    return;
+  }
   withGuild("aichat/config", {
     enabled: $("#ai-enabled").checked,
     channels: [...$("#ai-channels").selectedOptions].map((o) => o.value),
-    model: $("#ai-model").value.trim()
-  }, e.currentTarget)
-);
+    model: $("#ai-model").value.trim(),
+    limits: { daily, boost, cooldownSeconds: cooldown }
+  }, e.currentTarget);
+});
 
 /* --- reaction roles --- */
 

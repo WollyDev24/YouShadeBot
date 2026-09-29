@@ -15,8 +15,9 @@ import {
   requestQuota,
   getUsage,
   DEFAULT_MODEL,
-  BASE_LIMIT,
-  BOOST_LIMIT,
+  DEFAULT_LIMITS,
+  LIMIT_BOUNDS,
+  setAiLimits,
   getMemories,
   getMemory,
   setMemory,
@@ -28,9 +29,18 @@ import {
   AVAILABLE_MODELS
 } from "../utils/aichat.js";
 
-function quotaLabel(member) {
-  const q = requestQuota(member);
+function quotaLabel(member, limits) {
+  const q = requestQuota(member, limits);
   return Number.isFinite(q) ? String(q) : "unlimited";
+}
+
+/* Discord option names are `cooldown` but the stored key is `cooldownSeconds`. */
+function limitsToText(limits) {
+  return [
+    `**${limits.daily || "\u221E"}**/day per user`,
+    `**${limits.boost || "\u221E"}**/day for boosters`,
+    `**${limits.cooldownSeconds}s** cooldown`
+  ].join(" \u00b7 ");
 }
 
 export default {
@@ -90,6 +100,34 @@ export default {
     )
     .addSubcommand((s) => s.setName("status").setDescription("Show AI status and whitelist"))
     .addSubcommand((s) => s.setName("usage").setDescription("Show how many AI requests you have left today"))
+    .addSubcommand((s) =>
+      s
+        .setName("limits")
+        .setDescription("View or change the AI rate limits (0 = unlimited)")
+        .addIntegerOption((o) =>
+          o
+            .setName("daily")
+            .setDescription(`Requests per user per day (0 = unlimited, default: ${DEFAULT_LIMITS.daily})`)
+            .setMinValue(0)
+            .setMaxValue(LIMIT_BOUNDS.daily.max)
+        )
+        .addIntegerOption((o) =>
+          o
+            .setName("boost")
+            .setDescription(`Requests per day for boosters (0 = unlimited, default: ${DEFAULT_LIMITS.boost})`)
+            .setMinValue(0)
+            .setMaxValue(LIMIT_BOUNDS.boost.max)
+        )
+        .addIntegerOption((o) =>
+          o
+            .setName("cooldown")
+            .setDescription(
+              `Seconds a user must wait between messages, per channel (0 = off, default: ${DEFAULT_LIMITS.cooldownSeconds})`
+            )
+            .setMinValue(0)
+            .setMaxValue(LIMIT_BOUNDS.cooldownSeconds.max)
+        )
+    )
     .addSubcommand((s) =>
       s
         .setName("memory-add")
@@ -225,10 +263,34 @@ export default {
     if (sub === "usage") {
       const member = interaction.member;
       const used = getUsage(guild.id, interaction.user.id);
-      const quota = requestQuota(member);
+      const quota = requestQuota(member, cfg.limits);
       const left = Number.isFinite(quota) ? Math.max(0, quota - used) : "\u221E";
       return interaction.reply({
-        content: `Daily AI requests — used: **${used}**, quota: **${quotaLabel(member)}**, left: **${left}**.`,
+        content: `Daily AI requests — used: **${used}**, quota: **${quotaLabel(member, cfg.limits)}**, left: **${left}**.`,
+        flags: MessageFlags.Ephemeral
+      });
+    }
+
+    if (sub === "limits") {
+      const daily = interaction.options.getInteger("daily");
+      const boost = interaction.options.getInteger("boost");
+      const cooldown = interaction.options.getInteger("cooldown");
+      const touched = daily !== null || boost !== null || cooldown !== null;
+
+      if (!touched) {
+        return interaction.reply({
+          content: `Current AI limits \u2014 ${limitsToText(cfg.limits)}. Server admins are always unlimited.`,
+          flags: MessageFlags.Ephemeral
+        });
+      }
+
+      const patch = {};
+      if (daily !== null) patch.daily = daily;
+      if (boost !== null) patch.boost = boost;
+      if (cooldown !== null) patch.cooldownSeconds = cooldown;
+      const applied = setAiLimits(guild.id, patch);
+      return interaction.reply({
+        content: `AI limits updated \u2014 ${limitsToText(applied)}.`,
         flags: MessageFlags.Ephemeral
       });
     }
@@ -353,7 +415,7 @@ export default {
         },
         {
           name: "Request limits",
-          value: `**${BASE_LIMIT}**/day per user · **${BOOST_LIMIT}**/day for boosters · **unlimited** for admins`,
+          value: `${limitsToText(cfg.limits)} \u00b7 **unlimited** for admins`,
           inline: false
         }
       );

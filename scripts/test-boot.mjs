@@ -65,7 +65,7 @@ const GUILD = {
     enabled: false, logChannelId: null, windowSeconds: 10, threshold: 5,
     accountAgeHours: 24, action: "kick", lockdownChannels: [], caseCount: 0, cases: []
   },
-  aichat: { enabled: true, channels: ["c1", "c2"], model: "gemini-1.5-flash" },
+  aichat: { enabled: true, channels: ["c1", "c2"], model: "gemini-1.5-flash", limits: { daily: 5, boost: 15, cooldownSeconds: 4 } },
   reactionRoles: [],
   lockdowns: [],
   polls: [],
@@ -200,6 +200,59 @@ await test("command checkboxes rendered as custom elements with state", () => {
   assert.equal(ban.checked, false, "ban should be disabled");
   assert.equal(help.classList.contains("off"), false);
   assert.equal(ban.classList.contains("off"), true);
+});
+
+await test("AI rate limits render into the panel fields", () => {
+  const daily = $("#ai-limit-daily");
+  const boost = $("#ai-limit-boost");
+  const cd = $("#ai-limit-cooldown");
+  for (const el of [daily, boost, cd]) {
+    assert.equal(el.tagName.toLowerCase(), "mono-input", "limit fields must be custom inputs");
+  }
+  assert.equal(daily.value, "5");
+  assert.equal(boost.value, "15");
+  assert.equal(cd.value, "4");
+});
+
+await test("saving AI settings posts the edited limits", async () => {
+  $("#ai-limit-daily").value = "25";
+  $("#ai-limit-boost").value = "0";
+  $("#ai-limit-cooldown").value = "10";
+  sentBodies.length = 0;
+  $("#btn-ai-save").click();
+  await tick(10);
+  const call = sentBodies.find((b) => b.path.endsWith("/aichat/config"));
+  assert.ok(call, "no /aichat/config POST was made");
+  assert.deepEqual(call.body.limits, { daily: 25, boost: 0, cooldownSeconds: 10 });
+});
+
+await test("a non-numeric quota is rejected instead of posted", () => {
+  $("#ai-limit-daily").value = "abc";
+  sentBodies.length = 0;
+  $("#btn-ai-save").click();
+  assert.equal(sentBodies.length, 0, "nothing should be posted for a non-numeric quota");
+  $("#ai-limit-daily").value = "5";
+});
+
+await test("an out-of-range quota is clamped to the field maximum", async () => {
+  $("#ai-limit-daily").value = "9999";
+  sentBodies.length = 0;
+  $("#btn-ai-save").click();
+  await tick(10);
+  const call = sentBodies.find((b) => b.path.endsWith("/aichat/config"));
+  assert.ok(call);
+  assert.equal(call.body.limits.daily, 500, "should match the max on the field");
+  $("#ai-limit-daily").value = "5";
+});
+
+await test("mono-field renders a hint", () => {
+  const field = document.querySelector("mono-field[hint]");
+  assert.ok(field, "a hinted field should exist in the AI card");
+  const hint = field.shadowRoot.querySelector(".hint");
+  assert.equal(hint.hidden, false);
+  assert.match(hint.textContent, /unlimited/);
+  const plain = document.querySelector("mono-field:not([hint])");
+  assert.equal(plain.shadowRoot.querySelector(".hint").hidden, true, "no hint attribute means no hint");
 });
 
 await test("a value set before its options exist is applied once they do", () => {

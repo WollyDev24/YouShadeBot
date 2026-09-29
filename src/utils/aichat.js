@@ -2,8 +2,19 @@ import { PermissionsBitField } from "../lib/discord.js";
 import { getData, saveKey } from "./db.js";
 
 export const DEFAULT_MODEL = "gemini-1.5-flash";
-export const BASE_LIMIT = 5;
-export const BOOST_LIMIT = 15;
+
+/* Per-server rate limits. 0 means unlimited for the quota settings. */
+export const DEFAULT_LIMITS = {
+  daily: 5,
+  boost: 15,
+  cooldownSeconds: 4
+};
+
+export const LIMIT_BOUNDS = {
+  daily: { min: 0, max: 500 },
+  boost: { min: 0, max: 500 },
+  cooldownSeconds: { min: 0, max: 60 }
+};
 
 export const AVAILABLE_MODELS = [
   { id: "gemini-1.5-flash", name: "Gemini 1.5 Flash (Fast, Cost-effective)" },
@@ -12,7 +23,6 @@ export const AVAILABLE_MODELS = [
 ];
 
 const BASE_URL = "https://generativelanguage.googleapis.com/v1beta";
-const COOLDOWN_MS = 4000;
 const cooldowns = new Map();
 const notifiedToday = new Map();
 
@@ -55,12 +65,33 @@ const SYSTEM_PROMPT =
   "\n\n" +
   "When responding, relevant memories will be prepended to your context. Use them naturally in conversation.";
 
+function clampInt(value, key) {
+  const { min, max } = LIMIT_BOUNDS[key];
+  const n = Math.round(Number(value));
+  if (!Number.isFinite(n)) return null;
+  return Math.min(max, Math.max(min, n));
+}
+
+/* Fill in any missing limit and coerce out-of-range values, so a config
+ * written by an older version (or hand-edited) can never crash the bot. */
+export function normalizeLimits(raw) {
+  const src = raw ?? {};
+  const out = {};
+  for (const key of Object.keys(DEFAULT_LIMITS)) {
+    const n = clampInt(src[key] ?? DEFAULT_LIMITS[key], key);
+    out[key] = n ?? DEFAULT_LIMITS[key];
+  }
+  return out;
+}
+
 function cfg(guildId) {
   const data = getData();
   if (!data.aichat[guildId]) {
-    data.aichat[guildId] = { enabled: false, channels: [], model: DEFAULT_MODEL, usage: {} };
+    data.aichat[guildId] = { enabled: false, channels: [], model: DEFAULT_MODEL, usage: {}, limits: {} };
   }
-  return data.aichat[guildId];
+  const c = data.aichat[guildId];
+  c.limits = normalizeLimits(c.limits);
+  return c;
 }
 
 function today() {
@@ -107,11 +138,29 @@ export function setAiModel(guildId, model) {
   return c;
 }
 
-export function requestQuota(member) {
-  if (!member) return BASE_LIMIT;
+export function getAiLimits(guildId) {
+  return { ...cfg(guildId).limits };
+}
+
+export function setAiLimits(guildId, patch) {
+  const c = cfg(guildId);
+  c.limits = normalizeLimits({ ...c.limits, ...(patch ?? {}) });
+  saveKey("aichat");
+  return { ...c.limits };
+}
+
+/* 0 means "no cap", which reads as unlimited everywhere it is displayed. */
+function quotaFrom(value) {
+  const n = Number(value);
+  return !Number.isFinite(n) || n <= 0 ? Infinity : n;
+}
+
+export function requestQuota(member, limits) {
+  const l = limits ?? DEFAULT_LIMITS;
+  if (!member) return quotaFrom(l.daily);
   if (member.permissions.has(PermissionsBitField.Flags.Administrator)) return Infinity;
-  if (member.premiumSince) return BOOST_LIMIT;
-  return BASE_LIMIT;
+  if (member.premiumSince) return quotaFrom(l.boost);
+  return quotaFrom(l.daily);
 }
 
 export function getUsage(guildId, userId) {
@@ -290,7 +339,10 @@ export async function handleAiMessage(client, message) {
   if (!prompt) return;
 
   const member = message.member;
-  const quota = requestQuota(member);
+  const limits = c.limits;
+  const quota = requestQuota(member, limits);
+  const isBooster = Boolean(member?.premiumSince) &&
+    !member?.permissions?.has(PermissionsBitField.Flags.Administrator);
 
   if (Number.isFinite(quota) && getUsage(guild.id, message.author.id) >= quota) {
     const dayKey = `${guild.id}:${message.author.id}:${today()}`;
@@ -298,9 +350,12 @@ export async function handleAiMessage(client, message) {
       notifiedToday.set(dayKey, true);
       message
         .reply(
-          quota === BOOST_LIMIT
+          isBooster
             ? `**Monolith AI limit reached.** You have used your **${quota}** booster requests for today.`
-            : `**Monolith AI limit reached.** You have used your **${quota}** requests for today. Boost the server for **${BOOST_LIMIT}**/day — server admins get unlimited.`
+            : `**Monolith AI limit reached.** You have used your **${quota}** requests for today.` +
+              (quotaFrom(limits.boost) > quota
+                ? ` Boost the server for **${limits.boost}**/day — server admins get unlimited.`
+                : "")
         )
         .catch(() => {});
     }
@@ -309,7 +364,8 @@ export async function handleAiMessage(client, message) {
 
   const cdKey = `${message.author.id}:${message.channel.id}`;
   const last = cooldowns.get(cdKey) ?? 0;
-  if (Date.now() - last < COOLDOWN_MS) return;
+  const cooldownMs = Math.max(0, Number(limits.cooldownSeconds) || 0) * 1000;
+  if (cooldownMs > 0 && Date.now() - last < cooldownMs) return;
   cooldowns.set(cdKey, Date.now());
 
   try {

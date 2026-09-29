@@ -409,7 +409,12 @@ async function guildPayload(client, guild) {
     })(),
     aichat: (() => {
       const a = getAiConfig(guild.id);
-      return { enabled: a.enabled === true, channels: [...(a.channels ?? [])], model: a.model ?? "gemini-3.6-flash" };
+      return {
+        enabled: a.enabled === true,
+        channels: [...(a.channels ?? [])],
+        model: a.model ?? "gemini-3.6-flash",
+        limits: { ...a.limits }
+      };
     })(),
     reactionRoles: (() => {
       const rrs = getReactionRoles(guild.id);
@@ -1687,7 +1692,8 @@ export function startPanel(client) {
   app.post("/api/guilds/:id/aichat/config", requireAuth, async (req, res) => {
     const guild = client.guilds.cache.get(req.params.id);
     if (!guild) return res.status(404).json({ error: "guild not found" });
-    const { getAiConfig: gaic, setAiModel, AVAILABLE_MODELS: MODELS } = await import("../utils/aichat.js");
+    const { getAiConfig: gaic, setAiModel, setAiLimits, normalizeLimits, AVAILABLE_MODELS: MODELS } =
+      await import("../utils/aichat.js");
     const { saveKey } = await import("../utils/db.js");
     const body = req.body ?? {};
     const cfg = gaic(guild.id);
@@ -1701,8 +1707,11 @@ export function startPanel(client) {
       const validModel = MODELS.find((m) => m.id === body.model)?.id;
       if (validModel) setAiModel(guild.id, validModel);
     }
+    if (body.limits && typeof body.limits === "object") {
+      setAiLimits(guild.id, body.limits);
+    }
     saveKey("aichat");
-    return res.json({ ok: true, payload: await guildPayload(client, guild) });
+    return res.json({ ok: true, limits: normalizeLimits(gaic(guild.id).limits), payload: await guildPayload(client, guild) });
   });
 
   app.get("/api/guilds/:id/aichat/models", requireAuth, async (req, res) => {
