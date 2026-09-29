@@ -1,5 +1,38 @@
 const $ = (sel) => document.querySelector(sel);
 
+/* Factories for the custom elements. Every control the dashboard builds at
+ * runtime goes through these, so the DOM only ever contains <mono-*> tags.
+ * The `.btn` class names used across the codebase are translated into the
+ * variant/size attributes that <mono-button> understands. */
+function monoButton(classes = "") {
+  const btn = document.createElement("mono-button");
+  for (const token of classes.split(/\s+/).filter(Boolean)) {
+    if (token === "btn") continue;
+    if (["primary", "danger", "ghost", "discord", "success"].includes(token)) {
+      btn.setAttribute("variant", token);
+    } else if (["small", "large", "full", "block"].includes(token)) {
+      btn.setAttribute(token, "");
+    } else {
+      btn.classList.add(token);
+    }
+  }
+  return btn;
+}
+
+function monoSelect() {
+  return document.createElement("mono-select");
+}
+
+function monoInput(type = "text") {
+  const input = document.createElement("mono-input");
+  if (type !== "text") input.setAttribute("type", type);
+  return input;
+}
+
+function monoTextarea() {
+  return document.createElement("mono-textarea");
+}
+
 let guilds = [];
 let selectedGuildId = null;
 let CUR_USER = null;
@@ -20,12 +53,7 @@ async function api(path, options = {}) {
 }
 
 function toast(msg, isError = false) {
-  const el = $("#toast");
-  el.textContent = msg;
-  el.classList.toggle("error", isError);
-  el.classList.remove("hidden");
-  clearTimeout(toast._t);
-  toast._t = setTimeout(() => el.classList.add("hidden"), 3500);
+  $("#toast").show(msg, isError ? "error" : "info");
 }
 
 function showLogin(show) {
@@ -91,7 +119,7 @@ const INTRO_STEPS = [
         hint.textContent = "No servers available yet. Add the bot to a server you own or are admin in.";
         b.appendChild(hint);
         const a = document.createElement("a");
-        a.className = "btn discord full";
+        a = monoButton("btn discord full");
         a.href = inviteUrl || "#";
         a.target = "_blank";
         a.rel = "noopener";
@@ -100,7 +128,7 @@ const INTRO_STEPS = [
         return;
       }
       if (!guilds.some((g) => g.id === introServerId)) introServerId = guilds[0].id;
-      const sel = document.createElement("select");
+      const sel = monoSelect();
       sel.id = "intro-server";
       sel.className = "full";
       for (const g of guilds) {
@@ -133,8 +161,7 @@ const INTRO_STEPS = [
       status.className = "intro-status muted";
       b.appendChild(status);
 
-      const btn = document.createElement("button");
-      btn.className = "btn primary";
+      const btn = monoButton("btn primary");
       btn.textContent = "Register slash commands";
       btn.addEventListener("click", async () => {
         btn.disabled = true;
@@ -173,7 +200,7 @@ const INTRO_STEPS = [
       const label = document.createElement("label");
       label.textContent = g.name;
       label.htmlFor = "intro-update-channel";
-      const sel = document.createElement("select");
+      const sel = monoSelect();
       sel.id = "intro-update-channel";
       fillSelect(sel, g.channels.filter((c) => c.type === 0), "", "No text channels", true);
       if (introChannelId && g.channels.some((c) => c.id === introChannelId)) sel.value = introChannelId;
@@ -186,8 +213,7 @@ const INTRO_STEPS = [
       status.className = "intro-status muted";
       b.appendChild(status);
 
-      const btn = document.createElement("button");
-      btn.className = "btn primary";
+      const btn = monoButton("btn primary");
       btn.textContent = "Save update channel";
       btn.addEventListener("click", async () => {
         btn.disabled = true;
@@ -656,14 +682,12 @@ function renderTickets(g, textChannels) {
     box.innerHTML = `<span class="muted small">Add a ticket type first.</span>`;
   }
   for (const t of g.tickets.types) {
-    const label = document.createElement("label");
-    label.className = "check";
-    const cb = document.createElement("input");
-    cb.type = "checkbox";
+    const cb = document.createElement("mono-checkbox");
+    cb.className = "check";
     cb.value = t.id;
     cb.checked = true;
-    label.append(cb, ` ${t.name}${t.enabled ? "" : " (disabled)"}`);
-    box.appendChild(label);
+    cb.textContent = ` ${t.name}${t.enabled ? "" : " (disabled)"}`;
+    box.appendChild(cb);
   }
 }
 
@@ -674,21 +698,18 @@ function buildTypeCard(g, t) {
   const head = document.createElement("div");
   head.className = "field-row";
 
-  const nameInput = document.createElement("input");
-  nameInput.type = "text";
+  const nameInput = monoInput();
   nameInput.value = t.name;
   nameInput.placeholder = "Panel name (e.g. Support)";
   nameInput.maxLength = 80;
   nameInput.className = "grow";
   head.append(nameInput);
 
-  const enabledLabel = document.createElement("label");
-  enabledLabel.className = "check";
-  const enabledCb = document.createElement("input");
-  enabledCb.type = "checkbox";
+  const enabledCb = document.createElement("mono-checkbox");
+  enabledCb.className = "check";
   enabledCb.checked = t.enabled;
-  enabledLabel.append(enabledCb, " enabled");
-  head.append(enabledLabel);
+  enabledCb.textContent = " enabled";
+  head.append(enabledCb);
   card.append(head);
 
   const mkRow = (labelText, sel) => {
@@ -703,7 +724,7 @@ function buildTypeCard(g, t) {
   };
 
   const mkSel = (id, items, selected, optional) => {
-    const sel = document.createElement("select");
+    const sel = monoSelect();
     sel.id = id;
     fillSelect(sel, items, selected, "None available", optional);
     return sel;
@@ -725,7 +746,7 @@ function buildTypeCard(g, t) {
   );
 
   const colorSel = mkRow("Button color", (() => {
-    const sel = document.createElement("select");
+    const sel = monoSelect();
     sel.id = `tkc-${t.id}-color`;
     for (const c of ["Primary", "Secondary", "Success", "Danger"]) {
       const o = document.createElement("option");
@@ -740,16 +761,13 @@ function buildTypeCard(g, t) {
   const actions = document.createElement("div");
   actions.className = "field-row";
 
-  const btnPost = document.createElement("button");
-  btnPost.className = "btn primary";
+  const btnPost = monoButton("btn primary");
   btnPost.textContent = "Save & post panel";
 
-  const btnSave = document.createElement("button");
-  btnSave.className = "btn";
+  const btnSave = monoButton("btn");
   btnSave.textContent = "Save only";
 
-  const btnDelete = document.createElement("button");
-  btnDelete.className = "btn danger";
+  const btnDelete = monoButton("btn danger");
   btnDelete.textContent = "Delete type";
 
   actions.append(btnSave, btnPost, btnDelete);
@@ -889,13 +907,11 @@ function renderAnnouncements(g, textChannels) {
     body.textContent = a.title ? `${a.title} — ${a.message}` : a.message;
     info.append(head, body);
 
-    const btnSendNow = document.createElement("button");
-    btnSendNow.className = "btn small";
+    const btnSendNow = monoButton("btn small");
     btnSendNow.textContent = "Send now";
     btnSendNow.addEventListener("click", () => withGuild("announcements/send-now", { id: a.id }));
 
-    const btnCancel = document.createElement("button");
-    btnCancel.className = "btn danger small";
+    const btnCancel = monoButton("btn danger small");
     btnCancel.textContent = "Cancel";
     btnCancel.addEventListener("click", () => withGuild("announcements/delete", { id: a.id }));
 
@@ -932,26 +948,23 @@ function renderCommands(g) {
     grid.dataset.guildId = g.id;
     grid.dataset.dirty = "";
     for (const name of g.availableCommands) {
-      const label = document.createElement("label");
-      label.className = "check";
-      label.dataset.cmd = name;
-      const cb = document.createElement("input");
-      cb.type = "checkbox";
+      const cb = document.createElement("mono-checkbox");
+      cb.className = "check";
+      cb.dataset.cmd = name;
       cb.value = name;
+      cb.textContent = ` /${name}`;
       cb.addEventListener("change", () => {
         grid.dataset.dirty = "1";
-        label.classList.toggle("off", !cb.checked);
+        cb.classList.toggle("off", !cb.checked);
       });
-      label.append(cb, ` /${name}`);
-      grid.appendChild(label);
+      grid.appendChild(cb);
     }
   }
 
   if (!grid.dataset.dirty) {
-    for (const label of grid.querySelectorAll("label.check")) {
-      const cb = label.querySelector("input");
+    for (const cb of grid.querySelectorAll("mono-checkbox.check")) {
       cb.checked = !g.disabledCommands.includes(cb.value);
-      label.classList.toggle("off", !cb.checked);
+      cb.classList.toggle("off", !cb.checked);
     }
   }
 
@@ -963,7 +976,9 @@ function renderCommands(g) {
 }
 
 $("#btn-cmd-save").addEventListener("click", async (e) => {
-  const disabled = [...document.querySelectorAll("#cmd-grid input:not(:checked)")].map((cb) => cb.value);
+  const disabled = [...document.querySelectorAll("#cmd-grid mono-checkbox.check")]
+    .filter((cb) => !cb.checked)
+    .map((cb) => cb.value);
   const r = await withGuild("commands/toggles", { disabled }, e.currentTarget);
   if (r) $("#cmd-grid").dataset.dirty = "";
 });
@@ -992,8 +1007,7 @@ function renderFilters(g) {
     body.textContent = r.response;
     info.append(head, body);
 
-    const btnDelete = document.createElement("button");
-    btnDelete.className = "btn danger small";
+    const btnDelete = monoButton("btn danger small");
     btnDelete.textContent = "Remove";
     btnDelete.addEventListener("click", () => withGuild("filters/remove", { id: r.id }));
 
@@ -1225,15 +1239,13 @@ function renderSurveys(g, textChannels) {
       : (s.channelId ? `Posted in #${g.channels.find((c) => c.id === s.channelId)?.name ?? "(deleted)"}` : "Not posted yet");
     info.append(head, body);
 
-    const btnPost = document.createElement("button");
-    btnPost.className = "btn small";
+    const btnPost = monoButton("btn small");
     btnPost.textContent = s.messageId ? "Re-post" : "Post";
     btnPost.addEventListener("click", (e) => {
       withGuild("surveys/post", { id: s.id, channelId: $("#sv-channel").value || null }, e.currentTarget);
     });
 
-    const btnDelete = document.createElement("button");
-    btnDelete.className = "btn danger small";
+    const btnDelete = monoButton("btn danger small");
     btnDelete.textContent = "Delete";
     btnDelete.addEventListener("click", async (e) => {
       if (!confirm(`Delete survey #${s.id} ("${s.question}")? ${s.responseCount} response(s) will be lost.`)) return;
@@ -1300,8 +1312,7 @@ function renderSticky(g, textChannels) {
     body.textContent = s.content.slice(0, 100) + (s.content.length > 100 ? "..." : "");
     info.append(head, body);
 
-    const btnRemove = document.createElement("button");
-    btnRemove.className = "btn danger small";
+    const btnRemove = monoButton("btn danger small");
     btnRemove.textContent = "Remove";
     btnRemove.addEventListener("click", (e) =>
       withGuild("sticky/remove", { channelId: s.channelId }, e.currentTarget)
@@ -1417,8 +1428,7 @@ function renderAutomod(g) {
       const label = document.createElement("label");
       label.className = "check";
       label.innerHTML = `<code>${escapeHtml(w)}</code>`;
-      const btn = document.createElement("button");
-      btn.className = "btn danger small";
+      const btn = monoButton("btn danger small");
       btn.textContent = "×";
       btn.style.marginLeft = "6px";
       btn.addEventListener("click", () => withGuild("automod/words/remove", { word: w }));
@@ -1634,8 +1644,7 @@ function renderReactionRoles(g) {
     const info = document.createElement("div");
     info.className = "grow";
     info.innerHTML = `<strong>${escapeHtml(m.emoji)}</strong> → <span class="dc-mention">@${escapeHtml(m.roleName)}</span> ${m.label ? `<span class="muted small">(${escapeHtml(m.label)})</span>` : ""}`;
-    const btn = document.createElement("button");
-    btn.className = "btn danger small";
+    const btn = monoButton("btn danger small");
     btn.textContent = "Remove";
     btn.addEventListener("click", () => withGuild("reactionroles/remove-mapping", { emoji: m.emoji }));
     row.append(info, btn);
@@ -1690,8 +1699,7 @@ function renderLeveling(g) {
     const info = document.createElement("div");
     info.className = "grow";
     info.innerHTML = `Level <strong>${r.level}</strong> → <span class="dc-mention">@${escapeHtml(g.roles.find((x) => x.id === r.roleId)?.name ?? "(deleted role)")}</span>`;
-    const btn = document.createElement("button");
-    btn.className = "btn danger small";
+    const btn = monoButton("btn danger small");
     btn.textContent = "Remove";
     btn.addEventListener("click", () => withGuild("leveling/remove-role", { level: r.level }));
     row.append(info, btn);
@@ -1773,8 +1781,7 @@ function renderRoleMenuDetail(g, m) {
     info.className = "grow";
     info.innerHTML = `<span class="dc-mention">@${escapeHtml(g.roles.find((x) => x.id === r.roleId)?.name ?? "(deleted role)")}</span>` +
       (r.label ? ` <span class="muted small">(${escapeHtml(r.label)})</span>` : "");
-    const btn = document.createElement("button");
-    btn.className = "btn danger small";
+    const btn = monoButton("btn danger small");
     btn.textContent = "Remove";
     btn.addEventListener("click", () => withGuild("rolemenus/remove-role", { id: m.id, roleId: r.roleId }));
     row.append(info, btn);
@@ -1841,8 +1848,7 @@ function renderLockdown(g) {
     info.className = "grow";
     const age = Math.floor((Date.now() - l.lockedAt) / 60000);
     info.innerHTML = `<span class="dc-mention">#${escapeHtml(l.channelId)}</span> — locked by ${escapeHtml(l.lockedByName)} ${age}m ago`;
-    const btn = document.createElement("button");
-    btn.className = "btn primary small";
+    const btn = monoButton("btn primary small");
     btn.textContent = "Unlock";
     btn.addEventListener("click", () => withGuild("lockdown/unlock", { channelId: l.channelId }));
     row.append(info, btn);
@@ -1894,13 +1900,11 @@ function renderGiveaways(g, textChannels) {
       : `Ends ${fmtWhen(gw.endsAt)}`;
     info.append(head, body);
 
-    const btnEnd = document.createElement("button");
-    btnEnd.className = "btn danger small";
+    const btnEnd = monoButton("btn danger small");
     btnEnd.textContent = "End now";
     btnEnd.addEventListener("click", (e) => withGuild("giveaways/end", { id: gw.id }, e.currentTarget));
 
-    const btnReroll = document.createElement("button");
-    btnReroll.className = "btn small";
+    const btnReroll = monoButton("btn small");
     btnReroll.textContent = "Reroll";
     btnReroll.addEventListener("click", (e) => withGuild("giveaways/reroll", { id: gw.id }, e.currentTarget));
 
@@ -1979,8 +1983,7 @@ function createEmojiPicker() {
   picker.className = "emoji-picker hidden";
   picker.id = "emoji-picker";
 
-  const search = document.createElement("input");
-  search.type = "text";
+  const search = monoInput();
   search.placeholder = "Search emoji…";
   search.className = "emoji-picker-search";
   search.addEventListener("input", () => filterEmojiPicker(search.value));
@@ -2027,9 +2030,8 @@ function createEmojiPicker() {
 }
 
 function makeEmojiBtn(emoji) {
-  const btn = document.createElement("button");
+  const btn = monoButton("emoji-picker-btn");
   btn.type = "button";
-  btn.className = "emoji-picker-btn";
   btn.dataset.emoji = emoji;
   if (emoji.startsWith("<")) {
     const m = emoji.match(/^<a?:(\w+):(\d+)>$/);
@@ -2122,9 +2124,10 @@ function openEmojiPicker(target) {
   }
   picker.style.left = `${Math.min(rect.left, window.innerWidth - 330)}px`;
   picker.classList.remove("hidden");
-  picker.querySelector("input").value = "";
+  const search = picker.querySelector("mono-input");
+  search.value = "";
   filterEmojiPicker("");
-  picker.querySelector("input").focus();
+  search.focus();
 }
 
 document.querySelectorAll(".emoji-trigger").forEach((btn) => {
@@ -2232,7 +2235,9 @@ $("#btn-tk-add").addEventListener("click", (e) =>
 );
 
 $("#btn-tk-post-combined").addEventListener("click", (e) => {
-  const ids = [...document.querySelectorAll("#tk-combined-box input:checked")].map((cb) => cb.value);
+  const ids = [...document.querySelectorAll("#tk-combined-box mono-checkbox.check")]
+    .filter((cb) => cb.checked)
+    .map((cb) => cb.value);
   withGuild("tickets/post-combined", {
     channelId: $("#tk-combined-channel").value || null,
     typeIds: ids
@@ -2294,12 +2299,9 @@ function applyVisibility() {
 
   const searching = q.length > 0;
   document.body.classList.toggle("searching", searching);
-  const countEl = $("#search-count");
-  if (searching) {
-    countEl.textContent = `${count} match${count === 1 ? "" : "es"}`;
-  } else {
-    countEl.textContent = "";
-  }
+  $("#search").count = searching
+    ? `${count} match${count === 1 ? "" : "es"}`
+    : "";
 }
 
 function applyTab(name) {

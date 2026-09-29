@@ -7,7 +7,8 @@
   "scripts": {
     "start": "bash scripts/start.sh",
     "dev": "node --watch src/index.js",
-    "setup": "node scripts/setup.mjs"
+    "setup": "node scripts/setup.mjs",
+    "test": "node scripts/test-components.mjs && node scripts/test-panel.mjs && node scripts/test-boot.mjs"
   },
   "license": "MIT",
   "dependencies": {
@@ -19,5 +20,8 @@
   },
   "allowScripts": {
     "better-sqlite3@13.0.3": true
+  },
+  "devDependencies": {
+    "happy-dom": "^20.14.5"
   }
 }

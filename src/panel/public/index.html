@@ -43,8 +43,8 @@
         Sign in with Discord
       </a>
       <div id="pw-fields">
-        <input type="password" id="password" placeholder="Panel password" autocomplete="current-password" required />
-        <button type="submit" class="btn primary">Sign in</button>
+        <mono-input type="password" id="password" placeholder="Panel password" autocomplete="current-password" required/>
+        <mono-button type="submit" variant="primary">Sign in</mono-button>
       </div>
       <p id="login-error" class="error hidden"></p>
       <p class="muted small"><a class="muted-link" href="/privacy.html" target="_blank" rel="noopener">Privacy Policy</a></p>
@@ -66,14 +66,14 @@
       </div>
       <h2 class="sidebar-title">Servers</h2>
       <ul id="guild-list" class="guild-list"></ul>
-      <button id="user-box" class="user-box hidden" type="button" aria-label="Account">
+      <mono-button id="user-box" class="user-box hidden" type="button" aria-label="Account" bare>
         <img id="user-avatar" class="user-avatar" alt="" />
         <span class="user-box-info">
           <span id="user-name" class="user-name"></span>
           <span id="user-sub" class="muted small">Account</span>
         </span>
         <span class="user-box-gear mat-icon" aria-hidden="true">settings</span>
-      </button>
+      </mono-button>
     </aside>
 
     <main class="main">
@@ -103,22 +103,18 @@
 
 <nav id="tabs" class="tabs">
         <span class="tab-group">Workspace</span>
-        <button type="button" class="tab" data-tab="overview"><span class="tab-ico mat-icon" aria-hidden="true">home</span>Overview<span class="tab-badge" data-badge="overview"></span></button>
-        <button type="button" class="tab" data-tab="channels"><span class="tab-ico mat-icon" aria-hidden="true">volume_up</span>Channels<span class="tab-badge" data-badge="channels"></span></button>
+        <mono-button type="button" class="tab" data-tab="overview" bare><span class="tab-ico mat-icon" aria-hidden="true">home</span>Overview<span class="tab-badge" data-badge="overview"></span></mono-button>
+        <mono-button type="button" class="tab" data-tab="channels" bare><span class="tab-ico mat-icon" aria-hidden="true">volume_up</span>Channels<span class="tab-badge" data-badge="channels"></span></mono-button>
         <span class="tab-group">Community</span>
-        <button type="button" class="tab" data-tab="messaging"><span class="tab-ico mat-icon" aria-hidden="true">forum</span>Messaging<span class="tab-badge" data-badge="messaging"></span></button>
-        <button type="button" class="tab" data-tab="tickets"><span class="tab-ico mat-icon" aria-hidden="true">confirmation_number</span>Tickets<span class="tab-badge" data-badge="tickets"></span></button>
-        <button type="button" class="tab" data-tab="roles"><span class="tab-ico mat-icon" aria-hidden="true">groups</span>Roles<span class="tab-badge" data-badge="roles"></span></button>
+        <mono-button type="button" class="tab" data-tab="messaging" bare><span class="tab-ico mat-icon" aria-hidden="true">forum</span>Messaging<span class="tab-badge" data-badge="messaging"></span></mono-button>
+        <mono-button type="button" class="tab" data-tab="tickets" bare><span class="tab-ico mat-icon" aria-hidden="true">confirmation_number</span>Tickets<span class="tab-badge" data-badge="tickets"></span></mono-button>
+        <mono-button type="button" class="tab" data-tab="roles" bare><span class="tab-ico mat-icon" aria-hidden="true">groups</span>Roles<span class="tab-badge" data-badge="roles"></span></mono-button>
         <span class="tab-group">Protection</span>
-        <button type="button" class="tab" data-tab="safety"><span class="tab-ico mat-icon" aria-hidden="true">shield</span>Safety<span class="tab-badge" data-badge="safety"></span></button>
+        <mono-button type="button" class="tab" data-tab="safety" bare><span class="tab-ico mat-icon" aria-hidden="true">shield</span>Safety<span class="tab-badge" data-badge="safety"></span></mono-button>
       </nav>
 
         <div class="toolbar">
-          <div class="search-box">
-            <span class="search-ico">⌕</span>
-            <input type="text" id="search" placeholder="Search anything…  (press /)" autocomplete="off" spellcheck="false" />
-            <span id="search-count" class="search-count"></span>
-          </div>
+          <mono-search id="search" placeholder="Search anything…  (press /)"></mono-search>
         </div>
 
         <section class="card" data-tab="overview" id="sec-health">
@@ -168,12 +164,13 @@
             Users who join the trigger voice channel get their own private temporary voice channel.
           </p>
           <div class="field-row">
-            <label for="temp-channel">Trigger channel</label>
-            <select id="temp-channel"></select>
-            <button id="btn-temp-setup" class="btn primary">Enable</button>
+            <mono-field label="Trigger channel">
+              <mono-select id="temp-channel"></mono-select>
+            </mono-field>
+            <mono-button id="btn-temp-setup" variant="primary">Enable</mono-button>
           </div>
           <p id="temp-status" class="hint"></p>
-          <button id="btn-temp-disable" class="btn danger">Disable temporary channels</button>
+          <mono-button id="btn-temp-disable" variant="danger">Disable temporary channels</mono-button>
         </section>
 
         <section class="card" data-tab="channels" id="sec-stats">
@@ -182,9 +179,9 @@
             Voice channels showing live member / bot / online / in-voice numbers, updated every 5 minutes.
           </p>
           <div class="field-row">
-            <button id="btn-stats-setup" class="btn primary">Create stats channels</button>
-            <button id="btn-stats-refresh" class="btn">Refresh now</button>
-            <button id="btn-stats-disable" class="btn danger">Remove stats channels</button>
+            <mono-button id="btn-stats-setup" variant="primary">Create stats channels</mono-button>
+            <mono-button id="btn-stats-refresh">Refresh now</mono-button>
+            <mono-button id="btn-stats-disable" variant="danger">Remove stats channels</mono-button>
           </div>
           <p id="stats-status" class="hint"></p>
         </section>
@@ -197,17 +194,20 @@
           </p>
 
           <div class="field-row">
-            <label for="sk-channel">Channel</label>
-            <select id="sk-channel"></select>
+            <mono-field label="Channel">
+              <mono-select id="sk-channel"></mono-select>
+            </mono-field>
           </div>
           <div class="field-row col">
-            <label for="sk-content">Message content</label>
-            <textarea id="sk-content" rows="3" maxlength="2000" placeholder="The message to keep sticky"></textarea>
+            <mono-field label="Message content">
+              <mono-textarea id="sk-content" rows="3" maxlength="2000" placeholder="The message to keep sticky"></mono-textarea>
+            </mono-field>
           </div>
           <div class="field-row">
-            <label for="sk-interval">Interval (min)</label>
-            <input type="number" id="sk-interval" min="1" max="1440" value="5" style="width:80px" />
-            <button id="btn-sk-set" class="btn primary">Set sticky</button>
+            <mono-field label="Interval (min)">
+              <mono-input type="number" id="sk-interval" min="1" max="1440" value="5" width="80"/>
+            </mono-field>
+            <mono-button id="btn-sk-set" variant="primary">Set sticky</mono-button>
           </div>
           <p id="sk-status" class="hint"></p>
 
@@ -239,38 +239,42 @@
           </p>
 
           <div class="field-row">
-            <label class="check"><input type="checkbox" id="wc-enabled" /> enabled</label>
-            <label for="wc-channel">Channel</label>
-            <select id="wc-channel"></select>
+            <mono-checkbox class="check" id="wc-enabled">enabled</mono-checkbox>
+            <mono-field label="Channel">
+              <mono-select id="wc-channel"></mono-select>
+            </mono-field>
           </div>
 
           <div class="field-row col">
-            <label for="wc-message">Message</label>
-            <textarea id="wc-message" rows="3" maxlength="1000"></textarea>
+            <mono-field label="Message">
+              <mono-textarea id="wc-message" rows="3" maxlength="1000"></mono-textarea>
+            </mono-field>
           </div>
 
           <div class="field-row">
-            <label for="wc-mode">Mode</label>
-            <select id="wc-mode">
+            <mono-field label="Mode">
+              <mono-select id="wc-mode">
               <option value="text">Normal text</option>
               <option value="embed">Embed</option>
               <option value="mix">Mix (text + embed)</option>
-            </select>
+            </mono-select>
+            </mono-field>
           </div>
 
           <div class="field-row col" id="wc-mix-row" hidden>
-            <label for="wc-mix-text">Plain text (sent above the embed)</label>
-            <textarea id="wc-mix-text" rows="2" maxlength="500"></textarea>
+            <mono-field label="Plain text (sent above the embed)">
+              <mono-textarea id="wc-mix-text" rows="2" maxlength="500"></mono-textarea>
+            </mono-field>
           </div>
 
           <div class="field-row" id="wc-embed-row">
-            <input type="text" id="wc-title" placeholder="Embed title (optional)" maxlength="256" />
-            <input type="color" id="wc-color" value="#5865f2" title="Embed color" />
+            <mono-input id="wc-title" placeholder="Embed title (optional)" maxlength="256"/>
+            <mono-input type="color" id="wc-color" value="#5865f2" title="Embed color"/>
           </div>
 
           <div class="field-row">
-            <button id="btn-wc-save" class="btn primary">Save</button>
-            <button id="btn-wc-test" class="btn">Send test to channel</button>
+            <mono-button id="btn-wc-save" variant="primary">Save</mono-button>
+            <mono-button id="btn-wc-test">Send test to channel</mono-button>
           </div>
 
           <h4 class="preview-title">Live preview</h4>
@@ -300,7 +304,7 @@
           </p>
           <p id="tk-status" class="hint"></p>
           <div id="tk-types"></div>
-          <button id="btn-tk-add" class="btn">+ Add ticket type</button>
+          <mono-button id="btn-tk-add">+ Add ticket type</mono-button>
 
           <div class="subcard">
             <h4>Combined panel</h4>
@@ -309,9 +313,10 @@
               greyed-out until you enable them in their card above.
             </p>
             <div class="field-row">
-              <label for="tk-combined-channel">Channel</label>
-              <select id="tk-combined-channel"></select>
-              <button id="btn-tk-post-combined" class="btn primary">Post combined panel</button>
+              <mono-field label="Channel">
+                <mono-select id="tk-combined-channel"></mono-select>
+              </mono-field>
+              <mono-button id="btn-tk-post-combined" variant="primary">Post combined panel</mono-button>
             </div>
             <div id="tk-combined-box"></div>
           </div>
@@ -324,35 +329,40 @@
           </p>
 
           <div class="field-row">
-            <label for="es-channel">Channel</label>
-            <select id="es-channel"></select>
-            <label for="es-mode">Mode</label>
-            <select id="es-mode">
+            <mono-field label="Channel">
+              <mono-select id="es-channel"></mono-select>
+            </mono-field>
+            <mono-field label="Mode">
+              <mono-select id="es-mode">
               <option value="text">Normal text</option>
               <option value="embed">Embed</option>
-            </select>
+            </mono-select>
+            </mono-field>
           </div>
 
           <div class="field-row col" id="es-title-row" hidden>
-            <label for="es-title">Title</label>
-            <input type="text" id="es-title" maxlength="256" />
+            <mono-field label="Title">
+              <mono-input id="es-title" maxlength="256"/>
+            </mono-field>
           </div>
 
           <div class="field-row col">
-            <label for="es-message">Message</label>
-            <textarea id="es-message" rows="4" maxlength="2000"></textarea>
+            <mono-field label="Message">
+              <mono-textarea id="es-message" rows="4" maxlength="2000"></mono-textarea>
+            </mono-field>
           </div>
 
           <div class="field-row" id="es-style-row" hidden>
             <div class="field-row col grow">
-              <label for="es-footer">Footer</label>
-              <input type="text" id="es-footer" maxlength="2048" />
+              <mono-field label="Footer">
+                <mono-input id="es-footer" maxlength="2048"/>
+              </mono-field>
             </div>
-            <input type="color" id="es-color" value="#5865f2" title="Embed color" />
+            <mono-input type="color" id="es-color" value="#5865f2" title="Embed color"/>
           </div>
 
           <div class="field-row">
-            <button id="btn-es-send" class="btn primary">Send now</button>
+            <mono-button id="btn-es-send" variant="primary">Send now</mono-button>
           </div>
 
           <h4 class="preview-title">Live preview</h4>
@@ -382,14 +392,16 @@
           </p>
 
           <div class="field-row col" id="an-fields">
-            <label for="an-channel">Channel</label>
-            <select id="an-channel"></select>
-            <label for="an-when">When</label>
-            <input type="datetime-local" id="an-when" />
+            <mono-field label="Channel">
+              <mono-select id="an-channel"></mono-select>
+            </mono-field>
+            <mono-field label="When">
+              <mono-input type="datetime-local" id="an-when"/>
+            </mono-field>
           </div>
 
           <div class="field-row">
-            <button id="btn-an-schedule" class="btn primary">Schedule announcement</button>
+            <mono-button id="btn-an-schedule" variant="primary">Schedule announcement</mono-button>
           </div>
 
           <p class="muted small hint-label">Uses the embed sender fields above as content.</p>
@@ -407,40 +419,47 @@
           </p>
 
           <div class="field-row">
-            <label for="gw-channel">Channel</label>
-            <select id="gw-channel"></select>
+            <mono-field label="Channel">
+              <mono-select id="gw-channel"></mono-select>
+            </mono-field>
           </div>
 
           <div class="field-row col">
-            <label for="gw-title">Title</label>
-            <input type="text" id="gw-title" maxlength="200" placeholder="e.g. 1 Month Nitro" />
+            <mono-field label="Title">
+              <mono-input id="gw-title" maxlength="200" placeholder="e.g. 1 Month Nitro"/>
+            </mono-field>
           </div>
 
           <div class="field-row col">
-            <label for="gw-description">Description</label>
-            <textarea id="gw-description" rows="2" maxlength="1500" placeholder="What is it, rules, how it works…"></textarea>
+            <mono-field label="Description">
+              <mono-textarea id="gw-description" rows="2" maxlength="1500" placeholder="What is it, rules, how it works…"></mono-textarea>
+            </mono-field>
           </div>
 
           <div class="field-row">
             <div class="field-row col grow">
-              <label for="gw-link">Link to content (optional)</label>
-              <input type="text" id="gw-link" maxlength="500" placeholder="https://…" />
+              <mono-field label="Link to content (optional)">
+                <mono-input id="gw-link" maxlength="500" placeholder="https://…"/>
+              </mono-field>
             </div>
           </div>
 
           <div class="field-row">
             <div class="field-row col grow">
-              <label for="gw-code">Code for winners (optional, sent by DM)</label>
-              <input type="text" id="gw-code" maxlength="100" placeholder="e.g. NITRO-2026-XKCD" />
+              <mono-field label="Code for winners (optional, sent by DM)">
+                <mono-input id="gw-code" maxlength="100" placeholder="e.g. NITRO-2026-XKCD"/>
+              </mono-field>
             </div>
           </div>
 
           <div class="field-row">
-            <label for="gw-duration">Duration</label>
-            <input type="text" id="gw-duration" maxlength="20" value="60m" placeholder="e.g. 30s, 5m, 2h, 1d, 1h30m" />
-            <label for="gw-winners">Winners</label>
-            <input type="number" id="gw-winners" min="1" max="20" value="1" />
-            <button id="btn-gw-create" class="btn primary">Create giveaway</button>
+            <mono-field label="Duration">
+              <mono-input id="gw-duration" maxlength="20" value="60m" placeholder="e.g. 30s, 5m, 2h, 1d, 1h30m"/>
+            </mono-field>
+            <mono-field label="Winners">
+              <mono-input type="number" id="gw-winners" min="1" max="20" value="1"/>
+            </mono-field>
+            <mono-button id="btn-gw-create" variant="primary">Create giveaway</mono-button>
           </div>
 
           <h4 class="preview-title">Running &amp; ended</h4>
@@ -453,13 +472,14 @@
             Automatically moderate messages. Configure filters below, then enable the master toggle.
           </p>
           <div class="field-row">
-            <button id="btn-am-toggle" class="btn">Enable automod</button>
+            <mono-button id="btn-am-toggle">Enable automod</mono-button>
           </div>
           <p id="am-status" class="hint"></p>
           <div class="field-row">
-            <label for="am-log-channel">Log channel</label>
-            <select id="am-log-channel"></select>
-            <button id="btn-am-log-save" class="btn primary">Save</button>
+            <mono-field label="Log channel">
+              <mono-select id="am-log-channel"></mono-select>
+            </mono-field>
+            <mono-button id="btn-am-log-save" variant="primary">Save</mono-button>
           </div>
         </section>
 
@@ -467,27 +487,29 @@
           <h3>Word Filter</h3>
           <p class="muted small">Block messages containing specific words. Case-insensitive, whole-word match.</p>
           <div class="field-row">
-            <label class="check"><input type="checkbox" id="am-word-enabled" /> enabled</label>
-            <label for="am-word-action">Action</label>
-            <select id="am-word-action">
+            <mono-checkbox class="check" id="am-word-enabled">enabled</mono-checkbox>
+            <mono-field label="Action">
+              <mono-select id="am-word-action">
               <option value="delete">Delete message</option>
               <option value="warn">Warn user</option>
               <option value="mute">Mute user</option>
               <option value="kick">Kick user</option>
               <option value="ban">Ban user</option>
-            </select>
+            </mono-select>
+            </mono-field>
           </div>
           <div class="field-row col">
-            <label for="am-word-input">Add word</label>
-            <div class="field-row">
-              <input type="text" id="am-word-input" maxlength="100" placeholder="badword" />
-              <button id="btn-am-word-add" class="btn primary">Add</button>
-            </div>
+            <mono-field label="Add word">
+              <div class="field-row">
+                <mono-input id="am-word-input" maxlength="100" placeholder="badword"/>
+                <mono-button id="btn-am-word-add" variant="primary">Add</mono-button>
+              </div>
+            </mono-field>
           </div>
           <div id="am-word-list" class="check-grid"></div>
           <div class="field-row">
-            <button id="btn-am-word-save" class="btn primary">Save settings</button>
-            <button id="btn-am-word-clear" class="btn danger small">Clear all words</button>
+            <mono-button id="btn-am-word-save" variant="primary">Save settings</mono-button>
+            <mono-button id="btn-am-word-clear" variant="danger" small="">Clear all words</mono-button>
           </div>
         </section>
 
@@ -495,64 +517,70 @@
           <h3>Spam Detection</h3>
           <p class="muted small">Detects users sending too many messages in a short window.</p>
           <div class="field-row">
-            <label class="check"><input type="checkbox" id="am-spam-enabled" /> enabled</label>
-            <label for="am-spam-count">Messages</label>
-            <input type="number" id="am-spam-count" min="2" max="50" value="5" style="width:60px" />
-            <label for="am-spam-window">Window (sec)</label>
-            <input type="number" id="am-spam-window" min="3" max="60" value="10" style="width:60px" />
-            <label for="am-spam-action">Action</label>
-            <select id="am-spam-action">
+            <mono-checkbox class="check" id="am-spam-enabled">enabled</mono-checkbox>
+            <mono-field label="Messages">
+              <mono-input type="number" id="am-spam-count" min="2" max="50" value="5" width="60"/>
+            </mono-field>
+            <mono-field label="Window (sec)">
+              <mono-input type="number" id="am-spam-window" min="3" max="60" value="10" width="60"/>
+            </mono-field>
+            <mono-field label="Action">
+              <mono-select id="am-spam-action">
               <option value="delete">Delete message</option>
               <option value="warn">Warn user</option>
               <option value="mute">Mute user</option>
               <option value="kick">Kick user</option>
               <option value="ban">Ban user</option>
-            </select>
+            </mono-select>
+            </mono-field>
           </div>
-          <button id="btn-am-spam-save" class="btn primary">Save spam settings</button>
+          <mono-button id="btn-am-spam-save" variant="primary">Save spam settings</mono-button>
         </section>
 
         <section class="card" data-tab="safety" id="sec-automod-mention">
           <h3>Mass Mention Detection</h3>
           <p class="muted small">Block messages with too many user/role mentions.</p>
           <div class="field-row">
-            <label class="check"><input type="checkbox" id="am-mention-enabled" /> enabled</label>
-            <label for="am-mention-threshold">Threshold</label>
-            <input type="number" id="am-mention-threshold" min="2" max="50" value="5" style="width:60px" />
-            <label for="am-mention-action">Action</label>
-            <select id="am-mention-action">
+            <mono-checkbox class="check" id="am-mention-enabled">enabled</mono-checkbox>
+            <mono-field label="Threshold">
+              <mono-input type="number" id="am-mention-threshold" min="2" max="50" value="5" width="60"/>
+            </mono-field>
+            <mono-field label="Action">
+              <mono-select id="am-mention-action">
               <option value="delete">Delete message</option>
               <option value="warn">Warn user</option>
               <option value="mute">Mute user</option>
               <option value="kick">Kick user</option>
               <option value="ban">Ban user</option>
-            </select>
+            </mono-select>
+            </mono-field>
           </div>
-          <button id="btn-am-mention-save" class="btn primary">Save</button>
+          <mono-button id="btn-am-mention-save" variant="primary">Save</mono-button>
         </section>
 
         <section class="card" data-tab="safety" id="sec-automod-invite">
           <h3>Invite Link Blocking</h3>
           <p class="muted small">Block Discord invite links (discord.gg, etc).</p>
           <div class="field-row">
-            <label class="check"><input type="checkbox" id="am-invite-enabled" /> enabled</label>
-            <label for="am-invite-action">Action</label>
-            <select id="am-invite-action">
+            <mono-checkbox class="check" id="am-invite-enabled">enabled</mono-checkbox>
+            <mono-field label="Action">
+              <mono-select id="am-invite-action">
               <option value="delete">Delete message</option>
               <option value="warn">Warn user</option>
               <option value="mute">Mute user</option>
               <option value="kick">Kick user</option>
               <option value="ban">Ban user</option>
-            </select>
+            </mono-select>
+            </mono-field>
           </div>
-          <button id="btn-am-invite-save" class="btn primary">Save</button>
+          <mono-button id="btn-am-invite-save" variant="primary">Save</mono-button>
         </section>
 
         <section class="card" data-tab="safety" id="sec-automod-cases">
           <h3>Case History</h3>
           <p class="muted small">Every automod action is logged here.</p>
           <div class="field-row">
-            <button id="btn-am-cases-clear" class="btn danger">Clear all cases</button>
+            <mono-button id="btn-am-cases-clear" variant="danger">Clear all cases</mono-button>
           </div>
           <div id="am-case-list" class="ann-list"></div>
         </section>
@@ -564,36 +592,41 @@
             server or clears out the new accounts automatically.
           </p>
           <div class="field-row">
-            <button id="btn-ra-toggle" class="btn">Disable anti-raid</button>
+            <mono-button id="btn-ra-toggle">Disable anti-raid</mono-button>
           </div>
           <p id="ra-status" class="hint"></p>
           <div class="field-row">
-            <label for="ra-log-channel">Alert channel</label>
-            <select id="ra-log-channel"></select>
+            <mono-field label="Alert channel">
+              <mono-select id="ra-log-channel"></mono-select>
+            </mono-field>
           </div>
           <div class="field-row">
-            <label for="ra-threshold">Joins per window</label>
-            <input type="number" id="ra-threshold" min="2" max="50" value="5" style="width:70px" />
-            <label for="ra-window">Window (sec)</label>
-            <input type="number" id="ra-window" min="2" max="300" value="10" style="width:70px" />
-            <label for="ra-age">Max account age (hrs)</label>
-            <input type="number" id="ra-age" min="1" max="720" value="72" style="width:70px" />
+            <mono-field label="Joins per window">
+              <mono-input type="number" id="ra-threshold" min="2" max="50" value="5" width="70"/>
+            </mono-field>
+            <mono-field label="Window (sec)">
+              <mono-input type="number" id="ra-window" min="2" max="300" value="10" width="70"/>
+            </mono-field>
+            <mono-field label="Max account age (hrs)">
+              <mono-input type="number" id="ra-age" min="1" max="720" value="72" width="70"/>
+            </mono-field>
           </div>
           <div class="field-row">
-            <label for="ra-action">Action</label>
-            <select id="ra-action">
+            <mono-field label="Action">
+              <mono-select id="ra-action">
               <option value="lockdown">Lockdown</option>
               <option value="kick">Kick new accounts</option>
               <option value="ban">Ban new accounts</option>
-            </select>
-            <label class="check"><input type="checkbox" id="ra-lockchannels" /> lock channels too</label>
+            </mono-select>
+            </mono-field>
+            <mono-checkbox class="check" id="ra-lockchannels">lock channels too</mono-checkbox>
           </div>
           <div class="field-row">
-            <button id="btn-ra-save" class="btn primary">Save settings</button>
-            <button id="btn-ra-trigger" class="btn danger">Test trigger</button>
+            <mono-button id="btn-ra-save" variant="primary">Save settings</mono-button>
+            <mono-button id="btn-ra-trigger" variant="danger">Test trigger</mono-button>
           </div>
           <div class="field-row">
-            <button id="btn-ra-cases-clear" class="btn danger small">Clear all cases</button>
+            <mono-button id="btn-ra-cases-clear" variant="danger" small="">Clear all cases</mono-button>
           </div>
           <div id="ra-case-list" class="ann-list"></div>
         </section>
@@ -604,16 +637,18 @@
             Monolith answers via Gemini when you mention it or reply to its messages in a whitelisted channel.
           </p>
           <div class="field-row">
-            <label class="check"><input type="checkbox" id="ai-enabled" /> enabled</label>
-            <label for="ai-model">Gemini model</label>
-            <select id="ai-model" style="width:280px"></select>
+            <mono-checkbox class="check" id="ai-enabled">enabled</mono-checkbox>
+            <mono-field label="Gemini model">
+              <mono-select id="ai-model" style="width:280px"></mono-select>
+            </mono-field>
           </div>
           <div class="field-row col">
-            <label for="ai-channels">Whitelisted channels (ctrl-click to select multiple)</label>
-            <select id="ai-channels" multiple size="6"></select>
+            <mono-field label="Whitelisted channels (ctrl-click to select multiple)">
+              <mono-select id="ai-channels" multiple size="6"></mono-select>
+            </mono-field>
           </div>
           <div class="field-row">
-            <button id="btn-ai-save" class="btn primary">Save AI settings</button>
+            <mono-button id="btn-ai-save" variant="primary">Save AI settings</mono-button>
           </div>
           <p id="ai-status" class="hint"></p>
           <p class="muted small">
@@ -628,7 +663,7 @@
           </p>
           <div id="cmd-grid" class="check-grid"></div>
           <div class="field-row">
-            <button id="btn-cmd-save" class="btn primary">Save command toggles</button>
+            <mono-button id="btn-cmd-save" variant="primary">Save command toggles</mono-button>
           </div>
           <p id="cmd-status" class="hint"></p>
         </section>
@@ -640,18 +675,20 @@
           </p>
 
           <div class="field-row">
-            <label for="ar-human">Role for humans</label>
-            <select id="ar-human"></select>
+            <mono-field label="Role for humans">
+              <mono-select id="ar-human"></mono-select>
+            </mono-field>
           </div>
 
           <div class="field-row">
-            <label for="ar-bot">Role for bots</label>
-            <select id="ar-bot"></select>
+            <mono-field label="Role for bots">
+              <mono-select id="ar-bot"></mono-select>
+            </mono-field>
           </div>
 
           <div class="field-row">
-            <button id="btn-ar-save" class="btn primary">Save auto-roles</button>
-            <button id="btn-ar-disable" class="btn danger">Disable auto-roles</button>
+            <mono-button id="btn-ar-save" variant="primary">Save auto-roles</mono-button>
+            <mono-button id="btn-ar-disable" variant="danger">Disable auto-roles</mono-button>
           </div>
           <p id="ar-status" class="hint"></p>
         </section>
@@ -664,9 +701,10 @@
           </p>
 
           <div class="field-row">
-            <label for="pn-role">Panel role</label>
-            <select id="pn-role"></select>
-            <button id="btn-pn-save" class="btn primary">Save</button>
+            <mono-field label="Panel role">
+              <mono-select id="pn-role"></mono-select>
+            </mono-field>
+            <mono-button id="btn-pn-save" variant="primary">Save</mono-button>
           </div>
           <p id="pn-status" class="hint"></p>
         </section>
@@ -677,12 +715,13 @@
             Quickly lock channels to prevent members from sending messages. Locked channels are listed below.
           </p>
           <div class="field-row">
-            <label for="ld-channel">Channel to lock</label>
-            <select id="ld-channel"></select>
-            <button id="btn-ld-lock" class="btn danger">Lock</button>
+            <mono-field label="Channel to lock">
+              <mono-select id="ld-channel"></mono-select>
+            </mono-field>
+            <mono-button id="btn-ld-lock" variant="danger">Lock</mono-button>
           </div>
           <div class="field-row">
-            <button id="btn-ld-unlock-all" class="btn primary">Unlock all channels</button>
+            <mono-button id="btn-ld-unlock-all" variant="primary">Unlock all channels</mono-button>
           </div>
           <div id="ld-list" class="ann-list"></div>
         </section>
@@ -694,28 +733,34 @@
           </p>
           <div id="rr-status" class="hint"></div>
           <div class="field-row">
-            <label for="rr-title">Title</label>
-            <input type="text" id="rr-title" maxlength="100" value="Pick your roles!" style="width:200px" />
-            <label for="rr-color">Color</label>
-            <input type="color" id="rr-color" value="#5865f2" />
+            <mono-field label="Title">
+              <mono-input id="rr-title" maxlength="100" value="Pick your roles!" width="200"/>
+            </mono-field>
+            <mono-field label="Color">
+              <mono-input type="color" id="rr-color" value="#5865f2"/>
+            </mono-field>
           </div>
           <div class="field-row col">
-            <label for="rr-description">Description</label>
-            <textarea id="rr-description" rows="2" maxlength="300">React to get a role.</textarea>
+            <mono-field label="Description">
+              <mono-textarea id="rr-description" rows="2" maxlength="300">React to get a role.</mono-textarea>
+            </mono-field>
           </div>
           <div class="field-row">
-            <button id="btn-rr-delete" class="btn danger">Delete reaction role</button>
+            <mono-button id="btn-rr-delete" variant="danger">Delete reaction role</mono-button>
           </div>
           <h4 class="preview-title">Role mappings</h4>
           <div class="field-row">
-            <label for="rr-emoji">Emoji</label>
-            <input type="text" id="rr-emoji" maxlength="32" style="width:100px" />
-            <button type="button" class="emoji-trigger" data-target="rr-emoji" aria-label="Pick emoji"><span class="mat-icon" aria-hidden="true">mood</span></button>
-            <label for="rr-role">Role</label>
-            <select id="rr-role"></select>
-            <label for="rr-label">Label</label>
-            <input type="text" id="rr-label" maxlength="50" style="width:120px" placeholder="(optional)" />
-            <button id="btn-rr-add-mapping" class="btn primary">Add</button>
+            <mono-field label="Emoji">
+              <mono-input id="rr-emoji" maxlength="32" width="100"/>
+            </mono-field>
+            <mono-button type="button" class="emoji-trigger" data-target="rr-emoji" aria-label="Pick emoji" bare><span class="mat-icon" aria-hidden="true">mood</span></mono-button>
+            <mono-field label="Role">
+              <mono-select id="rr-role"></mono-select>
+            </mono-field>
+            <mono-field label="Label">
+              <mono-input id="rr-label" maxlength="50" placeholder="(optional)" width="120"/>
+            </mono-field>
+            <mono-button id="btn-rr-add-mapping" variant="primary">Add</mono-button>
           </div>
           <div id="rr-mapping-list" class="ann-list"></div>
         </section>
@@ -729,13 +774,14 @@
           </p>
 
           <div class="field-row">
-            <label for="up-channel">Logging channel</label>
-            <select id="up-channel"></select>
-            <button id="btn-up-save" class="btn primary">Save</button>
+            <mono-field label="Logging channel">
+              <mono-select id="up-channel"></mono-select>
+            </mono-field>
+            <mono-button id="btn-up-save" variant="primary">Save</mono-button>
           </div>
 
           <div class="field-row">
-            <button id="btn-up-check" class="btn">Check for updates now</button>
+            <mono-button id="btn-up-check">Check for updates now</mono-button>
           </div>
           <p id="up-status" class="hint"></p>
         </section>
@@ -748,20 +794,23 @@
           </p>
           <div id="lv-status" class="hint"></div>
           <div class="field-row">
-            <button id="btn-lv-save" class="btn primary">Save settings</button>
-            <label for="lv-ann">Announcement channel</label>
-            <select id="lv-ann"></select>
+            <mono-button id="btn-lv-save" variant="primary">Save settings</mono-button>
+            <mono-field label="Announcement channel">
+              <mono-select id="lv-ann"></mono-select>
+            </mono-field>
           </div>
           <div class="field-row">
-            <label><input type="checkbox" id="lv-removelower" /> Remove lower-tier reward roles when a higher level is reached</label>
+            <label><mono-checkbox id="lv-removelower"/> Remove lower-tier reward roles when a higher level is reached</label>
           </div>
           <h4 class="preview-title">Role rewards</h4>
           <div class="field-row">
-            <label for="lv-level">Level</label>
-            <input type="number" id="lv-level" min="1" value="1" style="width:80px" />
-            <label for="lv-role">Role</label>
-            <select id="lv-role"></select>
-            <button id="btn-lv-add-role" class="btn primary">Add reward</button>
+            <mono-field label="Level">
+              <mono-input type="number" id="lv-level" min="1" value="1" width="80"/>
+            </mono-field>
+            <mono-field label="Role">
+              <mono-select id="lv-role"></mono-select>
+            </mono-field>
+            <mono-button id="btn-lv-add-role" variant="primary">Add reward</mono-button>
           </div>
           <div id="lv-rewards" class="ann-list"></div>
         </section>
@@ -773,38 +822,46 @@
             add roles — it posts automatically to the chosen channel.
           </p>
           <div class="field-row">
-            <label for="rm-title">Title</label>
-            <input type="text" id="rm-title" maxlength="100" value="Pick your roles!" style="width:200px" />
-            <label for="rm-color">Color</label>
-            <input type="color" id="rm-color" value="#5865f2" />
+            <mono-field label="Title">
+              <mono-input id="rm-title" maxlength="100" value="Pick your roles!" width="200"/>
+            </mono-field>
+            <mono-field label="Color">
+              <mono-input type="color" id="rm-color" value="#5865f2"/>
+            </mono-field>
           </div>
           <div class="field-row col">
-            <label for="rm-description">Description</label>
-            <textarea id="rm-description" rows="2" maxlength="500">Select the roles you want.</textarea>
+            <mono-field label="Description">
+              <mono-textarea id="rm-description" rows="2" maxlength="500">Select the roles you want.</mono-textarea>
+            </mono-field>
           </div>
           <div class="field-row">
-            <label for="rm-mode">Mode</label>
-            <select id="rm-mode">
+            <mono-field label="Mode">
+              <mono-select id="rm-mode">
               <option value="multi">Multi (choose several)</option>
               <option value="unique">Unique (pick one)</option>
-            </select>
-            <label for="rm-channel">Channel</label>
-            <select id="rm-channel"></select>
-            <button id="btn-rm-create" class="btn primary">Create menu</button>
+            </mono-select>
+            </mono-field>
+            <mono-field label="Channel">
+              <mono-select id="rm-channel"></mono-select>
+            </mono-field>
+            <mono-button id="btn-rm-create" variant="primary">Create menu</mono-button>
           </div>
           <h4 class="preview-title">Manage a menu</h4>
           <div class="field-row">
-            <label for="rm-pick">Menu</label>
-            <select id="rm-pick"></select>
-            <button id="btn-rm-delete" class="btn danger">Delete menu</button>
+            <mono-field label="Menu">
+              <mono-select id="rm-pick"></mono-select>
+            </mono-field>
+            <mono-button id="btn-rm-delete" variant="danger">Delete menu</mono-button>
           </div>
           <div id="rm-current" class="hint"></div>
           <div class="field-row">
-            <label for="rm-role">Role</label>
-            <select id="rm-role"></select>
-            <label for="rm-label">Label</label>
-            <input type="text" id="rm-label" maxlength="80" style="width:140px" placeholder="(optional)" />
-            <button id="btn-rm-add-role" class="btn primary">Add role</button>
+            <mono-field label="Role">
+              <mono-select id="rm-role"></mono-select>
+            </mono-field>
+            <mono-field label="Label">
+              <mono-input id="rm-label" maxlength="80" placeholder="(optional)" width="140"/>
+            </mono-field>
+            <mono-button id="btn-rm-add-role" variant="primary">Add role</mono-button>
           </div>
           <div id="rm-roles" class="ann-list"></div>
         </section>
@@ -818,22 +875,25 @@
           </p>
 
           <div class="field-row col">
-            <label for="fr-trigger">Trigger</label>
-            <input type="text" id="fr-trigger" maxlength="100" placeholder='e.g. hello' />
+            <mono-field label="Trigger">
+              <mono-input id="fr-trigger" maxlength="100" placeholder='e.g. hello'/>
+            </mono-field>
           </div>
 
           <div class="field-row col">
-            <label for="fr-response">Response</label>
-            <textarea id="fr-response" rows="2" maxlength="1000" placeholder="Hey {username}, welcome!"></textarea>
+            <mono-field label="Response">
+              <mono-textarea id="fr-response" rows="2" maxlength="1000" placeholder="Hey {username}, welcome!"></mono-textarea>
+            </mono-field>
           </div>
 
           <div class="field-row">
-            <label for="fr-match">Match</label>
-            <select id="fr-match">
+            <mono-field label="Match">
+              <mono-select id="fr-match">
               <option value="contains">Contains — anywhere in the message</option>
               <option value="exact">Exact — the whole message</option>
-            </select>
-            <button id="btn-fr-add" class="btn primary">Add rule</button>
+            </mono-select>
+            </mono-field>
+            <mono-button id="btn-fr-add" variant="primary">Add rule</mono-button>
           </div>
 
           <h4 class="preview-title">Rules</h4>
@@ -847,18 +907,21 @@
           </p>
 
           <div class="field-row">
-            <label for="sb-channel">Board channel</label>
-            <select id="sb-channel"></select>
-            <label for="sb-threshold">Reactions needed</label>
-            <input type="number" id="sb-threshold" min="1" max="50" value="3" />
-            <label for="sb-emoji">Emoji</label>
-            <input type="text" id="sb-emoji" maxlength="32" value="⭐" style="width:100px" />
-            <button type="button" class="emoji-trigger" data-target="sb-emoji" aria-label="Pick emoji"><span class="mat-icon" aria-hidden="true">mood</span></button>
+            <mono-field label="Board channel">
+              <mono-select id="sb-channel"></mono-select>
+            </mono-field>
+            <mono-field label="Reactions needed">
+              <mono-input type="number" id="sb-threshold" min="1" max="50" value="3"/>
+            </mono-field>
+            <mono-field label="Emoji">
+              <mono-input id="sb-emoji" maxlength="32" value="⭐" width="100"/>
+            </mono-field>
+            <mono-button type="button" class="emoji-trigger" data-target="sb-emoji" aria-label="Pick emoji" bare><span class="mat-icon" aria-hidden="true">mood</span></mono-button>
           </div>
 
           <div class="field-row">
-            <button id="btn-sb-save" class="btn primary">Save starboard</button>
-            <button id="btn-sb-disable" class="btn danger">Disable starboard</button>
+            <mono-button id="btn-sb-save" variant="primary">Save starboard</mono-button>
+            <mono-button id="btn-sb-disable" variant="danger">Disable starboard</mono-button>
           </div>
           <p id="sb-status" class="hint"></p>
         </section>
@@ -871,30 +934,35 @@
           </p>
 
           <div class="field-row">
-            <label for="ct-correct">Correct count</label>
-            <input type="text" id="ct-correct" maxlength="32" value="✅" style="width:100px" />
-            <button type="button" class="emoji-trigger" data-target="ct-correct" aria-label="Pick emoji"><span class="mat-icon" aria-hidden="true">mood</span></button>
-            <label for="ct-milestone">Milestone</label>
-            <input type="text" id="ct-milestone" maxlength="32" value="🎉" style="width:100px" />
-            <button type="button" class="emoji-trigger" data-target="ct-milestone" aria-label="Pick emoji"><span class="mat-icon" aria-hidden="true">mood</span></button>
-            <label for="ct-69">69</label>
-            <input type="text" id="ct-69" maxlength="32" value="🔥" style="width:100px" />
-            <button type="button" class="emoji-trigger" data-target="ct-69" aria-label="Pick emoji"><span class="mat-icon" aria-hidden="true">mood</span></button>
+            <mono-field label="Correct count">
+              <mono-input id="ct-correct" maxlength="32" value="✅" width="100"/>
+            </mono-field>
+            <mono-button type="button" class="emoji-trigger" data-target="ct-correct" aria-label="Pick emoji" bare><span class="mat-icon" aria-hidden="true">mood</span></mono-button>
+            <mono-field label="Milestone">
+              <mono-input id="ct-milestone" maxlength="32" value="🎉" width="100"/>
+            </mono-field>
+            <mono-button type="button" class="emoji-trigger" data-target="ct-milestone" aria-label="Pick emoji" bare><span class="mat-icon" aria-hidden="true">mood</span></mono-button>
+            <mono-field label="69">
+              <mono-input id="ct-69" maxlength="32" value="🔥" width="100"/>
+            </mono-field>
+            <mono-button type="button" class="emoji-trigger" data-target="ct-69" aria-label="Pick emoji" bare><span class="mat-icon" aria-hidden="true">mood</span></mono-button>
           </div>
 
           <div class="field-row">
-            <button id="btn-ct-save" class="btn primary">Save emojis</button>
+            <mono-button id="btn-ct-save" variant="primary">Save emojis</mono-button>
           </div>
           <p id="ct-status" class="hint"></p>
           <h4 class="preview-title">Reward</h4>
           <div id="ct-reward" class="hint"></div>
           <div class="field-row">
-            <label for="ct-reward-role">Reward role</label>
-            <select id="ct-reward-role"></select>
-            <label for="ct-reward-every">Every</label>
-            <input type="number" id="ct-reward-every" min="1" value="10" style="width:80px" />
+            <mono-field label="Reward role">
+              <mono-select id="ct-reward-role"></mono-select>
+            </mono-field>
+            <mono-field label="Every">
+              <mono-input type="number" id="ct-reward-every" min="1" value="10" width="80"/>
+            </mono-field>
             <span class="muted small">correct count</span>
-            <button id="btn-ct-reward-save" class="btn primary">Save reward</button>
+            <mono-button id="btn-ct-reward-save" variant="primary">Save reward</mono-button>
           </div>
         </section>
 
@@ -907,30 +975,37 @@
 
           <h4 class="preview-title">Create survey</h4>
           <div class="field-row col">
-            <label for="sv-question">Question</label>
-            <input type="text" id="sv-question" maxlength="200" placeholder="e.g. What should we stream next?" />
+            <mono-field label="Question">
+              <mono-input id="sv-question" maxlength="200" placeholder="e.g. What should we stream next?"/>
+            </mono-field>
           </div>
           <div class="field-row col">
-            <label for="sv-description">Description (optional)</label>
-            <input type="text" id="sv-description" maxlength="500" placeholder="Extra context shown below the question" />
+            <mono-field label="Description (optional)">
+              <mono-input id="sv-description" maxlength="500" placeholder="Extra context shown below the question"/>
+            </mono-field>
           </div>
           <div class="field-row">
-            <label for="sv-channel">Post to channel</label>
-            <select id="sv-channel"></select>
-            <label for="sv-response-channel">Responses to channel</label>
-            <select id="sv-response-channel"></select>
+            <mono-field label="Post to channel">
+              <mono-select id="sv-channel"></mono-select>
+            </mono-field>
+            <mono-field label="Responses to channel">
+              <mono-select id="sv-response-channel"></mono-select>
+            </mono-field>
           </div>
           <div class="field-row">
-            <label for="sv-label">Button label</label>
-            <input type="text" id="sv-label" maxlength="80" value="Take Survey" style="width:140px" />
-            <label for="sv-emoji">Button emoji</label>
-            <input type="text" id="sv-emoji" maxlength="32" value="📋" style="width:100px" />
-            <button type="button" class="emoji-trigger" data-target="sv-emoji" aria-label="Pick emoji"><span class="mat-icon" aria-hidden="true">mood</span></button>
+            <mono-field label="Button label">
+              <mono-input id="sv-label" maxlength="80" value="Take Survey" width="140"/>
+            </mono-field>
+            <mono-field label="Button emoji">
+              <mono-input id="sv-emoji" maxlength="32" value="📋" width="100"/>
+            </mono-field>
+            <mono-button type="button" class="emoji-trigger" data-target="sv-emoji" aria-label="Pick emoji" bare><span class="mat-icon" aria-hidden="true">mood</span></mono-button>
           </div>
           <div class="field-row">
-            <label for="sv-color">Embed color</label>
-            <input type="color" id="sv-color" value="#5865f2" title="Embed color" />
-            <button id="btn-sv-create" class="btn primary">Create survey</button>
+            <mono-field label="Embed color">
+              <mono-input type="color" id="sv-color" value="#5865f2" title="Embed color"/>
+            </mono-field>
+            <mono-button id="btn-sv-create" variant="primary">Create survey</mono-button>
           </div>
           <p id="sv-status" class="hint"></p>
 
@@ -969,10 +1044,10 @@
       </div>
       <div id="intro-body" class="intro-body"></div>
       <div class="intro-actions">
-        <button id="btn-intro-skip" class="btn ghost">Skip</button>
+        <mono-button id="btn-intro-skip" variant="ghost">Skip</mono-button>
         <div class="intro-nav">
-          <button id="btn-intro-back" class="btn">Back</button>
-          <button id="btn-intro-next" class="btn primary">Next</button>
+          <mono-button id="btn-intro-back">Back</mono-button>
+          <mono-button id="btn-intro-next" variant="primary">Next</mono-button>
         </div>
       </div>
     </div>
@@ -986,7 +1061,7 @@
           <h3 id="user-modal-name"></h3>
           <span id="user-modal-sub" class="muted small"></span>
         </div>
-        <button id="btn-user-close" class="user-modal-close" type="button" aria-label="Close"><span class="mat-icon" aria-hidden="true">close</span></button>
+        <mono-button id="btn-user-close" class="user-modal-close" type="button" aria-label="Close" bare><span class="mat-icon" aria-hidden="true">close</span></mono-button>
       </div>
       <div class="user-modal-section">
         <h4>Account</h4>
@@ -996,8 +1071,8 @@
       </div>
       <div class="user-modal-section">
         <h4>Settings</h4>
-        <button id="btn-commands" class="btn primary full hidden">Re-register commands</button>
-        <button id="btn-logout" class="btn danger full">Log out</button>
+        <mono-button id="btn-commands" variant="primary" full="">Re-register commands</mono-button>
+        <mono-button id="btn-logout" variant="danger" full="">Log out</mono-button>
       </div>
     </div>
   </div>
@@ -1014,12 +1089,13 @@
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="discord-ico" aria-hidden="true"><path fill="currentColor" d="M20.317 4.37a19.79 19.79 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128c.126-.094.252-.192.372-.291a.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.099.246.198.373.292a.077.077 0 0 1-.006.127 12.3 12.3 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.84 19.84 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03ZM8.02 15.331c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418Zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418Z"/></svg>
           Invite the bot
         </a>
-        <button id="btn-invite-close" class="btn ghost full">Close</button>
+        <mono-button id="btn-invite-close" variant="ghost" full="">Close</mono-button>
       </div>
     </div>
   </div>
 
-  <div id="toast" class="toast hidden"></div>
+  <mono-toast id="toast"></mono-toast>
+  <script src="/components.js"></script>
   <script src="/app.js"></script>
 </body>
 </html>

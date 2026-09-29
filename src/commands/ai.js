@@ -92,64 +92,59 @@ export default {
     .addSubcommand((s) => s.setName("usage").setDescription("Show how many AI requests you have left today"))
     .addSubcommand((s) =>
       s
-        .setName("memory")
-        .setDescription("Manage AI memories (owner only)")
-        .addSubcommand((sc) =>
-          sc
-            .setName("add")
-            .setDescription("Add a new memory")
-            .addStringOption((o) =>
-              o.setName("key").setDescription("Memory key").setRequired(true).setMaxLength(100)
-            )
-            .addStringOption((o) =>
-              o.setName("value").setDescription("Memory value").setRequired(true).setMaxLength(2000)
-            )
+        .setName("memory-add")
+        .setDescription("Add a new memory (owner only)")
+        .addStringOption((o) =>
+          o.setName("key").setDescription("Memory key").setRequired(true).setMaxLength(100)
         )
-        .addSubcommand((sc) =>
-          sc
-            .setName("get")
-            .setDescription("Get a memory by key")
-            .addStringOption((o) =>
-              o.setName("key").setDescription("Memory key").setRequired(true).setMaxLength(100)
-            )
+        .addStringOption((o) =>
+          o.setName("value").setDescription("Memory value").setRequired(true).setMaxLength(2000)
         )
-        .addSubcommand((sc) =>
-          sc
-            .setName("update")
-            .setDescription("Update an existing memory")
-            .addStringOption((o) =>
-              o.setName("key").setDescription("Memory key").setRequired(true).setMaxLength(100)
-            )
-            .addStringOption((o) =>
-              o.setName("value").setDescription("New memory value").setRequired(true).setMaxLength(2000)
-            )
+    )
+    .addSubcommand((s) =>
+      s
+        .setName("memory-get")
+        .setDescription("Show a memory by key (owner only)")
+        .addStringOption((o) =>
+          o.setName("key").setDescription("Memory key").setRequired(true).setMaxLength(100)
         )
-        .addSubcommand((sc) =>
-          sc
-            .setName("delete")
-            .setDescription("Delete a memory")
-            .addStringOption((o) =>
-              o.setName("key").setDescription("Memory key").setRequired(true).setMaxLength(100)
-            )
+    )
+    .addSubcommand((s) =>
+      s
+        .setName("memory-update")
+        .setDescription("Update an existing memory (owner only)")
+        .addStringOption((o) =>
+          o.setName("key").setDescription("Memory key").setRequired(true).setMaxLength(100)
         )
-        .addSubcommand((sc) =>
-          sc
-            .setName("list")
-            .setDescription("List all memories")
-            .addIntegerOption((o) =>
-              o.setName("limit").setDescription("Max memories to show (default 25)").setMinValue(1).setMaxValue(50)
-            )
+        .addStringOption((o) =>
+          o.setName("value").setDescription("New memory value").setRequired(true).setMaxLength(2000)
         )
-        .addSubcommand((sc) =>
-          sc
-            .setName("search")
-            .setDescription("Search memories by query")
-            .addStringOption((o) =>
-              o.setName("query").setDescription("Search query").setRequired(true).setMaxLength(100)
-            )
-            .addIntegerOption((o) =>
-              o.setName("limit").setDescription("Max results (default 10)").setMinValue(1).setMaxValue(25)
-            )
+    )
+    .addSubcommand((s) =>
+      s
+        .setName("memory-delete")
+        .setDescription("Delete a memory (owner only)")
+        .addStringOption((o) =>
+          o.setName("key").setDescription("Memory key").setRequired(true).setMaxLength(100)
+        )
+    )
+    .addSubcommand((s) =>
+      s
+        .setName("memory-list")
+        .setDescription("List all memories (owner only)")
+        .addIntegerOption((o) =>
+          o.setName("limit").setDescription("Max memories to show (default 25)").setMinValue(1).setMaxValue(50)
+        )
+    )
+    .addSubcommand((s) =>
+      s
+        .setName("memory-search")
+        .setDescription("Search memories by query (owner only)")
+        .addStringOption((o) =>
+          o.setName("query").setDescription("Search query").setRequired(true).setMaxLength(100)
+        )
+        .addIntegerOption((o) =>
+          o.setName("limit").setDescription("Max results (default 10)").setMinValue(1).setMaxValue(25)
         )
     )
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
@@ -238,20 +233,20 @@ export default {
       });
     }
 
-    if (sub === "memory") {
+    if (sub.startsWith("memory-")) {
       if (!isOwner(interaction.user.id)) {
         return interaction.reply({
           content: "Only the bot owner can manage memories.",
           flags: MessageFlags.Ephemeral
         });
       }
-      const memSub = interaction.options.getSubcommand();
+      const memSub = sub.slice("memory-".length);
       if (memSub === "add") {
         const key = interaction.options.getString("key").trim();
         const value = interaction.options.getString("value").trim();
         if (getMemory(guild.id, key)) {
           return interaction.reply({
-            content: `Memory \`${key}\` already exists. Use \`/ai memory update\` to change it.`,
+            content: `Memory \`${key}\` already exists. Use \`/ai memory-update\` to change it.`,
             flags: MessageFlags.Ephemeral
           });
         }

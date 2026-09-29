@@ -65,7 +65,7 @@ const PUBLIC = path.join(__dirname, "public");
 const FRONTEND_REV = crypto
   .createHash("sha1")
   .update(
-    ["index.html", "app.js", "style.css", "privacy.html", "landing.html"]
+    ["index.html", "app.js", "style.css", "components.js", "privacy.html", "landing.html"]
       .map((f) => fs.readFileSync(path.join(PUBLIC, f)))
       .join("")
   )
@@ -1915,8 +1915,9 @@ export function startPanel(client) {
     const html = fs.readFileSync(path.join(PUBLIC, "index.html"), "utf8");
     res.set("Content-Type", "text/html; charset=utf-8").send(
       html
-        .replace('href="/style.css"', `href="/style.css?v=${FRONTEND_REV}"`)
-        .replace('src="/app.js"', `src="/app.js?v=${FRONTEND_REV}"`)
+      .replace('href="/style.css"', `href="/style.css?v=${FRONTEND_REV}"`)
+      .replace('src="/app.js"', `src="/app.js?v=${FRONTEND_REV}"`)
+      .replace('src="/components.js"', `src="/components.js?v=${FRONTEND_REV}"`)
     );
   });
   app.use(express.static(PUBLIC));
