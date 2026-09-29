@@ -1551,10 +1551,35 @@ $("#btn-ra-cases-clear").addEventListener("click", async (e) => {
 
 /* --- ai chat --- */
 
+async function loadAiModels() {
+  if (!selectedGuildId) return [];
+  try {
+    const res = await api(`/api/guilds/${selectedGuildId}/aichat/models`);
+    return res.models ?? [];
+  } catch {}
+  return [];
+}
+
 function renderAiChat(g, textChannels) {
-  const cfg = g.aichat ?? { enabled: false, channels: [], model: "gemini-3.6-flash" };
+  const cfg = g.aichat ?? { enabled: false, channels: [], model: "gemini-1.5-flash" };
   $("#ai-enabled").checked = !!cfg.enabled;
-  $("#ai-model").value = cfg.model ?? "";
+
+  const modelSelect = $("#ai-model");
+  if (!modelSelect.dataset.loaded) {
+    loadAiModels().then((models) => {
+      modelSelect.innerHTML = "";
+      for (const m of models) {
+        const opt = document.createElement("option");
+        opt.value = m.id;
+        opt.textContent = m.name;
+        modelSelect.appendChild(opt);
+      }
+      modelSelect.value = cfg.model ?? models[0]?.id ?? "";
+      modelSelect.dataset.loaded = "true";
+    });
+  } else {
+    modelSelect.value = cfg.model ?? "";
+  }
 
   const select = $("#ai-channels");
   select.innerHTML = "";

@@ -24,7 +24,8 @@ import {
   deleteMemory,
   searchMemories,
   formatMemoriesForContext,
-  isOwner
+  isOwner,
+  AVAILABLE_MODELS
 } from "../utils/aichat.js";
 
 function quotaLabel(member) {
@@ -79,7 +80,12 @@ export default {
         .setName("model")
         .setDescription("Set or view the Gemini model")
         .addStringOption((o) =>
-          o.setName("model").setDescription(`Model name (default: ${DEFAULT_MODEL})`).setMaxLength(60)
+          o.setName("model")
+            .setDescription(`Model name (default: ${DEFAULT_MODEL})`)
+            .setMaxLength(60)
+            .addChoices(
+              ...AVAILABLE_MODELS.map((m) => ({ name: m.name, value: m.id }))
+            )
         )
     )
     .addSubcommand((s) => s.setName("status").setDescription("Show AI status and whitelist"))

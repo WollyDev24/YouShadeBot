@@ -44,7 +44,7 @@ import {
 import { registerCommands } from "../utils/register.js";
 import { getAutomodConfig } from "../utils/automod.js";
 import { getAntiRaidConfig } from "../utils/antiraid.js";
-import { getAiConfig } from "../utils/aichat.js";
+import { getAiConfig, AVAILABLE_MODELS } from "../utils/aichat.js";
 import { getReactionRoles } from "../utils/reactionRoles.js";
 import { isLocked, getStatus, getAllLockdowns, lockChannel, unlockChannel, cleanup } from "../utils/lockdown.js";
 import { getPolls } from "../utils/polls.js";
@@ -1687,7 +1687,7 @@ export function startPanel(client) {
   app.post("/api/guilds/:id/aichat/config", requireAuth, async (req, res) => {
     const guild = client.guilds.cache.get(req.params.id);
     if (!guild) return res.status(404).json({ error: "guild not found" });
-    const { getAiConfig: gaic, setAiModel } = await import("../utils/aichat.js");
+    const { getAiConfig: gaic, setAiModel, AVAILABLE_MODELS: MODELS } = await import("../utils/aichat.js");
     const { saveKey } = await import("../utils/db.js");
     const body = req.body ?? {};
     const cfg = gaic(guild.id);
@@ -1697,9 +1697,17 @@ export function startPanel(client) {
         .filter((id) => typeof id === "string" && guild.channels.cache.has(id))
         .slice(0, 20);
     }
-    if (typeof body.model === "string" && body.model.trim()) setAiModel(guild.id, body.model);
+    if (typeof body.model === "string" && body.model.trim()) {
+      const validModel = MODELS.find((m) => m.id === body.model)?.id;
+      if (validModel) setAiModel(guild.id, validModel);
+    }
     saveKey("aichat");
     return res.json({ ok: true, payload: await guildPayload(client, guild) });
+  });
+
+  app.get("/api/guilds/:id/aichat/models", requireAuth, async (req, res) => {
+    const { AVAILABLE_MODELS } = await import("../utils/aichat.js");
+    return res.json({ models: AVAILABLE_MODELS });
   });
 
   app.post("/api/guilds/:id/reactionroles/add-mapping", requireAuth, async (req, res) => {

@@ -101,7 +101,8 @@ export function removeAiChannel(guildId, channelId) {
 
 export function setAiModel(guildId, model) {
   const c = cfg(guildId);
-  c.model = String(model ?? "").trim().slice(0, 60) || DEFAULT_MODEL;
+  const validModel = AVAILABLE_MODELS.find((m) => m.id === model)?.id ?? DEFAULT_MODEL;
+  c.model = validModel;
   saveKey("aichat");
   return c;
 }
@@ -207,7 +208,7 @@ export function formatMemoriesForContext(guildId, maxChars = 1500) {
   return context;
 }
 
-export { isOwner, canModifyMemory, canReceiveExternalMemory, getOwnerId, AVAILABLE_MODELS, getFallbackModels };
+export { isOwner, canModifyMemory, canReceiveExternalMemory, getOwnerId, getFallbackModels };
 
 function stripMentions(content) {
   return String(content ?? "")
@@ -219,27 +220,53 @@ function stripMentions(content) {
 }
 
 async function askGemini(model, prompt, apiKey) {
-  const url = `${BASE_URL}/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
-      contents: [{ role: "user", parts: [{ text: prompt }] }],
-      generationConfig: { maxOutputTokens: 1024, temperature: 0.8 }
-    })
-  });
+  const models = getFallbackModels(model);
+  let lastError = null;
 
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new Error(`Gemini API ${res.status}: ${body.slice(0, 200)}`);
+  for (const m of models) {
+    const url = `${BASE_URL}/models/${encodeURIComponent(m)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+          contents: [{ role: "user", parts: [{ text: prompt }] }],
+          generationConfig: { maxOutputTokens: 1024, temperature: 0.8 }
+        })
+      });
+
+      if (!res.ok) {
+        const body = await res.text().catch(() => "");
+        lastError = new Error(`Gemini API ${res.status}: ${body.slice(0, 200)}`);
+        if (res.status === 429 || res.status >= 500) {
+          console.warn(`[aichat] Model ${m} failed (${res.status}), trying fallback...`);
+          continue;
+        }
+        throw lastError;
+      }
+
+      const data = await res.json();
+      const text = data?.candidates?.[0]?.content?.parts
+        ?.map((part) => part.text ?? "")
+        .join("")
+        .trim() ?? "";
+
+      if (m !== model) {
+        console.log(`[aichat] Used fallback model: ${m} (primary: ${model})`);
+      }
+      return text;
+    } catch (err) {
+      lastError = err;
+      if (err.message.includes("429") || err.message.includes("500") || err.message.includes("503") || err.message.includes("504")) {
+        console.warn(`[aichat] Model ${m} failed, trying fallback...`);
+        continue;
+      }
+      throw err;
+    }
   }
 
-  const data = await res.json();
-  return data?.candidates?.[0]?.content?.parts
-    ?.map((part) => part.text ?? "")
-    .join("")
-    .trim() ?? "";
+  throw lastError ?? new Error("All models failed");
 }
 
 export async function handleAiMessage(client, message) {
