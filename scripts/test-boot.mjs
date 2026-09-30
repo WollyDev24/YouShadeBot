@@ -65,7 +65,7 @@ const GUILD = {
     enabled: false, logChannelId: null, windowSeconds: 10, threshold: 5,
     accountAgeHours: 24, action: "kick", lockdownChannels: [], caseCount: 0, cases: []
   },
-  aichat: { enabled: true, channels: ["c1", "c2"], model: "gemini-1.5-flash", limits: { daily: 5, boost: 15, cooldownSeconds: 4 } },
+  aichat: { enabled: true, channels: ["c1", "c2"], model: "gemini-2.5-flash", limits: { daily: 5, boost: 15, cooldownSeconds: 4 } },
   reactionRoles: [],
   lockdowns: [],
   polls: [],
@@ -120,9 +120,9 @@ window.fetch = async (path, opts = {}) => {
       ok: true, status: 200,
       json: async () => ({
         models: [
-          { id: "gemini-1.5-flash", name: "Gemini 1.5 Flash (Fast, Cost-effective)" },
-          { id: "gemini-1.5-pro", name: "Gemini 1.5 Pro (Advanced reasoning)" },
-          { id: "gemini-1.0-pro", name: "Gemini 1.0 Pro (Legacy)" }
+          { id: "gemini-flash-latest", name: "Gemini Flash Latest (always newest)" },
+          { id: "gemini-3.6-flash", name: "Gemini 3.6 Flash (agentic workhorse)" },
+          { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash (low cost, high volume)" }
         ]
       })
     };
@@ -181,7 +181,7 @@ await test("AI settings loaded into custom controls", () => {
   assert.equal($("#ai-enabled").checked, true, "ai-enabled should be checked");
   const model = $("#ai-model");
   assert.equal(model.tagName.toLowerCase(), "mono-select");
-  assert.equal(model.value, "gemini-1.5-flash", `model was "${model.value}"`);
+  assert.equal(model.value, "gemini-2.5-flash", `model was "${model.value}"`);
   assert.equal(model.options.length, 3, "model options should be populated");
 });
 

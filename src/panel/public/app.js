@@ -1571,7 +1571,7 @@ async function loadAiModels() {
 }
 
 function renderAiChat(g, textChannels) {
-  const cfg = g.aichat ?? { enabled: false, channels: [], model: "gemini-1.5-flash" };
+  const cfg = g.aichat ?? { enabled: false, channels: [] };
   $("#ai-enabled").checked = !!cfg.enabled;
 
   const limits = cfg.limits ?? {};
@@ -1593,7 +1593,7 @@ function renderAiChat(g, textChannels) {
       modelSelect.dataset.loaded = "true";
     });
   } else {
-    modelSelect.value = cfg.model ?? "";
+    modelSelect.value = cfg.model ?? modelSelect.options[0]?.value ?? "";
   }
 
   const select = $("#ai-channels");

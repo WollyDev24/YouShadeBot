@@ -44,7 +44,7 @@ import {
 import { registerCommands } from "../utils/register.js";
 import { getAutomodConfig } from "../utils/automod.js";
 import { getAntiRaidConfig } from "../utils/antiraid.js";
-import { getAiConfig, AVAILABLE_MODELS } from "../utils/aichat.js";
+import { getAiConfig, AVAILABLE_MODELS, DEFAULT_MODEL } from "../utils/aichat.js";
 import { getReactionRoles } from "../utils/reactionRoles.js";
 import { isLocked, getStatus, getAllLockdowns, lockChannel, unlockChannel, cleanup } from "../utils/lockdown.js";
 import { getPolls } from "../utils/polls.js";
@@ -412,7 +412,7 @@ async function guildPayload(client, guild) {
       return {
         enabled: a.enabled === true,
         channels: [...(a.channels ?? [])],
-        model: a.model ?? "gemini-3.6-flash",
+        model: a.model ?? DEFAULT_MODEL,
         limits: { ...a.limits }
       };
     })(),

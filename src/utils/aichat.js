@@ -1,7 +1,7 @@
 import { PermissionsBitField } from "../lib/discord.js";
 import { getData, saveKey } from "./db.js";
 
-export const DEFAULT_MODEL = "gemini-1.5-flash";
+export const DEFAULT_MODEL = "gemini-3.6-flash";
 
 /* Per-server rate limits. 0 means unlimited for the quota settings. */
 export const DEFAULT_LIMITS = {
@@ -16,10 +16,13 @@ export const LIMIT_BOUNDS = {
   cooldownSeconds: { min: 0, max: 60 }
 };
 
+/* `gemini-flash-latest` is a moving alias: it always resolves to whichever
+ * stable Flash model is newest, so the bot picks up upgrades without a
+ * deploy. Pin one of the explicit IDs below if you need repeatable output. */
 export const AVAILABLE_MODELS = [
-  { id: "gemini-1.5-flash", name: "Gemini 1.5 Flash (Fast, Cost-effective)" },
-  { id: "gemini-1.5-pro", name: "Gemini 1.5 Pro (Advanced reasoning)" },
-  { id: "gemini-1.0-pro", name: "Gemini 1.0 Pro (Legacy)" },
+  { id: "gemini-flash-latest", name: "Gemini Flash Latest (always newest)" },
+  { id: "gemini-3.6-flash", name: "Gemini 3.6 Flash (agentic workhorse)" },
+  { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash (low cost, high volume)" }
 ];
 
 const BASE_URL = "https://generativelanguage.googleapis.com/v1beta";
@@ -52,7 +55,7 @@ function canReceiveExternalMemory(message) {
 
 const SYSTEM_PROMPT =
   "You are Monolith, an AI assistant living inside a Discord server. " +
-  "Keep answers friendly, concise and Discord-appropriate. Use minimal markdown. " +
+  "Keep answers friendly, concise and Discord-appropriate. Use discord markdown capabilities when needed. " +
   "Never exceed about 1800 characters. If something is unclear, ask a short clarifying question." +
   "ONLY answer in english, NEVER any other language, even when asked to" +
   "Do not use Emojis" +
@@ -91,6 +94,9 @@ function cfg(guildId) {
   }
   const c = data.aichat[guildId];
   c.limits = normalizeLimits(c.limits);
+  /* A model removed from AVAILABLE_MODELS (or one Google has since retired)
+   * would silently fall back on every call, so heal the stored value once. */
+  if (!AVAILABLE_MODELS.some((m) => m.id === c.model)) c.model = DEFAULT_MODEL;
   return c;
 }
 

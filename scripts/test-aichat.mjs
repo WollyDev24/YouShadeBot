@@ -13,6 +13,9 @@ import {
   getAiLimits,
   setAiLimits,
   getAiConfig,
+  setAiModel,
+  AVAILABLE_MODELS,
+  DEFAULT_MODEL,
   getUsage,
   consumeUsage
 } from "../src/utils/aichat.js";
@@ -38,6 +41,27 @@ const GUILD = "test-aichat-limits-guild";
 
 test("defaults match the values that used to be hardcoded", () => {
   assert.deepEqual(DEFAULT_LIMITS, { daily: 5, boost: 15, cooldownSeconds: 4 });
+});
+
+test("the model list is exactly the three supported ids", () => {
+  assert.deepEqual(
+    AVAILABLE_MODELS.map((m) => m.id),
+    ["gemini-flash-latest", "gemini-3.6-flash", "gemini-2.5-flash"]
+  );
+  assert.ok(
+    AVAILABLE_MODELS.some((m) => m.id === DEFAULT_MODEL),
+    `DEFAULT_MODEL ${DEFAULT_MODEL} is not in the selectable list`
+  );
+});
+
+test("a config still pointing at a retired model heals on read", () => {
+  const g = `${GUILD}-models`;
+  getAiConfig(g).model = "gemini-1.5-pro";
+  assert.equal(getAiConfig(g).model, DEFAULT_MODEL, "gemini-1.5-pro was retired by Google");
+  setAiModel(g, "gemini-3.6-flash");
+  assert.equal(getAiConfig(g).model, "gemini-3.6-flash", "a supported id must survive untouched");
+  setAiModel(g, "gemini-4.0-ultra");
+  assert.equal(getAiConfig(g).model, DEFAULT_MODEL, "an unknown id must not be stored");
 });
 
 test("a brand new guild gets the defaults", () => {
