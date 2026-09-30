@@ -1578,6 +1578,7 @@ function renderAiChat(g, textChannels) {
   $("#ai-limit-daily").value = String(limits.daily ?? 5);
   $("#ai-limit-boost").value = String(limits.boost ?? 15);
   $("#ai-limit-cooldown").value = String(limits.cooldownSeconds ?? 4);
+  $("#ai-limit-images").value = String(limits.imageDaily ?? 10);
 
   const modelSelect = $("#ai-model");
   if (!modelSelect.dataset.loaded) {
@@ -1627,10 +1628,12 @@ $("#btn-ai-save").addEventListener("click", (e) => {
   const daily = collectLimit("#ai-limit-daily", 0, 500);
   const boost = collectLimit("#ai-limit-boost", 0, 500);
   const cooldown = collectLimit("#ai-limit-cooldown", 0, 60);
+  const images = collectLimit("#ai-limit-images", 0, 500);
   const bad = [];
   if (daily === null) bad.push("Per user / day");
   if (boost === null) bad.push("Booster / day");
   if (cooldown === null) bad.push("Cooldown (s)");
+  if (images === null) bad.push("Images / day");
   if (bad.length) {
     toast(`${bad.join(", ")} must be a number between 0 and the field maximum.`, true);
     return;
@@ -1639,7 +1642,7 @@ $("#btn-ai-save").addEventListener("click", (e) => {
     enabled: $("#ai-enabled").checked,
     channels: [...$("#ai-channels").selectedOptions].map((o) => o.value),
     model: $("#ai-model").value.trim(),
-    limits: { daily, boost, cooldownSeconds: cooldown }
+    limits: { daily, boost, cooldownSeconds: cooldown, imageDaily: images }
   }, e.currentTarget);
 });
 

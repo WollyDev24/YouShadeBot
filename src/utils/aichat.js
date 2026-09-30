@@ -7,14 +7,34 @@ export const DEFAULT_MODEL = "gemini-3.6-flash";
 export const DEFAULT_LIMITS = {
   daily: 5,
   boost: 15,
-  cooldownSeconds: 4
+  cooldownSeconds: 4,
+  /* Image messages are billed as full multimodal requests, so they get their
+   * own allowance instead of competing with plain text. Boosters and admins
+   * are exempt, so this one number is the only knob here. */
+  imageDaily: 10
 };
 
 export const LIMIT_BOUNDS = {
   daily: { min: 0, max: 500 },
   boost: { min: 0, max: 500 },
-  cooldownSeconds: { min: 0, max: 60 }
+  cooldownSeconds: { min: 0, max: 60 },
+  imageDaily: { min: 0, max: 500 }
 };
+
+/* Guards for the vision path. Gemini inlines the raw bytes in the JSON body,
+ * so both the count and the per-file size have to be capped. */
+export const MAX_IMAGES_PER_MESSAGE = 4;
+export const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+
+const IMAGE_MIME_TYPES = new Set([
+  "image/png",
+  "image/jpeg",
+  "image/jpg",
+  "image/webp",
+  "image/gif",
+  "image/heic",
+  "image/heif"
+]);
 
 /* `gemini-flash-latest` is a moving alias: it always resolves to whichever
  * stable Flash model is newest, so the bot picks up upgrades without a
@@ -66,7 +86,13 @@ const SYSTEM_PROMPT =
   "You should create memories for: user preferences, important facts shared, recurring topics, server-specific info, and notable events. " +
   "Only the bot owner can directly add/modify/delete memories via commands. Other users can only influence memories through conversation with you, and you decide what's worth remembering." +
   "\n\n" +
-  "When responding, relevant memories will be prepended to your context. Use them naturally in conversation.";
+  "When responding, relevant memories will be prepended to your context. Use them naturally in conversation." +
+  "\n\n" +
+  "IMAGES: Messages may include images. Read them before answering, and refer to what you actually see " +
+  "rather than guessing from the caption. If an image is unclear, low quality, or you cannot make out " +
+  "the details, say so plainly instead of inventing them. Do not claim to have seen an image that was " +
+  "not attached. Text-only messages and image messages use separate daily allowances, so keep image " +
+  "answers just as concise as text ones.";
 
 function clampInt(value, key) {
   const { min, max } = LIMIT_BOUNDS[key];
@@ -90,10 +116,11 @@ export function normalizeLimits(raw) {
 function cfg(guildId) {
   const data = getData();
   if (!data.aichat[guildId]) {
-    data.aichat[guildId] = { enabled: false, channels: [], model: DEFAULT_MODEL, usage: {}, limits: {} };
+    data.aichat[guildId] = { enabled: false, channels: [], model: DEFAULT_MODEL, usage: {}, imageUsage: {}, limits: {} };
   }
   const c = data.aichat[guildId];
   c.limits = normalizeLimits(c.limits);
+  c.imageUsage ??= {};
   /* A model removed from AVAILABLE_MODELS (or one Google has since retired)
    * would silently fall back on every call, so heal the stored value once. */
   if (!AVAILABLE_MODELS.some((m) => m.id === c.model)) c.model = DEFAULT_MODEL;
@@ -169,6 +196,16 @@ export function requestQuota(member, limits) {
   return quotaFrom(l.daily);
 }
 
+/* One knob, so boosters and admins are both unlimited rather than getting a
+ * second configurable tier they would outgrow anyway. */
+export function requestImageQuota(member, limits) {
+  const l = limits ?? DEFAULT_LIMITS;
+  if (!member) return quotaFrom(l.imageDaily);
+  if (member.permissions.has(PermissionsBitField.Flags.Administrator)) return Infinity;
+  if (member.premiumSince) return Infinity;
+  return quotaFrom(l.imageDaily);
+}
+
 export function getUsage(guildId, userId) {
   const c = cfg(guildId);
   return c.usage?.[today()]?.[userId] ?? 0;
@@ -181,6 +218,20 @@ export function consumeUsage(guildId, userId) {
   c.usage[today()][userId] = (c.usage[today()][userId] ?? 0) + 1;
   saveKey("aichat");
   return c.usage[today()][userId];
+}
+
+export function getImageUsage(guildId, userId) {
+  const c = cfg(guildId);
+  return c.imageUsage?.[today()]?.[userId] ?? 0;
+}
+
+export function consumeImageUsage(guildId, userId) {
+  const c = cfg(guildId);
+  c.imageUsage ??= {};
+  c.imageUsage[today()] ??= {};
+  c.imageUsage[today()][userId] = (c.imageUsage[today()][userId] ?? 0) + 1;
+  saveKey("aichat");
+  return c.imageUsage[today()][userId];
 }
 
 function getMemoryStore(guildId) {
@@ -274,9 +325,57 @@ function stripMentions(content) {
     .trim();
 }
 
-async function askGemini(model, prompt, apiKey) {
+/* Pull any image attachments off the message and turn them into Gemini
+ * inlineData parts. Returns the parts plus a count of what we had to drop,
+ * so the caller can tell the user instead of silently ignoring their image. */
+export async function collectImageParts(message) {
+  const parts = [];
+  let skipped = 0;
+  let seen = 0;
+
+  for (const att of message.attachments?.values?.() ?? []) {
+    const mime = String(att.contentType ?? "").toLowerCase();
+    if (!mime.startsWith("image/")) continue;
+    seen++;
+    if (parts.length >= MAX_IMAGES_PER_MESSAGE) {
+      skipped++;
+      continue;
+    }
+    if (!IMAGE_MIME_TYPES.has(mime)) {
+      skipped++;
+      continue;
+    }
+    if (Number(att.size ?? 0) > MAX_IMAGE_BYTES) {
+      skipped++;
+      continue;
+    }
+
+    const res = await fetch(att.url).catch(() => null);
+    if (!res?.ok) {
+      skipped++;
+      continue;
+    }
+    let bytes;
+    try {
+      bytes = Buffer.from(await res.arrayBuffer());
+    } catch {
+      skipped++;
+      continue;
+    }
+    if (bytes.byteLength === 0 || bytes.byteLength > MAX_IMAGE_BYTES) {
+      skipped++;
+      continue;
+    }
+    parts.push({ inlineData: { mimeType: mime, data: bytes.toString("base64") } });
+  }
+
+  return { parts, skipped, seen };
+}
+
+async function askGemini(model, prompt, apiKey, imageParts = []) {
   const models = getFallbackModels(model);
   let lastError = null;
+  const parts = imageParts.length ? [{ text: prompt }, ...imageParts] : [{ text: prompt }];
 
   for (const m of models) {
     const url = `${BASE_URL}/models/${encodeURIComponent(m)}:generateContent?key=${encodeURIComponent(apiKey)}`;
@@ -286,7 +385,7 @@ async function askGemini(model, prompt, apiKey) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
-          contents: [{ role: "user", parts: [{ text: prompt }] }],
+          contents: [{ role: "user", parts }],
           generationConfig: { maxOutputTokens: 1024, temperature: 0.8 }
         })
       });
@@ -341,29 +440,45 @@ export async function handleAiMessage(client, message) {
   }
   if (!isMention && !isReplyToBot) return;
 
-  const prompt = stripMentions(message.content);
-  if (!prompt) return;
+  let prompt = stripMentions(message.content);
+
+  /* Gather images before deciding which allowance to charge, so a picture
+   * message draws on the image quota even when the text quota is spent. */
+  const images = await collectImageParts(message);
+  const isImageRequest = images.parts.length > 0;
+
+  if (!prompt) {
+    if (!isImageRequest) return;
+    prompt = "Describe this image.";
+  } else if (images.skipped > 0) {
+    prompt += ` (I could not read ${images.skipped} of the attached image(s): too large or an unsupported format.)`;
+  }
 
   const member = message.member;
   const limits = c.limits;
-  const quota = requestQuota(member, limits);
+  const quota = isImageRequest ? requestImageQuota(member, limits) : requestQuota(member, limits);
   const isBooster = Boolean(member?.premiumSince) &&
     !member?.permissions?.has(PermissionsBitField.Flags.Administrator);
+  const used = isImageRequest ? getImageUsage(guild.id, message.author.id) : getUsage(guild.id, message.author.id);
+  const kind = isImageRequest ? "image" : "text";
 
-  if (Number.isFinite(quota) && getUsage(guild.id, message.author.id) >= quota) {
-    const dayKey = `${guild.id}:${message.author.id}:${today()}`;
+  if (Number.isFinite(quota) && used >= quota) {
+    const dayKey = `${guild.id}:${message.author.id}:${kind}:${today()}`;
     if (!notifiedToday.has(dayKey)) {
       notifiedToday.set(dayKey, true);
-      message
-        .reply(
-          isBooster
-            ? `**Monolith AI limit reached.** You have used your **${quota}** booster requests for today.`
-            : `**Monolith AI limit reached.** You have used your **${quota}** requests for today.` +
-              (quotaFrom(limits.boost) > quota
-                ? ` Boost the server for **${limits.boost}**/day — server admins get unlimited.`
-                : "")
-        )
-        .catch(() => {});
+      let notice;
+      if (isImageRequest) {
+        notice = `**Monolith AI image limit reached.** You have used your **${quota}** image request(s) today.`;
+      } else if (isBooster) {
+        notice = `**Monolith AI limit reached.** You have used your **${quota}** booster requests for today.`;
+      } else {
+        notice =
+          `**Monolith AI limit reached.** You have used your **${quota}** requests for today.` +
+          (quotaFrom(limits.boost) > quota
+            ? ` Boost the server for **${limits.boost}**/day — server admins get unlimited.`
+            : "");
+      }
+      message.reply(notice).catch(() => {});
     }
     return;
   }
@@ -378,9 +493,10 @@ export async function handleAiMessage(client, message) {
     if (typeof message.channel.sendTyping === "function") message.channel.sendTyping().catch(() => {});
     const name = member?.displayName ?? message.author.username;
     const memoryContext = formatMemoriesForContext(guild.id);
-    const fullPrompt = memoryContext ? `${memoryContext}\n\n${name}: ${prompt}` : `${name}: ${prompt}`;
-    const text = await askGemini(c.model, fullPrompt, apiKey);
-    consumeUsage(guild.id, message.author.id);
+    const prefix = memoryContext ? `${memoryContext}\n\n${name}: ` : `${name}: `;
+    const text = await askGemini(c.model, `${prefix}${prompt}`, apiKey, images.parts);
+    if (isImageRequest) consumeImageUsage(guild.id, message.author.id);
+    else consumeUsage(guild.id, message.author.id);
 
     if (!text) {
       return message.reply("Gemini returned an empty response — try rewording your message.").catch(() => {});

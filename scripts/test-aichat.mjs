@@ -14,6 +14,14 @@ import {
   setAiLimits,
   getAiConfig,
   setAiModel,
+  setAiEnabled,
+  setAiChannel,
+  requestImageQuota,
+  collectImageParts,
+  getImageUsage,
+  consumeImageUsage,
+  MAX_IMAGES_PER_MESSAGE,
+  MAX_IMAGE_BYTES,
   AVAILABLE_MODELS,
   DEFAULT_MODEL,
   getUsage,
@@ -26,32 +34,41 @@ const ADMIN = PermissionsBitField.Flags.Administrator;
 const member = { premiumSince: null, permissions: { has: (f) => f === ADMIN } };
 const booster = { premiumSince: new Date(), permissions: { has: () => false } };
 const plain = { premiumSince: null, permissions: { has: () => false } };
+const ADMIN_MEMBER = { premiumSince: null, permissions: { has: () => true } };
 
-const results = [];
-const test = (name, fn) => {
-  try {
-    fn();
-    results.push(["ok", name]);
-  } catch (err) {
-    results.push(["FAIL", `${name}\n       ${err.message}`]);
-  }
-};
+/* Register, then run sequentially at the end. Awaiting each one matters:
+ * several tests drive handleAiMessage against shared config, so letting them
+ * interleave would have them clobbering each other's limits. It also means an
+ * assertion that throws after an `await` is actually reported as a failure. */
+const tests = [];
+const test = (name, fn) => tests.push([name, fn]);
 
 const GUILD = "test-aichat-limits-guild";
 
 test("defaults match the values that used to be hardcoded", () => {
-  assert.deepEqual(DEFAULT_LIMITS, { daily: 5, boost: 15, cooldownSeconds: 4 });
+  assert.equal(DEFAULT_LIMITS.daily, 5);
+  assert.equal(DEFAULT_LIMITS.boost, 15);
+  assert.equal(DEFAULT_LIMITS.cooldownSeconds, 4);
+  assert.equal(DEFAULT_LIMITS.imageDaily, 10);
 });
 
-test("the model list is exactly the three supported ids", () => {
-  assert.deepEqual(
-    AVAILABLE_MODELS.map((m) => m.id),
-    ["gemini-flash-latest", "gemini-3.6-flash", "gemini-2.5-flash"]
-  );
+/* Assert invariants rather than a fixed list, so editing the lineup in
+ * AVAILABLE_MODELS does not require editing a test to match. */
+test("the model list is internally consistent", () => {
+  assert.ok(AVAILABLE_MODELS.length > 0, "there must be at least one model");
   assert.ok(
     AVAILABLE_MODELS.some((m) => m.id === DEFAULT_MODEL),
     `DEFAULT_MODEL ${DEFAULT_MODEL} is not in the selectable list`
   );
+  const ids = AVAILABLE_MODELS.map((m) => m.id);
+  assert.equal(new Set(ids).size, ids.length, "duplicate model ids in AVAILABLE_MODELS");
+  for (const m of AVAILABLE_MODELS) {
+    assert.match(m.id, /^gemini-[a-z0-9]+(\.[a-z0-9]+)?(-[a-z0-9]+(\.[a-z0-9]+)?)?$/, `bad model id: ${m.id}`);
+    assert.ok(m.name?.trim(), `model ${m.id} has no display name`);
+    /* Discord rejects a slash command outright if any choice name is over 100
+     * characters, so catch an over-long label here instead of at deploy. */
+    assert.ok(m.name.length <= 100, `display name for ${m.id} exceeds Discord's 100 char limit`);
+  }
 });
 
 test("a config still pointing at a retired model heals on read", () => {
@@ -69,7 +86,7 @@ test("a brand new guild gets the defaults", () => {
 });
 
 test("normalizeLimits backfills only the missing keys", () => {
-  assert.deepEqual(normalizeLimits({ daily: 3 }), { daily: 3, boost: 15, cooldownSeconds: 4 });
+  assert.deepEqual(normalizeLimits({ daily: 3 }), { daily: 3, boost: 15, cooldownSeconds: 4, imageDaily: DEFAULT_LIMITS.imageDaily });
   assert.deepEqual(normalizeLimits({}), DEFAULT_LIMITS);
   assert.deepEqual(normalizeLimits(undefined), DEFAULT_LIMITS);
   assert.deepEqual(normalizeLimits(null), DEFAULT_LIMITS);
@@ -117,16 +134,25 @@ test("requestQuota still works with no limits argument", () => {
 
 test("setAiLimits patches only the keys it is given", () => {
   setAiLimits(GUILD, { daily: 7 });
-  assert.deepEqual(getAiLimits(GUILD), { daily: 7, boost: 15, cooldownSeconds: 4 });
+  assert.deepEqual(getAiLimits(GUILD), { daily: 7, boost: 15, cooldownSeconds: 4, imageDaily: DEFAULT_LIMITS.imageDaily });
   setAiLimits(GUILD, { cooldownSeconds: 0 });
-  assert.deepEqual(getAiLimits(GUILD), { daily: 7, boost: 15, cooldownSeconds: 0 });
+  assert.deepEqual(getAiLimits(GUILD), { daily: 7, boost: 15, cooldownSeconds: 0, imageDaily: DEFAULT_LIMITS.imageDaily });
   setAiLimits(GUILD, { boost: 1, daily: 3, cooldownSeconds: 2 });
-  assert.deepEqual(getAiLimits(GUILD), { daily: 3, boost: 1, cooldownSeconds: 2 });
+  assert.deepEqual(getAiLimits(GUILD), { daily: 3, boost: 1, cooldownSeconds: 2, imageDaily: DEFAULT_LIMITS.imageDaily });
+  setAiLimits(GUILD, { imageDaily: 4 });
+  assert.deepEqual(getAiLimits(GUILD), { daily: 3, boost: 1, cooldownSeconds: 2, imageDaily: 4 });
 });
 
 test("setAiLimits clamps instead of persisting nonsense", () => {
-  setAiLimits(GUILD, { daily: 10_000, boost: -4 });
-  assert.deepEqual(getAiLimits(GUILD), { daily: LIMIT_BOUNDS.daily.max, boost: 0, cooldownSeconds: 2 });
+  setAiLimits(GUILD, { imageDaily: DEFAULT_LIMITS.imageDaily, daily: 10_000, boost: -4 });
+  assert.deepEqual(getAiLimits(GUILD), {
+    daily: LIMIT_BOUNDS.daily.max,
+    boost: 0,
+    cooldownSeconds: 2,
+    imageDaily: DEFAULT_LIMITS.imageDaily
+  });
+  setAiLimits(GUILD, { imageDaily: 9999 });
+  assert.equal(getAiLimits(GUILD).imageDaily, LIMIT_BOUNDS.imageDaily.max);
 });
 
 test("getAiLimits hands back a copy, not the live config", () => {
@@ -171,6 +197,7 @@ function mockInteraction(sub, opts = {}) {
   const given = new Map(Object.entries(opts));
   return {
     guildId: GUILD_ID,
+    guild: { id: GUILD_ID },
     user: { id: "test-user" },
     member: plain,
     options: {
@@ -200,10 +227,10 @@ test("/ai limits with no options just reports the current limits", async () => {
 });
 
 test("/ai limits sets only the options that were passed", async () => {
-  setAiLimits(GUILD, { daily: 5, boost: 15, cooldownSeconds: 4 });
+  setAiLimits(GUILD, { daily: 5, boost: 15, cooldownSeconds: 4, imageDaily: DEFAULT_LIMITS.imageDaily });
   const it = mockInteraction("limits", { daily: 30 });
   await ai.execute({}, it);
-  assert.deepEqual(getAiLimits(GUILD), { daily: 30, boost: 15, cooldownSeconds: 4 });
+  assert.deepEqual(getAiLimits(GUILD), { daily: 30, boost: 15, cooldownSeconds: 4, imageDaily: DEFAULT_LIMITS.imageDaily });
   assert.match(it.replied.content, /updated/);
   assert.match(it.replied.content, /\*\*30\*\*\/day per user/);
 });
@@ -227,7 +254,8 @@ test("/ai status reports the live limits, not the old constants", async () => {
   setAiLimits(GUILD, { daily: 11, boost: 22, cooldownSeconds: 5 });
   const it = mockInteraction("status");
   await ai.execute({}, it);
-  const field = it.replied.embeds[0].fields.find((f) => f.name === "Request limits");
+  /* EmbedBuilder keeps its data private; fields only exist after toJSON(). */
+  const field = it.replied.embeds[0].toJSON().fields.find((f) => f.name === "Request limits");
   assert.ok(field, "status should still have a Request limits field");
   assert.match(field.value, /\*\*11\*\*\/day per user/);
   assert.match(field.value, /\*\*22\*\*\/day for boosters/);
@@ -266,19 +294,33 @@ const realKey = process.env.GEMINI_API_KEY;
 let geminiCalls = 0;
 
 process.env.GEMINI_API_KEY = "test-key";
-globalThis.fetch = async (url) => {
+/* Captures the request body so tests can assert on the inlineData parts the
+ * vision path is supposed to be sending. */
+let lastGeminiBody = null;
+globalThis.fetch = async (url, opts) => {
   if (String(url).includes("generativelanguage")) {
     geminiCalls++;
+    lastGeminiBody = opts?.body ? JSON.parse(opts.body) : null;
     return {
       ok: true,
       status: 200,
       json: async () => ({ candidates: [{ content: { parts: [{ text: "hi" }] } }] })
     };
   }
-  return { ok: true, status: 200, json: async () => ({}) };
+  /* Attachment CDN fetch. A 1x1 PNG so the decoded bytes are real. */
+  const png = Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+    "base64"
+  );
+  return {
+    ok: true,
+    status: 200,
+    json: async () => ({}),
+    arrayBuffer: async () => png.buffer.slice(png.byteOffset, png.byteOffset + png.byteLength)
+  };
 };
 
-function fakeMessage(authorId, { premiumSince = null } = {}) {
+function fakeMessage(authorId, { premiumSince = null, isAdmin = false, content = "hello", attachments = {} } = {}) {
   const replies = [];
   return {
     guild: { id: GUILD_ID },
@@ -286,14 +328,22 @@ function fakeMessage(authorId, { premiumSince = null } = {}) {
     member: {
       displayName: `u${authorId}`,
       premiumSince,
-      permissions: { has: () => false }
+      permissions: { has: () => isAdmin }
     },
     channel: {
       id: "chan-1",
       sendTyping: async () => {}
     },
     mentions: { has: () => true },
-    content: "hello",
+    content,
+    /* discord.js exposes attachments as a Collection; collectImageParts only
+     * relies on .values(), so a Map stands in faithfully. */
+    attachments: new Map(
+      Object.entries(attachments).map(([key, a]) => [
+        key,
+        { url: a.url ?? `https://cdn.test/${key}.png`, contentType: a.contentType ?? "image/png", size: a.size ?? 12, name: a.name ?? `${key}.png` }
+      ])
+    ),
     replies,
     reply: async (text) => {
       replies.push(text);
@@ -391,6 +441,191 @@ test("the cooldown is per user and per channel", async () => {
   await handleAiMessage(client, other);
   assert.equal(geminiCalls, 2, "but the same user in the same channel is");
 });
+
+/* --- vision: images attached to an AI message --- */
+
+const IMG = { a: {} };
+
+test("requestImageQuota exempts boosters and admins", () => {
+  const limits = { ...DEFAULT_LIMITS, imageDaily: 3 };
+  assert.equal(requestImageQuota(plain, limits), 3);
+  assert.equal(requestImageQuota(booster, limits), Infinity);
+  assert.equal(requestImageQuota(ADMIN_MEMBER, limits), Infinity);
+  assert.equal(requestImageQuota(plain, { ...limits, imageDaily: 0 }), Infinity, "0 means unlimited");
+});
+
+test("an attached image is sent as inlineData", async () => {
+  setAiLimits(GUILD_ID, { daily: 5, boost: 5, cooldownSeconds: 0, imageDaily: 5 });
+  const msg = fakeMessage("img-1", { content: "what is this", attachments: IMG });
+  geminiCalls = 0;
+  lastGeminiBody = null;
+  await handleAiMessage(client, msg);
+  assert.equal(geminiCalls, 1, "the model should have been called");
+  const parts = lastGeminiBody?.contents?.[0]?.parts ?? [];
+  const inline = parts.find((p) => p.inlineData);
+  assert.ok(inline, "the image must be sent as inlineData, not dropped");
+  assert.equal(inline.inlineData.mimeType, "image/png");
+  assert.ok(inline.inlineData.data.length > 0, "inlineData needs base64 bytes");
+  assert.ok(
+    parts[0].text.includes("what is this"),
+    "the caption must still be sent as text"
+  );
+});
+
+test("an image message is charged to the image quota, not the text one", async () => {
+  setAiLimits(GUILD_ID, { daily: 5, boost: 5, cooldownSeconds: 0, imageDaily: 5 });
+  const msg = fakeMessage("img-2", { attachments: IMG });
+  geminiCalls = 0;
+  await handleAiMessage(client, msg);
+  assert.equal(geminiCalls, 1);
+  assert.equal(getImageUsage(GUILD_ID, "img-2"), 1, "image usage should be 1");
+  assert.equal(getUsage(GUILD_ID, "img-2"), 0, "text usage must stay untouched");
+});
+
+test("an image with no caption still gets answered", async () => {
+  setAiLimits(GUILD_ID, { daily: 5, boost: 5, cooldownSeconds: 0, imageDaily: 5 });
+  const msg = fakeMessage("img-3", { content: "", attachments: IMG });
+  geminiCalls = 0;
+  lastGeminiBody = null;
+  await handleAiMessage(client, msg);
+  assert.equal(geminiCalls, 1, "a captionless image should still be handled");
+  assert.ok(
+    /describe this image/i.test(lastGeminiBody?.contents?.[0]?.parts?.[0]?.text ?? ""),
+    "a captionless image should fall back to a generic prompt"
+  );
+});
+
+test("the image quota really gates a plain member", async () => {
+  setAiLimits(GUILD_ID, { daily: 0, boost: 0, cooldownSeconds: 0, imageDaily: 2 });
+  geminiCalls = 0;
+  /* Same user each time, so the count really is this user's cumulative usage. */
+  const msg = fakeMessage("img-cap", { attachments: IMG });
+  for (let i = 0; i < 4; i++) {
+    await handleAiMessage(client, msg);
+  }
+  assert.equal(geminiCalls, 2, "only the configured image quota should get through");
+  assert.equal(getImageUsage(GUILD_ID, "img-cap"), 2, "blocked requests must not be charged");
+});
+
+test("boosters and admins are not gated by the image quota", async () => {
+  setAiLimits(GUILD_ID, { daily: 0, boost: 0, cooldownSeconds: 0, imageDaily: 1 });
+  geminiCalls = 0;
+  for (let i = 0; i < 3; i++) {
+    await handleAiMessage(client, fakeMessage(`img-boost-${i}`, { premiumSince: new Date(), attachments: IMG }));
+    await handleAiMessage(client, fakeMessage(`img-adm-${i}`, { isAdmin: true, attachments: IMG }));
+  }
+  assert.equal(geminiCalls, 6, "boosters and admins should be unlimited");
+});
+
+test("an image quota of 0 means unlimited", async () => {
+  setAiLimits(GUILD_ID, { daily: 0, boost: 0, cooldownSeconds: 0, imageDaily: 0 });
+  geminiCalls = 0;
+  for (let i = 0; i < 6; i++) {
+    await handleAiMessage(client, fakeMessage(`img-free-${i}`, { attachments: IMG }));
+  }
+  assert.equal(geminiCalls, 6, "no gating at all");
+});
+
+test("text and image quotas are counted independently", async () => {
+  setAiLimits(GUILD_ID, { daily: 1, boost: 1, cooldownSeconds: 0, imageDaily: 1 });
+  const msg = fakeMessage("img-mix", { attachments: IMG });
+  geminiCalls = 0;
+  await handleAiMessage(client, msg);
+  assert.equal(getImageUsage(GUILD_ID, "img-mix"), 1);
+  assert.equal(getUsage(GUILD_ID, "img-mix"), 0);
+  const text = fakeMessage("img-mix");
+  await handleAiMessage(client, text);
+  assert.equal(getUsage(GUILD_ID, "img-mix"), 1, "text should still be allowed after an image");
+  assert.equal(getImageUsage(GUILD_ID, "img-mix"), 1, "the image count should not move");
+});
+
+test("an oversized image is skipped and never inlined", async () => {
+  setAiLimits(GUILD_ID, { daily: 5, boost: 5, cooldownSeconds: 0, imageDaily: 5 });
+  const tooBig = { big: { size: MAX_IMAGE_BYTES + 1 } };
+  const msg = fakeMessage("img-big", { attachments: tooBig });
+  geminiCalls = 0;
+  lastGeminiBody = null;
+  await handleAiMessage(client, msg);
+  assert.equal(geminiCalls, 1, "the text still deserves an answer");
+  const parts = lastGeminiBody?.contents?.[0]?.parts ?? [];
+  assert.ok(!parts.some((p) => p.inlineData), "a too-large image must not be inlined");
+  assert.match(parts[0].text, /could not read 1/, "and the user should be told why");
+  assert.equal(getImageUsage(GUILD_ID, "img-big"), 0, "no image quota was consumed");
+  assert.equal(getUsage(GUILD_ID, "img-big"), 1, "it counted as a plain text request");
+});
+
+test("an oversized image alone does not trigger the bot", async () => {
+  setAiLimits(GUILD_ID, { daily: 5, boost: 5, cooldownSeconds: 0, imageDaily: 5 });
+  const tooBig = { big: { size: MAX_IMAGE_BYTES + 1 } };
+  geminiCalls = 0;
+  await handleAiMessage(client, fakeMessage("img-big2", { content: "", attachments: tooBig }));
+  assert.equal(geminiCalls, 0, "no caption and no usable image means nothing to answer");
+});
+
+test("at most MAX_IMAGES_PER_MESSAGE images are inlined", async () => {
+  const many = {};
+  for (let i = 0; i < MAX_IMAGES_PER_MESSAGE + 3; i++) many[`i${i}`] = {};
+  const res = await collectImageParts(fakeMessage("img-many", { attachments: many }));
+  assert.equal(res.parts.length, MAX_IMAGES_PER_MESSAGE, "the extra images should be dropped");
+  assert.equal(res.skipped, 3, "and reported as skipped");
+});
+
+test("non-image attachments are ignored entirely", async () => {
+  const doc = { doc: { contentType: "application/pdf" } };
+  const res = await collectImageParts(fakeMessage("img-doc", { attachments: doc }));
+  assert.equal(res.parts.length, 0);
+  assert.equal(res.seen, 0, "a pdf is not an image to be counted or skipped");
+});
+
+test("an unsupported image format is skipped and reported", async () => {
+  const svg = { s: { contentType: "image/svg+xml" } };
+  const res = await collectImageParts(fakeMessage("img-svg", { attachments: svg }));
+  assert.equal(res.parts.length, 0);
+  assert.equal(res.skipped, 1);
+});
+
+test("/ai usage reports the image allowance too", async () => {
+  setAiLimits(GUILD, { daily: 4, boost: 40, cooldownSeconds: 4, imageDaily: 7 });
+  const it = mockInteraction("usage");
+  await ai.execute({}, it);
+  assert.match(it.replied.content, /quota: \*\*4\*\*/, "text quota");
+  assert.match(it.replied.content, /AI images[\s\S]*quota: \*\*7\*\*/, "image quota");
+});
+
+test("/ai limits sets the image allowance", async () => {
+  setAiLimits(GUILD, { daily: 5, boost: 15, cooldownSeconds: 4, imageDaily: DEFAULT_LIMITS.imageDaily });
+  const it = mockInteraction("limits", { images: 12 });
+  await ai.execute({}, it);
+  assert.equal(getAiLimits(GUILD).imageDaily, 12);
+  assert.match(it.replied.content, /\*\*12\*\* images\/day/);
+});
+
+test("a booster sees unlimited images in the limits readout", async () => {
+  setAiLimits(GUILD, { daily: 5, boost: 15, cooldownSeconds: 4, imageDaily: 6 });
+  const it = mockInteraction("limits");
+  await ai.execute({}, it);
+  assert.match(it.replied.content, /boosters \+ admins unlimited/);
+});
+
+test("the /ai limits subcommand still fits Discord's payload limit", () => {
+  const json = JSON.stringify(ai.data.toJSON());
+  assert.ok(json.length <= 4000, `slash command JSON is ${json.length} bytes, Discord caps at 4000`);
+  const limitOpt = ai.data.toJSON().options.find((o) => o.name === "limits");
+  assert.ok(
+    limitOpt.options.some((o) => o.name === "images"),
+    "/ai limits should expose an images option"
+  );
+});
+
+const results = [];
+for (const [name, fn] of tests) {
+  try {
+    await fn();
+    results.push(["ok", name]);
+  } catch (err) {
+    results.push(["FAIL", `${name}\n       ${err.message}`]);
+  }
+}
 
 globalThis.fetch = realFetch;
 if (realKey === undefined) delete process.env.GEMINI_API_KEY;

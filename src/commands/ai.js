@@ -13,7 +13,9 @@ import {
   removeAiChannel,
   setAiModel,
   requestQuota,
+  requestImageQuota,
   getUsage,
+  getImageUsage,
   DEFAULT_MODEL,
   DEFAULT_LIMITS,
   LIMIT_BOUNDS,
@@ -39,7 +41,8 @@ function limitsToText(limits) {
   return [
     `**${limits.daily || "\u221E"}**/day per user`,
     `**${limits.boost || "\u221E"}**/day for boosters`,
-    `**${limits.cooldownSeconds}s** cooldown`
+    `**${limits.cooldownSeconds}s** cooldown`,
+    `**${limits.imageDaily || "\u221E"}** images/day (boosters + admins unlimited)`
   ].join(" \u00b7 ");
 }
 
@@ -126,6 +129,15 @@ export default {
             )
             .setMinValue(0)
             .setMaxValue(LIMIT_BOUNDS.cooldownSeconds.max)
+        )
+        .addIntegerOption((o) =>
+          o
+            .setName("images")
+            .setDescription(
+              `Images per user per day (0 = unlimited, boosters and admins unlimited, default: ${DEFAULT_LIMITS.imageDaily})`
+            )
+            .setMinValue(0)
+            .setMaxValue(LIMIT_BOUNDS.imageDaily.max)
         )
     )
     .addSubcommand((s) =>
@@ -260,13 +272,20 @@ export default {
       });
     }
 
-    if (sub === "usage") {
+if (sub === "usage") {
       const member = interaction.member;
       const used = getUsage(guild.id, interaction.user.id);
       const quota = requestQuota(member, cfg.limits);
       const left = Number.isFinite(quota) ? Math.max(0, quota - used) : "\u221E";
+
+      const imgUsed = getImageUsage(guild.id, interaction.user.id);
+      const imgQuota = requestImageQuota(member, cfg.limits);
+      const imgLeft = Number.isFinite(imgQuota) ? Math.max(0, imgQuota - imgUsed) : "\u221E";
+
       return interaction.reply({
-        content: `Daily AI requests — used: **${used}**, quota: **${quotaLabel(member, cfg.limits)}**, left: **${left}**.`,
+        content:
+          `Daily AI requests \u2014 used: **${used}**, quota: **${quotaLabel(member, cfg.limits)}**, left: **${left}**.\n` +
+          `Daily AI images \u2014 used: **${imgUsed}**, quota: **${Number.isFinite(imgQuota) ? imgQuota : "unlimited"}**, left: **${imgLeft}**.`,
         flags: MessageFlags.Ephemeral
       });
     }
@@ -275,7 +294,8 @@ export default {
       const daily = interaction.options.getInteger("daily");
       const boost = interaction.options.getInteger("boost");
       const cooldown = interaction.options.getInteger("cooldown");
-      const touched = daily !== null || boost !== null || cooldown !== null;
+      const images = interaction.options.getInteger("images");
+      const touched = daily !== null || boost !== null || cooldown !== null || images !== null;
 
       if (!touched) {
         return interaction.reply({
@@ -288,6 +308,7 @@ export default {
       if (daily !== null) patch.daily = daily;
       if (boost !== null) patch.boost = boost;
       if (cooldown !== null) patch.cooldownSeconds = cooldown;
+      if (images !== null) patch.imageDaily = images;
       const applied = setAiLimits(guild.id, patch);
       return interaction.reply({
         content: `AI limits updated \u2014 ${limitsToText(applied)}.`,

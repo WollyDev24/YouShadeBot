@@ -65,7 +65,7 @@ const GUILD = {
     enabled: false, logChannelId: null, windowSeconds: 10, threshold: 5,
     accountAgeHours: 24, action: "kick", lockdownChannels: [], caseCount: 0, cases: []
   },
-  aichat: { enabled: true, channels: ["c1", "c2"], model: "gemini-2.5-flash", limits: { daily: 5, boost: 15, cooldownSeconds: 4 } },
+  aichat: { enabled: true, channels: ["c1", "c2"], model: "gemini-3.8-flash", limits: { daily: 5, boost: 15, cooldownSeconds: 4, imageDaily: 10 } },
   reactionRoles: [],
   lockdowns: [],
   polls: [],
@@ -122,7 +122,7 @@ window.fetch = async (path, opts = {}) => {
         models: [
           { id: "gemini-flash-latest", name: "Gemini Flash Latest (always newest)" },
           { id: "gemini-3.6-flash", name: "Gemini 3.6 Flash (agentic workhorse)" },
-          { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash (low cost, high volume)" }
+          { id: "gemini-3.8-flash", name: "Gemini 3.8 Flash (low cost, high volume)" }
         ]
       })
     };
@@ -181,7 +181,7 @@ await test("AI settings loaded into custom controls", () => {
   assert.equal($("#ai-enabled").checked, true, "ai-enabled should be checked");
   const model = $("#ai-model");
   assert.equal(model.tagName.toLowerCase(), "mono-select");
-  assert.equal(model.value, "gemini-2.5-flash", `model was "${model.value}"`);
+  assert.equal(model.value, "gemini-3.8-flash", `model was "${model.value}"`);
   assert.equal(model.options.length, 3, "model options should be populated");
 });
 
@@ -206,24 +206,35 @@ await test("AI rate limits render into the panel fields", () => {
   const daily = $("#ai-limit-daily");
   const boost = $("#ai-limit-boost");
   const cd = $("#ai-limit-cooldown");
-  for (const el of [daily, boost, cd]) {
+  const images = $("#ai-limit-images");
+  for (const el of [daily, boost, cd, images]) {
     assert.equal(el.tagName.toLowerCase(), "mono-input", "limit fields must be custom inputs");
   }
   assert.equal(daily.value, "5");
   assert.equal(boost.value, "15");
   assert.equal(cd.value, "4");
+  assert.equal(images.value, "10");
 });
 
 await test("saving AI settings posts the edited limits", async () => {
   $("#ai-limit-daily").value = "25";
   $("#ai-limit-boost").value = "0";
   $("#ai-limit-cooldown").value = "10";
+  $("#ai-limit-images").value = "3";
   sentBodies.length = 0;
   $("#btn-ai-save").click();
   await tick(10);
   const call = sentBodies.find((b) => b.path.endsWith("/aichat/config"));
   assert.ok(call, "no /aichat/config POST was made");
-  assert.deepEqual(call.body.limits, { daily: 25, boost: 0, cooldownSeconds: 10 });
+  assert.deepEqual(call.body.limits, { daily: 25, boost: 0, cooldownSeconds: 10, imageDaily: 3 });
+});
+
+await test("a non-numeric image quota is rejected instead of posted", () => {
+  $("#ai-limit-images").value = "abc";
+  sentBodies.length = 0;
+  $("#btn-ai-save").click();
+  assert.equal(sentBodies.length, 0, "nothing should be posted for a non-numeric image quota");
+  $("#ai-limit-images").value = "10";
 });
 
 await test("a non-numeric quota is rejected instead of posted", () => {
