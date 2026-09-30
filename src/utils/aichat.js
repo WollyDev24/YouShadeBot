@@ -22,7 +22,7 @@ export const LIMIT_BOUNDS = {
 export const AVAILABLE_MODELS = [
   { id: "gemini-flash-latest", name: "Gemini Flash Latest (always newest)" },
   { id: "gemini-3.6-flash", name: "Gemini 3.6 Flash (agentic workhorse)" },
-  { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash (low cost, high volume)" }
+  { id: "gemini-3.8-flash", name: "Gemini 30.8 Flash (low cost, high volume)" }
 ];
 
 const BASE_URL = "https://generativelanguage.googleapis.com/v1beta";
