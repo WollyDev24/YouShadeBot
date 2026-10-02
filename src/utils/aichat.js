@@ -69,6 +69,9 @@ function canModifyMemory(message) {
   return isOwner(message.author.id);
 }
 
+/* The bot may only write its own memory on the owner's say-so. Anyone else
+ * can still be discussed in conversation, but their words never become a
+ * stored memory on their own. */
 function canReceiveExternalMemory(message) {
   return isOwner(message.author.id);
 }
@@ -80,13 +83,23 @@ const SYSTEM_PROMPT =
   "ONLY answer in english, NEVER any other language, even when asked to" +
   "Do not use Emojis" +
   "\n\n" +
-  "MEMORY SYSTEM: You have a persistent memory system. You can create, update, and recall memories on your own. " +
-  "Memories are key-value pairs stored per server. When users mention or reply to you, relevant memories are provided in context. " +
-  "You decide when to create or update memories based on conversation importance. " +
-  "You should create memories for: user preferences, important facts shared, recurring topics, server-specific info, and notable events. " +
-  "Only the bot owner can directly add/modify/delete memories via commands. Other users can only influence memories through conversation with you, and you decide what's worth remembering." +
-  "\n\n" +
-  "When responding, relevant memories will be prepended to your context. Use them naturally in conversation." +
+  "MEMORY SYSTEM: You have tools that actually write to a persistent, per-server key-value memory store. " +
+  "Available memories are listed in your context under RELEVANT MEMORIES; use them naturally in conversation. " +
+  "\n" +
+  "RULES FOR THE MEMORY TOOLS:\n" +
+  "1. To remember something, CALL save_memory. To change an existing one, CALL update_memory. " +
+  "To remove one, CALL delete_memory. Never claim you remembered, noted, or will remember something unless " +
+  "you actually make the tool call in that same turn. Saying \"noted\" in plain text stores nothing.\n" +
+  "2. Worth saving: durable user preferences, standing facts about people, server-specific info, and recurring " +
+  "topics. Not worth saving: one-off chatter, anything already in memory, or transient state.\n" +
+  "3. Keep keys short, lowercase and hyphenated, e.g. \"marcus-timezone\". Reuse the existing key when updating " +
+  "rather than inventing a near-duplicate.\n" +
+  "4. Save at most two or three memories per conversation, and only when genuinely useful. Err on the side of " +
+  "saving less. Do not save secrets, passwords, API keys or tokens.\n" +
+  "5. Memory writes are only permitted while talking to the server owner. If you are asked to remember something " +
+  "by anyone else, do not call the tools; you may acknowledge the request in conversation, but be honest that " +
+  "only the owner can store it.\n" +
+  "6. After a tool call is handled, reply normally to the user in plain text. Do not narrate the storage details." +
   "\n\n" +
   "IMAGES: Messages may include images. Read them before answering, and refer to what you actually see " +
   "rather than guessing from the caption. If an image is unclear, low quality, or you cannot make out " +
@@ -314,7 +327,127 @@ export function formatMemoriesForContext(guildId, maxChars = 1500) {
   return context;
 }
 
+/* Things that should never be written to a store that gets read back into
+ * every future prompt. Deliberately narrow: a false positive here silently
+ * drops a legitimate memory, so this targets high-confidence credential shapes
+ * rather than anything vaguely sensitive-looking. */
+const SECRET_PATTERNS = [
+  /\b(?:discord\.com\/api\/webhooks\/\d+\/[A-Za-z0-9_-]{60,})/i,
+  /\bMTk[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{6}\.[A-Za-z0-9_-]{25,}\b/,
+  /\bgh[pousr]_[A-Za-z0-9]{20,}\b/,
+  /\bsk-[A-Za-z0-9]{20,}\b/,
+  /\bAIza[A-Za-z0-9_-]{30,}\b/,
+  /\bxox[baprs]-[A-Za-z0-9-]{10,}\b/,
+  /\b(?:password|passwd|secret|api[_\- ]?key|access[_\- ]?token|private[_\- ]?key)\b\s*[:=]/i,
+  /-----BEGIN [A-Z ]*PRIVATE KEY-----/,
+  /\b[\w.+-]+@[\w-]+\.[\w.]{2,}\b/,
+  /\b(?:\d[ -]*?){13,19}\b/,
+  /\b[A-Za-z0-9+/]{60,}={0,2}\b/
+];
+
+export function looksLikeSecret(text) {
+  const s = String(text ?? "");
+  return SECRET_PATTERNS.some((re) => re.test(s));
+}
+
 export { isOwner, canModifyMemory, canReceiveExternalMemory, getOwnerId, getFallbackModels };
+
+/* The three things the model is allowed to do to its own memory. Declared for
+ * Gemini's function calling API, which is what gives the model an actual
+ * channel to write with; before this it could only mention memory in prose. */
+const MEMORY_TOOLS = [
+  {
+    name: "save_memory",
+    description:
+      "Store a new memory for this server. Use short, stable, lowercase-hyphenated keys. " +
+      "Only call this when the conversation contains something durably useful, and never for secrets.",
+    parameters: {
+      type: "object",
+      properties: {
+        key: { type: "string", description: "Short stable identifier, e.g. marcus-timezone" },
+        value: { type: "string", description: "The fact to remember, in one or two sentences" }
+      },
+      required: ["key", "value"]
+    }
+  },
+  {
+    name: "update_memory",
+    description: "Change the value of an existing memory. Fails if the key does not already exist.",
+    parameters: {
+      type: "object",
+      properties: {
+        key: { type: "string", description: "The existing key to overwrite" },
+        value: { type: "string", description: "The new value" }
+      },
+      required: ["key", "value"]
+    }
+  },
+  {
+    name: "delete_memory",
+    description: "Remove a memory entirely. Use when the owner asks you to forget something.",
+    parameters: {
+      type: "object",
+      properties: { key: { type: "string", description: "The key to delete" } },
+      required: ["key"]
+    }
+  }
+];
+
+/* Bound the tool loop so a model that keeps calling cannot spin forever. */
+const MAX_TOOL_ROUNDS = 3;
+
+/* Executes one requested memory mutation. Returns a short string for the model
+ * to read back, and reports whether anything was actually written. */
+function runMemoryTool(name, args, { guildId, authorId }) {
+  const key = typeof args?.key === "string" ? args.key.trim().slice(0, 64) : "";
+  const value = typeof args?.value === "string" ? args.value.trim() : "";
+
+  if (!key || !/^[a-z0-9][a-z0-9._-]*$/i.test(key)) {
+    return { result: "Rejected: key must be 1-64 characters of letters, digits, dot, dash or underscore.", saved: false };
+  }
+
+  if (!canReceiveExternalMemory({ author: { id: authorId } })) {
+    return {
+      result: "Rejected: only the server owner can have memories written. Tell the user this plainly.",
+      saved: false
+    };
+  }
+
+  if (name === "delete_memory") {
+    const ok = deleteMemory(guildId, key);
+    return {
+      result: ok ? `Deleted "${key}".` : `No memory named "${key}" exists.`,
+      saved: false
+    };
+  }
+
+  if (!value) {
+    return { result: `Rejected: "${key}" needs a value.`, saved: false };
+  }
+  if (looksLikeSecret(key) || looksLikeSecret(value)) {
+    console.warn(`[aichat] Blocked a memory write to "${key}" that looked like a credential`);
+    return {
+      result: `Rejected: "${key}" looks like it contains a secret, so it was not stored.`,
+      saved: false
+    };
+  }
+
+  if (name === "save_memory") {
+    if (getMemory(guildId, key)) {
+      /* Re-saving an existing key would clobber it and lose the original
+       * createdAt, so steer the model to update_memory instead. */
+      return { result: `"${key}" already exists. Use update_memory to change it.`, saved: false };
+    }
+    setMemory(guildId, key, value.slice(0, 2000), authorId);
+    return { result: `Saved "${key}".`, saved: true };
+  }
+
+  const updated = updateMemory(guildId, key, value.slice(0, 2000), authorId);
+  if (!updated) {
+    return { result: `No memory named "${key}" exists. Use save_memory to create it.`, saved: false };
+  }
+  return { result: `Updated "${key}".`, saved: true };
+}
 
 function stripMentions(content) {
   return String(content ?? "")
@@ -372,10 +505,21 @@ export async function collectImageParts(message) {
   return { parts, skipped, seen };
 }
 
-async function askGemini(model, prompt, apiKey, imageParts = []) {
+/* One HTTP round trip to the model. Returns the raw parts so the caller can
+ * distinguish prose from tool calls, which a flattened text join would lose. */
+async function generateOnce(model, systemInstruction, contents, apiKey, tools) {
   const models = getFallbackModels(model);
   let lastError = null;
-  const parts = imageParts.length ? [{ text: prompt }, ...imageParts] : [{ text: prompt }];
+
+  const payload = {
+    systemInstruction: { parts: [{ text: systemInstruction }] },
+    contents,
+    generationConfig: { maxOutputTokens: 1024, temperature: 0.8 }
+  };
+  if (tools) {
+    payload.tools = [{ functionDeclarations: tools }];
+    payload.toolConfig = { functionCallingConfig: { mode: "AUTO" } };
+  }
 
   for (const m of models) {
     const url = `${BASE_URL}/models/${encodeURIComponent(m)}:generateContent?key=${encodeURIComponent(apiKey)}`;
@@ -383,16 +527,18 @@ async function askGemini(model, prompt, apiKey, imageParts = []) {
       const res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
-          contents: [{ role: "user", parts }],
-          generationConfig: { maxOutputTokens: 1024, temperature: 0.8 }
-        })
+        body: JSON.stringify(payload)
       });
 
       if (!res.ok) {
         const body = await res.text().catch(() => "");
         lastError = new Error(`Gemini API ${res.status}: ${body.slice(0, 200)}`);
+        /* 400 here usually means this model rejected the tool schema. Retry
+         * without tools so the conversation still works on a fallback. */
+        if (res.status === 400 && tools) {
+          console.warn(`[aichat] Model ${m} rejected the memory tools, continuing without them`);
+          return { parts: [], text: "", toolCalls: [], toolUnsupported: true };
+        }
         if (res.status === 429 || res.status >= 500) {
           console.warn(`[aichat] Model ${m} failed (${res.status}), trying fallback...`);
           continue;
@@ -401,15 +547,11 @@ async function askGemini(model, prompt, apiKey, imageParts = []) {
       }
 
       const data = await res.json();
-      const text = data?.candidates?.[0]?.content?.parts
-        ?.map((part) => part.text ?? "")
-        .join("")
-        .trim() ?? "";
-
+      const rawParts = data?.candidates?.[0]?.content?.parts ?? [];
       if (m !== model) {
         console.log(`[aichat] Used fallback model: ${m} (primary: ${model})`);
       }
-      return text;
+      return { parts: rawParts, toolUnsupported: false };
     } catch (err) {
       lastError = err;
       if (err.message.includes("429") || err.message.includes("500") || err.message.includes("503") || err.message.includes("504")) {
@@ -421,6 +563,60 @@ async function askGemini(model, prompt, apiKey, imageParts = []) {
   }
 
   throw lastError ?? new Error("All models failed");
+}
+
+/* Ask the model, run whatever memory tools it asks for, and ask again so it
+ * can reply in plain text with the results in hand. Returns the final text
+ * plus how many memories actually changed. */
+async function askGeminiWithTools(model, prompt, apiKey, imageParts, toolCtx) {
+  const parts = imageParts.length ? [{ text: prompt }, ...imageParts] : [{ text: prompt }];
+  let contents = [{ role: "user", parts }];
+  let tools = MEMORY_TOOLS;
+  let saved = 0;
+
+  for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
+    const res = await generateOnce(model, SYSTEM_PROMPT, contents, apiKey, tools);
+    if (res.toolUnsupported) {
+      tools = null;
+      continue;
+    }
+
+    const toolCalls = res.parts.filter((p) => p.functionCall?.name);
+    const text = res.parts
+      .map((part) => part.text ?? "")
+      .join("")
+      .trim();
+
+    if (!toolCalls.length || !tools) {
+      return { text, saved };
+    }
+    if (round === MAX_TOOL_ROUNDS) {
+      console.warn(`[aichat] hit the tool call ceiling, replying without more memory writes`);
+      return { text, saved };
+    }
+
+    const functionResponses = [];
+    for (const call of toolCalls) {
+      const known = MEMORY_TOOLS.some((t) => t.name === call.functionCall.name);
+      const out = known
+        ? runMemoryTool(call.functionCall.name, call.functionCall.args ?? {}, toolCtx)
+        : { result: `Unknown tool "${call.functionCall.name}".`, saved: false };
+      if (out.saved) saved++;
+      console.log(`[aichat] memory tool ${call.functionCall.name}(${JSON.stringify(call.functionCall.args ?? {})}) -> ${out.result}`);
+      functionResponses.push({
+        functionResponse: { name: call.functionCall.name, response: { result: out.result } }
+      });
+    }
+
+    /* Replay the turn as: model asked -> we answered -> model replies. */
+    contents = [
+      ...contents,
+      { role: "model", parts: res.parts },
+      { role: "user", parts: functionResponses }
+    ];
+  }
+
+  return { text: "", saved };
 }
 
 export async function handleAiMessage(client, message) {
@@ -494,7 +690,11 @@ export async function handleAiMessage(client, message) {
     const name = member?.displayName ?? message.author.username;
     const memoryContext = formatMemoriesForContext(guild.id);
     const prefix = memoryContext ? `${memoryContext}\n\n${name}: ` : `${name}: `;
-    const text = await askGemini(c.model, `${prefix}${prompt}`, apiKey, images.parts);
+    const { text, saved } = await askGeminiWithTools(c.model, `${prefix}${prompt}`, apiKey, images.parts, {
+      guildId: guild.id,
+      authorId: message.author.id
+    });
+    if (saved > 0) console.log(`[aichat] stored ${saved} memory/memories for guild ${guild.id}`);
     if (isImageRequest) consumeImageUsage(guild.id, message.author.id);
     else consumeUsage(guild.id, message.author.id);
 

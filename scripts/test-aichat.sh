@@ -31,7 +31,10 @@ restore() {
 }
 trap restore EXIT
 
-node scripts/test-aichat.mjs
+# aichat.js captures OWNER_ID at import time and ES imports are hoisted, so the
+# value has to be in the environment rather than assigned inside the test file.
+OWNER_ID="${OWNER_ID:-test-owner-user}" \
+  node scripts/test-aichat.mjs
 status=$?
 
 # The store flushes 100ms after the last write; wait for it to close cleanly so
