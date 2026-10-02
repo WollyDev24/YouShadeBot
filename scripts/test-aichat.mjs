@@ -58,6 +58,7 @@ import {
   getUsage,
   consumeUsage
 } from "../src/utils/aichat.js";
+import { reportAiConfig } from "../src/events/clientReady.js";
 import { PermissionsBitField } from "../src/lib/discord.js";
 
 const ADMIN = PermissionsBitField.Flags.Administrator;
@@ -1078,6 +1079,83 @@ test("a failed reply is not recorded as conversation memory", async () => {
   };
   await handleAiMessage(client, convMessage("liam", { content: "anything", channelId: "chan-5", history: [] }));
   assert.equal(getConversationSummary(CONV, "chan-5"), null, "an errored turn should not be summarised");
+});
+
+/* --- startup AI config check ---
+ *
+ * A missing key or owner id used to make the AI features fail silently, which
+ * looks identical to the bot ignoring you. This runs on every startup, so it
+ * also has to not throw.
+ */
+const AI_CONFIG_GUILD = "test-aichat-cfg";
+
+function captureWarnings(fn) {
+  const lines = [];
+  const orig = console.warn;
+  console.warn = (...a) => lines.push(a.join(" "));
+  try {
+    fn();
+  } finally {
+    console.warn = orig;
+  }
+  return lines.join("\n");
+}
+
+test("startup says nothing when the AI is not enabled anywhere", () => {
+  setAiEnabled(AI_CONFIG_GUILD, false);
+  const out = captureWarnings(() => reportAiConfig([AI_CONFIG_GUILD]));
+  assert.ok(!/GEMINI_API_KEY|OWNER_ID/.test(out), `unexpected warning: ${out}`);
+});
+
+test("startup warns when the AI is enabled but no API key is set", () => {
+  setAiEnabled(AI_CONFIG_GUILD, true);
+  const key = process.env.GEMINI_API_KEY;
+  delete process.env.GEMINI_API_KEY;
+  try {
+    const out = captureWarnings(() => reportAiConfig([AI_CONFIG_GUILD]));
+    assert.match(out, /GEMINI_API_KEY is not set/, "a missing key must be reported");
+  } finally {
+    process.env.GEMINI_API_KEY = key;
+  }
+});
+
+test("startup warns when OWNER_ID is missing, since writes would all be refused", () => {
+  setAiEnabled(AI_CONFIG_GUILD, true);
+  const owner = process.env.OWNER_ID;
+  process.env.OWNER_ID = "";
+  try {
+    const out = captureWarnings(() => reportAiConfig([AI_CONFIG_GUILD]));
+    assert.match(out, /OWNER_ID is not set/, "the inert memory writes should be reported");
+  } finally {
+    process.env.OWNER_ID = owner;
+  }
+});
+
+test("startup warns when OWNER_ID is not a Discord id", () => {
+  setAiEnabled(AI_CONFIG_GUILD, true);
+  const owner = process.env.OWNER_ID;
+  process.env.OWNER_ID = "not-a-number";
+  try {
+    const out = captureWarnings(() => reportAiConfig([AI_CONFIG_GUILD]));
+    assert.match(out, /does not look like a Discord user ID/);
+  } finally {
+    process.env.OWNER_ID = owner;
+  }
+});
+
+test("startup stays quiet when the AI is fully configured", () => {
+  setAiEnabled(AI_CONFIG_GUILD, true);
+  const key = process.env.GEMINI_API_KEY;
+  const owner = process.env.OWNER_ID;
+  process.env.GEMINI_API_KEY = "key-for-test";
+  process.env.OWNER_ID = "123456789012345678";
+  try {
+    const out = captureWarnings(() => reportAiConfig([AI_CONFIG_GUILD]));
+    assert.ok(out.trim() === "", `expected no warnings, got: ${out}`);
+  } finally {
+    process.env.GEMINI_API_KEY = key;
+    process.env.OWNER_ID = owner;
+  }
 });
 
 const results = [];

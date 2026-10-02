@@ -4,7 +4,9 @@ import { fileURLToPath } from "node:url";
 import Database from "better-sqlite3";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const DATA_DIR = path.join(__dirname, "..", "data");
+const DATA_DIR = process.env.MONOLITH_DATA_DIR
+  ? path.resolve(process.env.MONOLITH_DATA_DIR)
+  : path.join(__dirname, "..", "data");
 const DB_FILE = path.join(DATA_DIR, "store.db");
 const OLD_FILE = path.join(DATA_DIR, "store.json");
 
@@ -103,11 +105,23 @@ function flushNow() {
   const keys = [...dirty].filter((k) => typeof k === "string" && k.length > 0);
   dirty.clear();
   const upsert = db.prepare("INSERT OR REPLACE INTO kv (key, value) VALUES (?, ?)");
+  const del = db.prepare("DELETE FROM kv WHERE key = ?");
   const batch = db.transaction(() => {
     for (const key of keys) {
-      const raw = JSON.stringify(store[key]);
-      if (typeof raw !== "string") continue;
-      upsert.run(key, raw);
+      /* A key removed from the in-memory store must not leave its old row
+       * behind. JSON.stringify(undefined) is undefined, and skipping the
+       * write silently left SQLite serving the stale value on next boot, so a
+       * delete looked like it had worked right up until a restart. Known
+       * stores fall back to their default shape; anything else loses its row
+       * outright. */
+      const value = store[key] === undefined
+        ? (key in DEFAULTS ? structuredClone(DEFAULTS[key]) : undefined)
+        : store[key];
+      if (value === undefined) {
+        del.run(key);
+        continue;
+      }
+      upsert.run(key, JSON.stringify(value));
     }
   });
   batch();
@@ -125,6 +139,12 @@ export function saveKey(key) {
   getData();
   if (typeof key !== "string" || !key) {
     console.error("[db] saveKey called with invalid key:", key, "\n", new Error().stack);
+    return;
+  }
+  /* Every store is declared in DEFAULTS. A typo'd key would otherwise be
+   * written to SQLite and then ignored by every reader. */
+  if (!(key in DEFAULTS)) {
+    console.error(`[db] saveKey called with undeclared key "${key}"`, "\n", new Error().stack);
     return;
   }
   dirty.add(key);

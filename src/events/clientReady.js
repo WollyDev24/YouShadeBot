@@ -7,6 +7,25 @@ import { startAutoUpdate, notifyLogChannels } from "../utils/updater.js";
 import { startPanel } from "../panel/server.js";
 import { restoreAllTimers } from "../utils/sticky.js";
 
+/* The AI features fail silently when their configuration is missing: no API
+ * key means every message is ignored, and no OWNER_ID means every memory write
+ * is refused while the command handlers keep working. Both look like "the bot
+ * just ignores me", so say so once at startup instead. */
+export function reportAiConfig(guildIds) {
+  const enabled = guildIds.some((id) => getData().aichat?.[id]?.enabled);
+  if (!enabled) return;
+
+  if (!process.env.GEMINI_API_KEY) {
+    console.warn("[ready] AI chat is enabled for at least one server but GEMINI_API_KEY is not set; AI replies are disabled.");
+    return;
+  }
+  if (!process.env.OWNER_ID) {
+    console.warn("[ready] OWNER_ID is not set; the AI can read memories but every memory write it attempts will be refused.");
+  } else if (!/^\d+$/.test(process.env.OWNER_ID.trim())) {
+    console.warn(`[ready] OWNER_ID does not look like a Discord user ID; the AI will refuse all memory writes.`);
+  }
+}
+
 export default {
   name: "clientReady",
   once: true,
@@ -16,6 +35,12 @@ export default {
 
     const commandCount = client.commands?.size ?? 0;
     notifyLogChannels(client, `\u{1F7E2} **Bot started** — registered **${commandCount}** commands.`).catch(() => {});
+
+    try {
+      reportAiConfig([...client.guilds.cache.keys()]);
+    } catch (err) {
+      console.error("[ready] AI config check failed:", err.message);
+    }
 
     startPanel(client);
     restoreAllTimers(client);

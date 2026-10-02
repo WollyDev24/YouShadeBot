@@ -1,43 +1,25 @@
 #!/usr/bin/env bash
-# Runs the AI limit tests without letting them touch the live SQLite store.
-# src/utils/db.js opens src/data/store.db on import, so snapshot it first and
-# put it back afterwards whether the tests pass or fail.
+# Runs the AI limit tests against a throwaway store.
+#
+# src/utils/db.js resolves its data directory from MONOLITH_DATA_DIR, so the
+# tests get their own database instead of racing a snapshot/restore of the live
+# one. Anything the run writes stays in the temp directory and is deleted on the
+# way out, which also covers the WAL and shared-memory files for free.
 set -uo pipefail
 cd "$(dirname "$0")/.."
 
-DATA_DIR="src/data"
-BACKUP="$(mktemp -d)"
-FILES=("store.db" "store.db-wal" "store.db-shm")
-
-had_data=0
-if [ -d "$DATA_DIR" ]; then
-  had_data=1
-  for f in "${FILES[@]}"; do
-    [ -f "$DATA_DIR/$f" ] && cp -p "$DATA_DIR/$f" "$BACKUP/$f"
-  done
-fi
-
-restore() {
-  if [ "$had_data" = "1" ]; then
-    for f in "${FILES[@]}"; do
-      if [ -f "$BACKUP/$f" ]; then
-        cp -p "$BACKUP/$f" "$DATA_DIR/$f"
-      else
-        rm -f "$DATA_DIR/$f"
-      fi
-    done
-  fi
-  rm -rf "$BACKUP"
+TMP_DIR="$(mktemp -d)"
+cleanup() {
+  # The store flushes 100ms after the last write; give any pending checkpoint
+  # time to land before the directory disappears underneath it.
+  sleep 0.2
+  rm -rf "$TMP_DIR"
 }
-trap restore EXIT
+trap cleanup EXIT
 
 # aichat.js captures OWNER_ID at import time and ES imports are hoisted, so the
 # value has to be in the environment rather than assigned inside the test file.
+MONOLITH_DATA_DIR="$TMP_DIR" \
 OWNER_ID="${OWNER_ID:-test-owner-user}" \
   node scripts/test-aichat.mjs
-status=$?
-
-# The store flushes 100ms after the last write; wait for it to close cleanly so
-# the restore below cannot race a pending WAL checkpoint.
-sleep 0.3
-exit $status
+exit $?
