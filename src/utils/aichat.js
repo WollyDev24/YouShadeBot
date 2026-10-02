@@ -652,11 +652,85 @@ export async function collectImageParts(message) {
   return { parts, skipped, seen };
 }
 
+/* --- multiple API keys ---
+ *
+ * Keys are discovered from the environment on every request rather than read
+ * once at import, so adding GEMINI_API_KEY4 needs nothing but a new line in
+ * .env and a restart. Any number is picked up; nothing here is hardcoded to a
+ * count. GEMINI_API_KEY is still accepted so single-key setups keep working,
+ * and is tried last.
+ */
+/* With 3 models and N keys the cross product is 3N requests. Cap it so a pile
+ * of dead keys cannot turn one reply into a burst. */
+const MAX_API_ATTEMPTS = 8;
+const KEY_COOLDOWN_MS = 60_000;
+/* A key that answered 401/403 is not going to start working on its own, so it
+ * is sidelined for much longer than one that merely hit a rate limit. */
+const KEY_INVALID_MS = 10 * 60_000;
+const keyCoolingUntil = new Map();
+let keyCursor = 0;
+
+const KEY_NAME = /^GEMINI_API_KEY(\d+)$/;
+
+export function discoverApiKeys(env = process.env) {
+  const numbered = [];
+  for (const name of Object.keys(env)) {
+    const match = KEY_NAME.exec(name);
+    if (match) numbered.push([Number(match[1]), env[name]]);
+  }
+  numbered.sort((a, b) => a[0] - b[0]);
+
+  const keys = [];
+  const seen = new Set();
+  for (const value of [...numbered.map(([, v]) => v), env.GEMINI_API_KEY]) {
+    const key = String(value ?? "").trim();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    keys.push(key);
+  }
+  return keys;
+}
+
+function isCooling(key) {
+  return (keyCoolingUntil.get(key) ?? 0) > Date.now();
+}
+
+/* Starts each request at a different key so a set of keys shares the load,
+ * and skips any that recently failed. If every key is cooling, the cooling
+ * ones are used anyway: staying silent is worse than retrying a rate limit. */
+function orderedKeys(keys) {
+  if (keys.length <= 1) return keys;
+  const offset = keyCursor % keys.length;
+  keyCursor = (keyCursor + 1) % keys.length;
+  const rotated = [...keys.slice(offset), ...keys.slice(0, offset)];
+  const ready = rotated.filter((k) => !isCooling(k));
+  return ready.length ? ready : rotated;
+}
+
+function coolKey(key, ms) {
+  keyCoolingUntil.set(key, Date.now() + ms);
+  if (keyCoolingUntil.size > 64) {
+    for (const [k, until] of keyCoolingUntil) {
+      if (until <= Date.now()) keyCoolingUntil.delete(k);
+    }
+  }
+}
+
+/* Only ever called from tests, which need a clean slate between cases. */
+export function resetApiKeyState() {
+  keyCoolingUntil.clear();
+  keyCursor = 0;
+}
+
 /* One HTTP round trip to the model. Returns the raw parts so the caller can
  * distinguish prose from tool calls, which a flattened text join would lose. */
-async function generateOnce(model, systemInstruction, contents, apiKey, tools) {
+async function generateOnce(model, systemInstruction, contents, apiKeys, tools) {
   const models = getFallbackModels(model);
+  const keys = Array.isArray(apiKeys) ? apiKeys : [apiKeys];
   let lastError = null;
+  /* Guards the models x keys cross product, so several dead keys cannot turn
+   * one reply into a burst of requests. */
+  let attempts = 0;
 
   const payload = {
     systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -669,43 +743,58 @@ async function generateOnce(model, systemInstruction, contents, apiKey, tools) {
   }
 
   for (const m of models) {
-    const url = `${BASE_URL}/models/${encodeURIComponent(m)}:generateContent?key=${encodeURIComponent(apiKey)}`;
-    try {
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
+    for (const apiKey of orderedKeys(keys)) {
+      if (attempts >= MAX_API_ATTEMPTS) break;
+      attempts++;
+      const url = `${BASE_URL}/models/${encodeURIComponent(m)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+      try {
+        const res = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
 
-      if (!res.ok) {
-        const body = await res.text().catch(() => "");
-        lastError = new Error(`Gemini API ${res.status}: ${body.slice(0, 200)}`);
-        /* 400 here usually means this model rejected the tool schema. Retry
-         * without tools so the conversation still works on a fallback. */
-        if (res.status === 400 && tools) {
-          console.warn(`[aichat] Model ${m} rejected the memory tools, continuing without them`);
-          return { parts: [], text: "", toolCalls: [], toolUnsupported: true };
+        if (!res.ok) {
+          const body = await res.text().catch(() => "");
+          lastError = new Error(`Gemini API ${res.status}: ${body.slice(0, 200)}`);
+          /* 400 here usually means this model rejected the tool schema. Retry
+           * without tools so the conversation still works on a fallback. */
+          if (res.status === 400 && tools) {
+            console.warn(`[aichat] Model ${m} rejected the memory tools, continuing without them`);
+            return { parts: [], text: "", toolCalls: [], toolUnsupported: true };
+          }
+          if (res.status === 429 || res.status >= 500) {
+            /* Honour Retry-After when present, otherwise back off on our own
+             * schedule. Both cases are the key's problem, not the model's. */
+            const retryAfter = Number(res.headers?.get?.("retry-after"));
+            coolKey(apiKey, Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : KEY_COOLDOWN_MS);
+            console.warn(`[aichat] ${m} failed (${res.status}) on one key, trying another...`);
+            continue;
+          }
+          if (res.status === 401 || res.status === 403) {
+            /* With several keys configured, one bad or revoked key must not
+             * take the whole feature down. */
+            coolKey(apiKey, KEY_INVALID_MS);
+            console.warn(`[aichat] ${m} rejected a key (${res.status}), trying another...`);
+            continue;
+          }
+          throw lastError;
         }
-        if (res.status === 429 || res.status >= 500) {
-          console.warn(`[aichat] Model ${m} failed (${res.status}), trying fallback...`);
+
+        const data = await res.json();
+        const rawParts = data?.candidates?.[0]?.content?.parts ?? [];
+        if (m !== model) {
+          console.log(`[aichat] Used fallback model: ${m} (primary: ${model})`);
+        }
+        return { parts: rawParts, toolUnsupported: false };
+      } catch (err) {
+        lastError = err;
+        if (err.message.includes("429") || err.message.includes("500") || err.message.includes("503") || err.message.includes("504")) {
+          console.warn(`[aichat] ${m} failed, trying another key...`);
           continue;
         }
-        throw lastError;
+        throw err;
       }
-
-      const data = await res.json();
-      const rawParts = data?.candidates?.[0]?.content?.parts ?? [];
-      if (m !== model) {
-        console.log(`[aichat] Used fallback model: ${m} (primary: ${model})`);
-      }
-      return { parts: rawParts, toolUnsupported: false };
-    } catch (err) {
-      lastError = err;
-      if (err.message.includes("429") || err.message.includes("500") || err.message.includes("503") || err.message.includes("504")) {
-        console.warn(`[aichat] Model ${m} failed, trying fallback...`);
-        continue;
-      }
-      throw err;
     }
   }
 
@@ -715,7 +804,7 @@ async function generateOnce(model, systemInstruction, contents, apiKey, tools) {
 /* Ask the model, run whatever memory tools it asks for, and ask again so it
  * can reply in plain text with the results in hand. Returns the final text
  * plus how many memories actually changed. */
-async function askGeminiWithTools(model, prompt, apiKey, imageParts, toolCtx, history = []) {
+async function askGeminiWithTools(model, prompt, apiKeys, imageParts, toolCtx, history = []) {
   const parts = imageParts.length ? [{ text: prompt }, ...imageParts] : [{ text: prompt }];
   /* History first, then the live turn. The API requires alternating-ish
    * roles and rejects a leading model turn, so a stray model message from
@@ -725,7 +814,7 @@ async function askGeminiWithTools(model, prompt, apiKey, imageParts, toolCtx, hi
   let saved = 0;
 
   for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
-    const res = await generateOnce(model, SYSTEM_PROMPT, contents, apiKey, tools);
+    const res = await generateOnce(model, SYSTEM_PROMPT, contents, apiKeys, tools);
     if (res.toolUnsupported) {
       tools = null;
       continue;
@@ -770,9 +859,9 @@ async function askGeminiWithTools(model, prompt, apiKey, imageParts, toolCtx, hi
 }
 
 export async function handleAiMessage(client, message) {
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKeys = discoverApiKeys();
   const guild = message.guild;
-  if (!guild || !apiKey) return;
+  if (!guild || !apiKeys.length) return;
 
   const c = cfg(guild.id);
   if (!c.enabled || !c.channels.length) return;
@@ -863,7 +952,7 @@ export async function handleAiMessage(client, message) {
     const { text, saved } = await askGeminiWithTools(
       c.model,
       finalPrompt,
-      apiKey,
+      apiKeys,
       images.parts,
       { guildId: guild.id, authorId: message.author.id },
       history

@@ -194,11 +194,24 @@ src/
    global registration (takes up to an hour).
 
    The AI features fail silently when these are missing: without
-   `GEMINI_API_KEY` the bot ignores AI messages entirely, and without a
+   `GEMINI_API_KEY` the bot ignores AI messages entirely, and without an
    `OWNER_ID` it can read memories but every write is refused. The bot prints a
    warning on startup if the AI is enabled somewhere and either is unset, so
    check the console after deploying. See `.env.example` for the full list,
    including the optional Discord OAuth and panel settings.
+
+   To spread requests across several keys, or to survive one being rate
+   limited, add them with a numeric suffix:
+
+   ```
+   GEMINI_API_KEY1=first-key
+   GEMINI_API_KEY2=second-key
+   GEMINI_API_KEY3=third-key
+   ```
+
+   There is no fixed limit. Requests rotate between the keys, and a key that is
+   rate limited or rejected is sidelined while the others keep serving. The
+   plain `GEMINI_API_KEY` still works on its own and is tried last.
 
 4. **Run**
 

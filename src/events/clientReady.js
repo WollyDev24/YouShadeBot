@@ -6,6 +6,7 @@ import { runDue as runDueReminders } from "../utils/reminders.js";
 import { startAutoUpdate, notifyLogChannels } from "../utils/updater.js";
 import { startPanel } from "../panel/server.js";
 import { restoreAllTimers } from "../utils/sticky.js";
+import { discoverApiKeys } from "../utils/aichat.js";
 
 /* The AI features fail silently when their configuration is missing: no API
  * key means every message is ignored, and no OWNER_ID means every memory write
@@ -15,10 +16,12 @@ export function reportAiConfig(guildIds) {
   const enabled = guildIds.some((id) => getData().aichat?.[id]?.enabled);
   if (!enabled) return;
 
-  if (!process.env.GEMINI_API_KEY) {
-    console.warn("[ready] AI chat is enabled for at least one server but GEMINI_API_KEY is not set; AI replies are disabled.");
+  const keys = discoverApiKeys();
+  if (!keys.length) {
+    console.warn("[ready] AI chat is enabled for at least one server but no Gemini API key is set; AI replies are disabled.");
     return;
   }
+  if (keys.length > 1) console.log(`[ready] Gemini: ${keys.length} API keys configured, requests will rotate between them`);
   if (!process.env.OWNER_ID) {
     console.warn("[ready] OWNER_ID is not set; the AI can read memories but every memory write it attempts will be refused.");
   } else if (!/^\d+$/.test(process.env.OWNER_ID.trim())) {

@@ -56,7 +56,9 @@ import {
   AVAILABLE_MODELS,
   DEFAULT_MODEL,
   getUsage,
-  consumeUsage
+  consumeUsage,
+  discoverApiKeys,
+  resetApiKeyState
 } from "../src/utils/aichat.js";
 import { reportAiConfig } from "../src/events/clientReady.js";
 import { PermissionsBitField } from "../src/lib/discord.js";
@@ -325,6 +327,15 @@ const realFetch = globalThis.fetch;
 const realKey = process.env.GEMINI_API_KEY;
 let geminiCalls = 0;
 
+/* Wipe any real GEMINI_API_KEY<n> the developer happens to have exported, so
+ * a test run cannot pick up live credentials and rotate through them. */
+const realNumberedKeys = {};
+for (const name of Object.keys(process.env)) {
+  if (/^GEMINI_API_KEY\d+$/.test(name)) {
+    realNumberedKeys[name] = process.env[name];
+    delete process.env[name];
+  }
+}
 process.env.GEMINI_API_KEY = "test-key";
 /* Captures the request body so tests can assert on the inlineData parts the
  * vision path is supposed to be sending, and queues model responses so the
@@ -1115,7 +1126,7 @@ test("startup warns when the AI is enabled but no API key is set", () => {
   delete process.env.GEMINI_API_KEY;
   try {
     const out = captureWarnings(() => reportAiConfig([AI_CONFIG_GUILD]));
-    assert.match(out, /GEMINI_API_KEY is not set/, "a missing key must be reported");
+    assert.match(out, /no Gemini API key is set/, "a missing key must be reported");
   } finally {
     process.env.GEMINI_API_KEY = key;
   }
@@ -1185,6 +1196,195 @@ test("a channel whose manager is missing does not break the reply", async () => 
   assert.deepEqual(await buildHistoryContents(m, "bot"), [], "should degrade to no history");
 });
 
+/* --- multiple Gemini API keys --- */
+
+const KEYS = "test-aichat-keys";
+
+/* Runs `fn` with exactly the given keys in the environment and nothing else.
+ * Without this the suite's own GEMINI_API_KEY stays in play and happily
+ * answers, which would let every rotation and failover test pass without the
+ * rotation actually working. */
+async function withKeys(env, fn) {
+  const saved = {};
+  for (const name of Object.keys(process.env)) {
+    if (/^GEMINI_API_KEY\d*$/.test(name)) {
+      saved[name] = process.env[name];
+      delete process.env[name];
+    }
+  }
+  Object.assign(process.env, env);
+  resetApiKeyState();
+  try {
+    return await fn();
+  } finally {
+    for (const name of Object.keys(process.env)) {
+      if (/^GEMINI_API_KEY\d*$/.test(name)) delete process.env[name];
+    }
+    Object.assign(process.env, saved);
+    resetApiKeyState();
+  }
+}
+
+test("keys are discovered from GEMINI_API_KEY<n>, in numeric order", () => {
+  const env = {
+    GEMINI_API_KEY: "bare",
+    GEMINI_API_KEY10: "ten",
+    GEMINI_API_KEY2: "two",
+    GEMINI_API_KEY1: "one"
+  };
+  assert.deepEqual(discoverApiKeys(env), ["one", "two", "ten", "bare"],
+    "numbered keys sort numerically and the bare key is the last resort");
+});
+
+test("a single bare GEMINI_API_KEY still works", () => {
+  assert.deepEqual(discoverApiKeys({ GEMINI_API_KEY: "solo" }), ["solo"]);
+});
+
+test("blank, whitespace and duplicate keys are dropped", () => {
+  const env = {
+    GEMINI_API_KEY1: "same",
+    GEMINI_API_KEY2: "same",
+    GEMINI_API_KEY3: "   ",
+    GEMINI_API_KEY4: "",
+    GEMINI_API_KEY: "same"
+  };
+  assert.deepEqual(discoverApiKeys(env), ["same"], "only the distinct non-empty key survives");
+});
+
+test("unrelated env vars are not mistaken for keys", () => {
+  const env = { GEMINI_API_KEY_EXTRA: "no", GEMINI_KEY: "no", MY_GEMINI_API_KEY1: "no", GEMINI_API_KEY: "yes" };
+  assert.deepEqual(discoverApiKeys(env), ["yes"]);
+});
+
+test("no keys at all yields an empty list", () => {
+  assert.deepEqual(discoverApiKeys({}), []);
+});
+
+test("requests rotate across the configured keys", async () => withKeys(
+  { GEMINI_API_KEY1: "k1", GEMINI_API_KEY2: "k2", GEMINI_API_KEY3: "k3" },
+  async () => {
+  setAiEnabled(KEYS, true);
+  setAiChannel(KEYS, "chan-1");
+  setAiLimits(KEYS, { daily: 0, boost: 0, cooldownSeconds: 0, imageDaily: 0 });
+
+  const seen = [];
+  globalThis.fetch = async (url, opts) => {
+    if (String(url).includes("generativelanguage")) {
+      seen.push(new URL(url).searchParams.get("key"));
+      return { ok: true, status: 200, json: async () => textResponse("ok") };
+    }
+    return { ok: true, status: 200, json: async () => ({}), arrayBuffer: async () => new ArrayBuffer(4) };
+  };
+
+  for (let i = 0; i < 6; i++) await handleAiMessage(client, keyMessage("pat", `msg ${i}`));
+  const unique = [...new Set(seen)];
+  assert.equal(unique.length, 3, `expected all three keys to be used, saw ${unique.join(",")}`);
+  assert.deepEqual(unique.sort(), ["k1", "k2", "k3"], "every configured key should be reachable");
+}));
+
+test("a rate limited key is sidelined and the next one answers", async () => withKeys(
+  { GEMINI_API_KEY1: "k1", GEMINI_API_KEY2: "k2" },
+  async () => {
+
+  const tried = [];
+  let first = true;
+  globalThis.fetch = async (url, opts) => {
+    if (String(url).includes("generativelanguage")) {
+      const key = new URL(url).searchParams.get("key");
+      tried.push(key);
+      if (key === "k1" && first) {
+        first = false;
+        return { ok: false, status: 429, headers: { get: () => null }, text: async () => "rate limited" };
+      }
+      return { ok: true, status: 200, json: async () => textResponse("answered by k2") };
+    }
+    return { ok: true, status: 200, json: async () => ({}), arrayBuffer: async () => new ArrayBuffer(4) };
+  };
+
+  const msg = keyMessage("quinn", "hello");
+  await handleAiMessage(client, msg);
+  assert.ok(tried.includes("k1"), "the first key should have been tried");
+  assert.ok(tried.includes("k2"), "the second key should have picked it up");
+  assert.equal(msg.replies.at(-1), "answered by k2", "the user should still get an answer");
+}));
+
+test("a rejected key does not take the whole feature down", async () => withKeys(
+  { GEMINI_API_KEY1: "revoked", GEMINI_API_KEY2: "good" },
+  async () => {
+
+  const tried = [];
+  globalThis.fetch = async (url, opts) => {
+    if (String(url).includes("generativelanguage")) {
+      const key = new URL(url).searchParams.get("key");
+      tried.push(key);
+      if (key === "revoked") {
+        return { ok: false, status: 401, headers: { get: () => null }, text: async () => "API key not valid" };
+      }
+      return { ok: true, status: 200, json: async () => textResponse("still working") };
+    }
+    return { ok: true, status: 200, json: async () => ({}), arrayBuffer: async () => new ArrayBuffer(4) };
+  };
+
+  const msg = keyMessage("ruth", "are you there");
+  await handleAiMessage(client, msg);
+  assert.ok(tried.includes("good"), "a valid key should still be tried");
+  assert.equal(msg.replies.at(-1), "still working");
+}));
+
+test("every key failing surfaces the error instead of hanging", async () => withKeys(
+  { GEMINI_API_KEY1: "bad1", GEMINI_API_KEY2: "bad2" },
+  async () => {
+  globalThis.fetch = async (url) => {
+    if (String(url).includes("generativelanguage")) {
+      return { ok: false, status: 500, headers: { get: () => null }, text: async () => "server on fire" };
+    }
+    return { ok: true, status: 200, json: async () => ({}), arrayBuffer: async () => new ArrayBuffer(4) };
+  };
+  const msg = keyMessage("sam", "hello");
+  await handleAiMessage(client, msg);
+  const reply = msg.replies.at(-1) ?? "";
+  assert.match(reply, /error/i, `expected an error reply, got "${reply}"`);
+}));
+
+test("a dead pile of keys cannot explode into many requests", async () => withKeys(
+  Object.fromEntries(Array.from({ length: 6 }, (_, i) => [`GEMINI_API_KEY${i + 1}`, `dead${i + 1}`])),
+  async () => {
+  let calls = 0;
+  globalThis.fetch = async (url) => {
+    if (String(url).includes("generativelanguage")) {
+      calls++;
+      return { ok: false, status: 500, headers: { get: () => null }, text: async () => "boom" };
+    }
+    return { ok: true, status: 200, json: async () => ({}), arrayBuffer: async () => new ArrayBuffer(4) };
+  };
+  await handleAiMessage(client, keyMessage("tess", "hello"));
+  assert.ok(calls <= 8, `made ${calls} requests for one reply, the cap should hold it down`);
+}));
+
+test("the reply is not sent twice while rotating keys", async () => withKeys(
+  { GEMINI_API_KEY1: "bad", GEMINI_API_KEY2: "good" },
+  async () => {
+  globalThis.fetch = async (url) => {
+    if (String(url).includes("generativelanguage")) {
+      if (new URL(url).searchParams.get("key") === "bad") {
+        return { ok: false, status: 429, headers: { get: () => null }, text: async () => "slow down" };
+      }
+      return { ok: true, status: 200, json: async () => textResponse("one answer") };
+    }
+    return { ok: true, status: 200, json: async () => ({}), arrayBuffer: async () => new ArrayBuffer(4) };
+  };
+  const msg = keyMessage("uma", "hello");
+  await handleAiMessage(client, msg);
+  assert.equal(msg.replies.length, 1, `expected exactly one reply, got ${msg.replies.length}`);
+  assert.equal(msg.replies[0], "one answer");
+}));
+
+function keyMessage(authorId, content) {
+  const m = fakeMessage(authorId, { content });
+  m.guild = { id: KEYS };
+  return m;
+}
+
 const results = [];
 for (const [name, fn] of tests) {
   try {
@@ -1198,6 +1398,7 @@ for (const [name, fn] of tests) {
 globalThis.fetch = realFetch;
 if (realKey === undefined) delete process.env.GEMINI_API_KEY;
 else process.env.GEMINI_API_KEY = realKey;
+for (const [name, value] of Object.entries(realNumberedKeys)) process.env[name] = value;
 
 let failed = 0;
 for (const [status, name] of results) {
