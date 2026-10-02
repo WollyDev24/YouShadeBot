@@ -389,9 +389,11 @@ function fakeMessage(
     channel: {
       id: channelId,
       sendTyping: async () => {},
-      /* Discord's real channel exposes messages.fetch; returning null mimics a
-       * channel where history is unavailable, which must not break the reply. */
-      messages: { fetch: history === null ? undefined : async () => history }
+      /* Discord's real channel exposes messages.fetch on the messages manager.
+       * This has to be a method rather than an arrow function: discord.js
+       * implements it as MessageManager#fetch and reaches for this.resolveId,
+       * so a fake that ignores its receiver cannot catch a bad bind. */
+      messages: { fetch: history === null ? undefined : async function () { return history; } }
     },
     id: `msg-${authorId}-${Math.random().toString(36).slice(2, 8)}`,
     createdTimestamp: Date.now(),
@@ -1156,6 +1158,31 @@ test("startup stays quiet when the AI is fully configured", () => {
     process.env.GEMINI_API_KEY = key;
     process.env.OWNER_ID = owner;
   }
+});
+
+test("channel history is fetched as a method of the messages manager", async () => {
+  /* Regression. buildHistoryContents used to pull fetch off the manager and
+   * re-invoke it against the channel, so the manager's this.resolveId lookup
+   * landed on a channel and threw "this.resolveId is not a function" on every
+   * real message. A fake that ignored its receiver passed happily. */
+  const history = [pastMsg("m1", "alice", "alice", "hello", 1)];
+  const m = convMessage("nina", { history });
+  const manager = m.channel.messages;
+  let receiver = null;
+  manager.fetch = async function () {
+    receiver = this;
+    return history;
+  };
+
+  const contents = await buildHistoryContents(m, "bot");
+  assert.equal(receiver, manager, "fetch must keep its manager as the receiver");
+  assert.equal(contents.length, 1, "and still return the history it produced");
+});
+
+test("a channel whose manager is missing does not break the reply", async () => {
+  const m = convMessage("omar", { history: [] });
+  m.channel.messages = undefined;
+  assert.deepEqual(await buildHistoryContents(m, "bot"), [], "should degrade to no history");
 });
 
 const results = [];

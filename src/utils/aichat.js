@@ -419,10 +419,14 @@ function toContentPart(msg, botId) {
 /* Pull the messages around this one and shape them into API contents.
  * Excludes the triggering message, which the caller supplies separately. */
 export async function buildHistoryContents(message, botId, { limit = CONV_HISTORY_MESSAGES, maxChars = CONV_HISTORY_CHARS } = {}) {
-  const fetch = message.channel?.messages?.fetch;
-  if (typeof fetch !== "function") return [];
+  /* Call fetch as a method of the manager. discord.js implements it as
+   * MessageManager#fetch, which reaches for this.resolveId, so binding the
+   * receiver to the channel instead throws "this.resolveId is not a function".
+   * It has to be the channel's messages manager that gets the call. */
+  const manager = message.channel?.messages;
+  if (typeof manager?.fetch !== "function") return [];
 
-  const collected = await fetch.call(message.channel, { limit: limit + 1 }).catch(() => null);
+  const collected = await manager.fetch({ limit: limit + 1 }).catch(() => null);
   if (!collected) return [];
 
   const list = [...collected.values()]
