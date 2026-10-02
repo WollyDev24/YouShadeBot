@@ -183,6 +183,8 @@ src/
    TOKEN=your-bot-token-hits here
    CLIENT_ID=your-application-id-here
    GUILD_ID=optional-guild-id-for-quick-registration
+   GEMINI_API_KEY=your-gemini-key
+   OWNER_ID=your-discord-user-id
    PANEL_PASSWORD=admin
    PANEL_HOST=127.0.0.1
    PANEL_PORT=3000
@@ -190,6 +192,13 @@ src/
 
    `GUILD_ID` is optional — commands register instantly with it; omit it for
    global registration (takes up to an hour).
+
+   The AI features fail silently when these are missing: without
+   `GEMINI_API_KEY` the bot ignores AI messages entirely, and without a
+   `OWNER_ID` it can read memories but every write is refused. The bot prints a
+   warning on startup if the AI is enabled somewhere and either is unset, so
+   check the console after deploying. See `.env.example` for the full list,
+   including the optional Discord OAuth and panel settings.
 
 4. **Run**
 
