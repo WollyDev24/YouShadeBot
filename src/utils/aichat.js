@@ -26,6 +26,15 @@ export const LIMIT_BOUNDS = {
 export const MAX_IMAGES_PER_MESSAGE = 4;
 export const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
+/* Conversation context. Every message we send carries the surrounding chat, so
+ * these are kept modest: a 1M token window is not the constraint, latency and
+ * cost per message are. */
+export const CONV_HISTORY_MESSAGES = 15;
+export const CONV_HISTORY_CHARS = 3000;
+export const CONV_SUMMARY_CHARS = 1200;
+export const CONV_SUMMARY_MAX_ENTRIES = 8;
+export const CONV_TTL_DAYS = 7;
+
 const IMAGE_MIME_TYPES = new Set([
   "image/png",
   "image/jpeg",
@@ -82,6 +91,15 @@ const SYSTEM_PROMPT =
   "Never exceed about 1800 characters. If something is unclear, ask a short clarifying question." +
   "ONLY answer in english, NEVER any other language, even when asked to" +
   "Do not use Emojis" +
+  "\n\n" +
+  "CONVERSATION CONTEXT: You will often be given the recent messages from this " +
+  "channel before the current one, each prefixed with the speaker's name. Treat " +
+  "that as the conversation so far, so you can refer back to what was said, " +
+  "including things said before you joined in. Lines beginning \"You said " +
+  "earlier:\" are your own previous replies. When someone replies to a message, " +
+  "the parent message is quoted to you explicitly, so answer the reply rather " +
+  "than the raw text in isolation. Do not claim you did not see something that " +
+  "is present in that context, and do not invent details that are not in it." +
   "\n\n" +
   "MEMORY SYSTEM: You have tools that actually write to a persistent, per-server key-value memory store. " +
   "Available memories are listed in your context under RELEVANT MEMORIES; use them naturally in conversation. " +
@@ -309,6 +327,131 @@ export function searchMemories(guildId, query, limit = 10) {
     }
   }
   return results;
+}
+
+/* --- conversation memory ---
+ *
+ * Two independent things, both per channel:
+ *
+ * 1. Recent channel messages, pulled live at request time. This is what lets
+ *    the bot answer "what did I just ask?" about a message it never saw,
+ *    and gives it the surrounding conversation instead of one bare turn.
+ *
+ * 2. A rolling summary of the bot's own recent activity in the channel,
+ *    persisted so it survives a restart. The live history above is only as
+ *    old as the last few minutes; this is the part that remembers.
+ */
+
+function getConversationStore(guildId) {
+  const data = getData();
+  data.aiconv ??= {};
+  data.aiconv[guildId] ??= {};
+  return data.aiconv[guildId];
+}
+
+/* Keyed by channel so two channels in one guild do not bleed together. */
+function convKey(channelId) {
+  return channelId ?? "unknown";
+}
+
+export function getConversationSummary(guildId, channelId) {
+  const entry = getConversationStore(guildId)[convKey(channelId)];
+  if (!entry) return null;
+  const stamp = Date.parse(entry.updatedAt ?? "");
+  if (Number.isFinite(stamp) && Date.now() - stamp > CONV_TTL_DAYS * 86_400_000) {
+    return null;
+  }
+  return entry.summary ?? null;
+}
+
+/* Bounded FIFO: drop the oldest entry once the cap is reached, so a busy
+ * channel cannot grow the store without limit. */
+export function addConversationSummary(guildId, channelId, line) {
+  const store = getConversationStore(guildId);
+  const key = convKey(channelId);
+  const entry = store[key] ?? { summary: [] };
+  entry.summary = Array.isArray(entry.summary) ? entry.summary : [];
+  entry.summary.push(String(line).slice(0, 300));
+  while (entry.summary.length > CONV_SUMMARY_MAX_ENTRIES) entry.summary.shift();
+  entry.updatedAt = new Date().toISOString();
+  store[key] = entry;
+  saveKey("aiconv");
+  return entry;
+}
+
+export function clearConversation(guildId, channelId) {
+  const store = getConversationStore(guildId);
+  const key = convKey(channelId);
+  const existed = key in store;
+  if (existed) {
+    delete store[key];
+    saveKey("aiconv");
+  }
+  return existed;
+}
+
+export function formatConversationForContext(guildId, channelId, maxChars = CONV_SUMMARY_CHARS) {
+  const summary = getConversationSummary(guildId, channelId);
+  if (!summary?.length) return "";
+  let out = "WHAT YOU RECENTLY SAID IN THIS CHANNEL:\n";
+  let total = 0;
+  for (const line of summary) {
+    if (total + line.length > maxChars) break;
+    out += `- ${line}\n`;
+    total += line.length;
+  }
+  return out;
+}
+
+/* Turn one line of recent channel traffic into a `role` the API accepts.
+ * Discord has no "model" role, so the bot's own messages are sent as user
+ * turns with a clear prefix instead. */
+function toContentPart(msg, botId) {
+  const who = msg.author?.bot ? `${msg.author.username} (a bot)` : msg.author?.username ?? "someone";
+  const text = String(msg.content ?? "").trim();
+  if (!text) return null;
+  return {
+    role: "user",
+    parts: [{ text: msg.author?.id === botId ? `You said earlier: ${text}` : `${who}: ${text}` }]
+  };
+}
+
+/* Pull the messages around this one and shape them into API contents.
+ * Excludes the triggering message, which the caller supplies separately. */
+export async function buildHistoryContents(message, botId, { limit = CONV_HISTORY_MESSAGES, maxChars = CONV_HISTORY_CHARS } = {}) {
+  const fetch = message.channel?.messages?.fetch;
+  if (typeof fetch !== "function") return [];
+
+  const collected = await fetch.call(message.channel, { limit: limit + 1 }).catch(() => null);
+  if (!collected) return [];
+
+  const list = [...collected.values()]
+    .filter((m) => m.id !== message.id)
+    .sort((a, b) => (a.createdTimestamp ?? 0) - (b.createdTimestamp ?? 0))
+    .slice(-limit);
+
+  const contents = [];
+  let total = 0;
+  for (const m of list) {
+    const part = toContentPart(m, botId);
+    if (!part) continue;
+    const size = part.parts[0].text.length;
+    /* Stop once the budget is spent, so a wall of text cannot balloon the
+     * request. Oldest messages go first because the recent ones matter more. */
+    if (total + size > maxChars) break;
+    total += size;
+    contents.push(part);
+  }
+  return contents;
+}
+
+/* Summarise a single exchange into one short line for the rolling summary. */
+export function summariseExchange(authorName, text) {
+  const clean = String(text ?? "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 180);
+  return `${authorName}: ${clean}`;
 }
 
 export function formatMemoriesForContext(guildId, maxChars = 1500) {
@@ -568,9 +711,12 @@ async function generateOnce(model, systemInstruction, contents, apiKey, tools) {
 /* Ask the model, run whatever memory tools it asks for, and ask again so it
  * can reply in plain text with the results in hand. Returns the final text
  * plus how many memories actually changed. */
-async function askGeminiWithTools(model, prompt, apiKey, imageParts, toolCtx) {
+async function askGeminiWithTools(model, prompt, apiKey, imageParts, toolCtx, history = []) {
   const parts = imageParts.length ? [{ text: prompt }, ...imageParts] : [{ text: prompt }];
-  let contents = [{ role: "user", parts }];
+  /* History first, then the live turn. The API requires alternating-ish
+   * roles and rejects a leading model turn, so a stray model message from
+   * history is folded into a user turn by toContentPart. */
+  let contents = [...history, { role: "user", parts }];
   let tools = MEMORY_TOOLS;
   let saved = 0;
 
@@ -630,9 +776,21 @@ export async function handleAiMessage(client, message) {
 
   const isMention = message.mentions.has(client.user.id);
   let isReplyToBot = false;
+  let parentLine = "";
   if (message.reference?.messageId) {
     const ref = await message.fetchReference().catch(() => null);
-    isReplyToBot = Boolean(ref && ref.author.id === client.user.id);
+    if (ref) {
+      isReplyToBot = ref.author?.id === client.user.id;
+      /* Quote the parent into the prompt. The fetched history usually covers
+       * it, but not always: the parent can be older than the window, or
+       * filtered out of it. Without this the model sees a bare "what about
+       * this?" with nothing to attach it to. */
+      const parentText = String(ref.content ?? "").trim();
+      if (parentText) {
+        const who = ref.author?.bot ? `${ref.author.username} (a bot)` : ref.author?.username ?? "someone";
+        parentLine = `[Replying to ${who}: "${parentText.slice(0, 500)}"]`;
+      }
+    }
   }
   if (!isMention && !isReplyToBot) return;
 
@@ -688,13 +846,28 @@ export async function handleAiMessage(client, message) {
   try {
     if (typeof message.channel.sendTyping === "function") message.channel.sendTyping().catch(() => {});
     const name = member?.displayName ?? message.author.username;
+    /* Long-lived memories, then what we know of this channel's recent past,
+     * then the live surrounding messages. Each is optional. */
     const memoryContext = formatMemoriesForContext(guild.id);
-    const prefix = memoryContext ? `${memoryContext}\n\n${name}: ` : `${name}: `;
-    const { text, saved } = await askGeminiWithTools(c.model, `${prefix}${prompt}`, apiKey, images.parts, {
-      guildId: guild.id,
-      authorId: message.author.id
-    });
+    const convContext = formatConversationForContext(guild.id, message.channel.id);
+    const history = await buildHistoryContents(message, client.user.id);
+    const preamble = [memoryContext, convContext].filter(Boolean).join("\n\n");
+
+    const current = [parentLine, `${name}: ${prompt}`].filter(Boolean).join("\n");
+    const finalPrompt = preamble ? `${preamble}\n\n${current}` : current;
+
+    const { text, saved } = await askGeminiWithTools(
+      c.model,
+      finalPrompt,
+      apiKey,
+      images.parts,
+      { guildId: guild.id, authorId: message.author.id },
+      history
+    );
     if (saved > 0) console.log(`[aichat] stored ${saved} memory/memories for guild ${guild.id}`);
+    if (text) {
+      addConversationSummary(guild.id, message.channel.id, summariseExchange(name, prompt));
+    }
     if (isImageRequest) consumeImageUsage(guild.id, message.author.id);
     else consumeUsage(guild.id, message.author.id);
 

@@ -39,6 +39,15 @@ import {
   consumeImageUsage,
   getMemories,
   looksLikeSecret,
+  buildHistoryContents,
+  formatConversationForContext,
+  getConversationSummary,
+  addConversationSummary,
+  clearConversation,
+  summariseExchange,
+  CONV_HISTORY_MESSAGES,
+  CONV_HISTORY_CHARS,
+  CONV_SUMMARY_MAX_ENTRIES,
   getMemory,
   setMemory,
   deleteMemory,
@@ -363,7 +372,10 @@ globalThis.fetch = async (url, opts) => {
   };
 };
 
-function fakeMessage(authorId, { premiumSince = null, isAdmin = false, content = "hello", attachments = {} } = {}) {
+function fakeMessage(
+  authorId,
+  { premiumSince = null, isAdmin = false, content = "hello", attachments = {}, history = null, replyTo = null, channelId = "chan-1" } = {}
+) {
   const replies = [];
   return {
     guild: { id: GUILD_ID },
@@ -374,8 +386,17 @@ function fakeMessage(authorId, { premiumSince = null, isAdmin = false, content =
       permissions: { has: () => isAdmin }
     },
     channel: {
-      id: "chan-1",
-      sendTyping: async () => {}
+      id: channelId,
+      sendTyping: async () => {},
+      /* Discord's real channel exposes messages.fetch; returning null mimics a
+       * channel where history is unavailable, which must not break the reply. */
+      messages: { fetch: history === null ? undefined : async () => history }
+    },
+    id: `msg-${authorId}-${Math.random().toString(36).slice(2, 8)}`,
+    createdTimestamp: Date.now(),
+    reference: replyTo ? { messageId: "parent" } : undefined,
+    fetchReference: replyTo ? async () => replyTo : async () => {
+      throw new Error("no reference");
     },
     mentions: { has: () => true },
     content,
@@ -859,6 +880,204 @@ test("looksLikeSecret catches credentials but not ordinary facts", () => {
   ]) {
     assert.ok(!looksLikeSecret(good), `should be allowed: ${good}`);
   }
+});
+
+/* --- conversation memory: tracking the chat around the message --- */
+
+const CONV = "test-aichat-conv-guild";
+
+/* A past channel message as Discord would hand it to us. */
+const pastMsg = (id, authorId, username, content, createdTimestamp, bot = false) => ({
+  id,
+  author: { id: authorId, username, bot },
+  content,
+  createdTimestamp
+});
+
+function convMessage(authorId, opts = {}) {
+  const m = fakeMessage(authorId, opts);
+  m.guild = { id: CONV };
+  return m;
+}
+
+test("the conversation guild starts with no stored summary", () => {
+  for (const ch of ["chan-1", "chan-2"]) clearConversation(CONV, ch);
+  assert.equal(getConversationSummary(CONV, "chan-1"), null);
+});
+
+test("recent channel history is sent as real multi-turn context", async () => {
+  setAiLimits(CONV, { daily: 0, boost: 0, cooldownSeconds: 0, imageDaily: 0 });
+  setAiEnabled(CONV, true);
+  setAiChannel(CONV, "chan-1");
+
+  const history = [
+    pastMsg("m1", "alice", "alice", "is the meetup still on?", 1),
+    pastMsg("m2", "bob", "bob", "I think it moved to 7pm", 2),
+    pastMsg("m3", "bot", "monolith", "yes, 7pm in the main room", 3, true)
+  ];
+  nextGeminiResponse = queueGemini(textResponse("still 7pm"));
+  geminiCalls = 0;
+  lastGeminiBody = null;
+  await handleAiMessage(client, convMessage("carol", { content: "and where?", history }));
+
+  const contents = lastGeminiBody?.contents ?? [];
+  assert.ok(contents.length >= 4, `expected history plus the live turn, got ${contents.length}`);
+  const texts = contents.map((c) => c.parts[0].text);
+  assert.match(texts[0], /alice: is the meetup still on\?/, "the oldest message should come first");
+  assert.match(texts[1], /bob: I think it moved to 7pm/);
+  assert.match(texts[2], /You said earlier: yes, 7pm in the main room/, "the bot's own past replies are labelled as its own");
+  assert.match(texts.at(-1), /carol: and where\?/, "the live turn must come last");
+});
+
+test("the triggering message is not duplicated into history", async () => {
+  const m = convMessage("dave", { content: "unique-question-marker", history: [] });
+  const contents = await buildHistoryContents(m, "bot");
+  assert.equal(contents.length, 0);
+});
+
+test("a reply quotes the parent message into the prompt", async () => {
+  nextGeminiResponse = queueGemini(textResponse("it is on friday"));
+  geminiCalls = 0;
+  lastGeminiBody = null;
+  const parent = pastMsg("parent", "alice", "alice", "the retro is on thursday", 1);
+  await handleAiMessage(
+    client,
+    convMessage("erin", { content: "is that right?", replyTo: parent, history: [] })
+  );
+  const prompt = lastGeminiBody?.contents?.at(-1)?.parts?.[0]?.text ?? "";
+  assert.match(prompt, /Replying to alice/, "the reply must name who was replied to");
+  assert.match(prompt, /the retro is on thursday/, "and quote what they said");
+});
+
+test("a reply to a bot message is still quoted", async () => {
+  nextGeminiResponse = queueGemini(textResponse("friday, correct"));
+  lastGeminiBody = null;
+  const parent = pastMsg("parent", "bot", "monolith", "the retro is on thursday", 1, true);
+  await handleAiMessage(
+    client,
+    convMessage("erin", { content: "sure?", replyTo: parent, history: [] })
+  );
+  const prompt = lastGeminiBody?.contents?.at(-1)?.parts?.[0]?.text ?? "";
+  assert.match(prompt, /Replying to monolith/, "a reply to the bot should still be quoted");
+});
+
+test("history is capped so a busy channel cannot balloon the request", async () => {
+  const many = [];
+  for (let i = 0; i < CONV_HISTORY_MESSAGES + 25; i++) {
+    many.push(pastMsg(`x${i}`, "u", `u${i}`, `message number ${i}`, i));
+  }
+  const m = convMessage("frank", { history: many });
+  const contents = await buildHistoryContents(m, "bot");
+  assert.ok(
+    contents.length <= CONV_HISTORY_MESSAGES,
+    `kept ${contents.length}, cap is ${CONV_HISTORY_MESSAGES}`
+  );
+  /* The newest messages must survive the cap, not the oldest. */
+  assert.match(contents.at(-1).parts[0].text, new RegExp(`message number ${many.length - 1}`));
+});
+
+test("history respects the character budget", async () => {
+  const huge = [];
+  for (let i = 0; i < 30; i++) {
+    huge.push(pastMsg(`h${i}`, "u", `u${i}`, "x".repeat(500), i));
+  }
+  const contents = await buildHistoryContents(convMessage("gina", { history: huge }), "bot");
+  const total = contents.reduce((n, c) => n + c.parts[0].text.length, 0);
+  assert.ok(total <= CONV_HISTORY_CHARS, `history was ${total} chars, budget is ${CONV_HISTORY_CHARS}`);
+});
+
+test("a channel with no history available still answers", async () => {
+  nextGeminiResponse = queueGemini(textResponse("answer without history"));
+  geminiCalls = 0;
+  const msg = convMessage("hank", { content: "hello?", history: null });
+  await handleAiMessage(client, msg);
+  assert.equal(geminiCalls, 1, "missing history must not break the reply");
+  assert.equal(msg.replies.at(-1), "answer without history");
+});
+
+test("a reply with no parent text does not emit an empty quote", async () => {
+  nextGeminiResponse = queueGemini(textResponse("ok"));
+  lastGeminiBody = null;
+  const blank = pastMsg("parent", "alice", "alice", "   ", 1);
+  await handleAiMessage(client, convMessage("iris", { content: "hm?", replyTo: blank, history: [] }));
+  const prompt = lastGeminiBody?.contents?.at(-1)?.parts?.[0]?.text ?? "";
+  assert.ok(!/Replying to/.test(prompt), "an empty parent should not produce a quote block");
+});
+
+test("a successful reply is remembered for the next turn", async () => {
+  clearConversation(CONV, "chan-1");
+  nextGeminiResponse = queueGemini(textResponse("the venue is the old library"));
+  await handleAiMessage(client, convMessage("jack", { content: "where is the party?", history: [] }));
+  const summary = getConversationSummary(CONV, "chan-1");
+  assert.ok(summary, "the exchange should be recorded");
+  assert.match(summary.at(-1), /jack: where is the party\?/);
+});
+
+test("the remembered summary is prepended on the next message", async () => {
+  clearConversation(CONV, "chan-1");
+  nextGeminiResponse = queueGemini(textResponse("first answer"));
+  await handleAiMessage(client, convMessage("jack", { content: "where is the party?", history: [] }));
+
+  nextGeminiResponse = queueGemini(textResponse("same place"));
+  lastGeminiBody = null;
+  await handleAiMessage(client, convMessage("jack", { content: "and tomorrow?", history: [] }));
+  const prompt = lastGeminiBody?.contents?.at(-1)?.parts?.[0]?.text ?? "";
+  assert.match(prompt, /WHAT YOU RECENTLY SAID IN THIS CHANNEL/);
+  assert.match(prompt, /where is the party\?/, "the previous exchange should be recalled");
+});
+
+test("conversation memory is per channel", async () => {
+  clearConversation(CONV, "chan-1");
+  clearConversation(CONV, "chan-2");
+  addConversationSummary(CONV, "chan-1", "alice: secret plans for chan-1");
+  assert.match(getConversationSummary(CONV, "chan-1")?.at(-1) ?? "", /chan-1/);
+  assert.equal(getConversationSummary(CONV, "chan-2"), null, "another channel must not see it");
+
+  setAiChannel(CONV, "chan-2");
+  nextGeminiResponse = queueGemini(textResponse("hi"));
+  lastGeminiBody = null;
+  await handleAiMessage(client, convMessage("kyle", { content: "hello", channelId: "chan-2", history: [] }));
+  const prompt = lastGeminiBody?.contents?.at(-1)?.parts?.[0]?.text ?? "";
+  assert.ok(!/secret plans/.test(prompt), "channel 2 must not inherit channel 1's summary");
+});
+
+test("the summary is bounded and drops the oldest entries", () => {
+  clearConversation(CONV, "chan-3");
+  for (let i = 0; i < CONV_SUMMARY_MAX_ENTRIES + 6; i++) {
+    addConversationSummary(CONV, "chan-3", `entry ${i}`);
+  }
+  const summary = getConversationSummary(CONV, "chan-3");
+  assert.ok(summary.length <= CONV_SUMMARY_MAX_ENTRIES, `kept ${summary.length}`);
+  assert.ok(
+    summary.some((l) => /entry 0\b/.test(l)) === false,
+    "the oldest entry should have been dropped"
+  );
+});
+
+test("summariseExchange collapses whitespace and truncates", () => {
+  const line = summariseExchange("alice", "a".repeat(400).replace(/(.{40})/g, "$1 \n "));
+  assert.ok(line.length <= 190, `line was ${line.length} chars`);
+  assert.ok(!/\n/.test(line), "newlines should be collapsed");
+  assert.match(line, /^alice: /);
+});
+
+test("clearConversation removes the stored summary", () => {
+  addConversationSummary(CONV, "chan-4", "alice: something");
+  assert.ok(getConversationSummary(CONV, "chan-4"));
+  clearConversation(CONV, "chan-4");
+  assert.equal(getConversationSummary(CONV, "chan-4"), null);
+});
+
+test("a failed reply is not recorded as conversation memory", async () => {
+  clearConversation(CONV, "chan-5");
+  setAiChannel(CONV, "chan-5");
+  nextGeminiResponse = queueGemini({ error: true });
+  globalThis.fetch = async (url, opts) => {
+    if (String(url).includes("generativelanguage")) return { ok: false, status: 500, text: async () => "boom" };
+    return { ok: true, status: 200, json: async () => ({}), arrayBuffer: async () => new ArrayBuffer(4) };
+  };
+  await handleAiMessage(client, convMessage("liam", { content: "anything", channelId: "chan-5", history: [] }));
+  assert.equal(getConversationSummary(CONV, "chan-5"), null, "an errored turn should not be summarised");
 });
 
 const results = [];

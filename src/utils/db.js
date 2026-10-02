@@ -33,7 +33,10 @@ const DEFAULTS = {
   roleMenus: {},
   aichat: {},
   antiraid: {},
-  aimemory: {}
+  aimemory: {},
+  /* Per-channel rolling summaries of what the AI has recently said, so it has
+   * some continuity across restarts rather than starting blind each time. */
+  aiconv: {}
 };
 
 let store;
