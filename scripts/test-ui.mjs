@@ -572,6 +572,80 @@ await test("a loading button will not submit its form", () => {
   assert.equal(submits, 1, "clearing loading restores submission");
 });
 
+
+/* ------------------------------------------------- fields and names ---- */
+
+/* <mono-field> and its control live in different shadow roots, so there is no
+ * native label/for association. The label has to be handed over by hand. */
+function makeField(label, controlTag = "mono-input") {
+  const field = document.createElement("mono-field");
+  if (label != null) field.setAttribute("label", label);
+  const ctl = document.createElement(controlTag);
+  field.appendChild(ctl);
+  document.body.appendChild(field);
+  return { field, ctl, inner: ctl.shadowRoot.querySelector("input, textarea, .ctl") };
+}
+
+await test("a field hands its label to the control it wraps", () => {
+  const { ctl, inner } = makeField("Panel password");
+  assert.equal(inner.getAttribute("aria-label"), "Panel password");
+  assert.equal(ctl.getAttribute("aria-label"), "Panel password");
+});
+
+await test("renaming a field updates the name it handed over", () => {
+  const { field, inner } = makeField("Old name");
+  field.setAttribute("label", "New name");
+  assert.equal(inner.getAttribute("aria-label"), "New name");
+});
+
+await test("removing a field label takes the name back off the control", () => {
+  const { field, ctl, inner } = makeField("Temporary");
+  field.removeAttribute("label");
+  assert.equal(inner.getAttribute("aria-label"), null);
+  assert.equal(ctl.hasAttribute("aria-label"), false);
+});
+
+await test("a field never overwrites a name the author set on the control", () => {
+  const { ctl, inner } = makeField("Field label");
+  ctl.setAttribute("aria-label", "Author label");
+  /* force a resync the way a re-render would */
+  ctl.setAttribute("label", "Field label");
+  assert.equal(inner.getAttribute("aria-label"), "Author label");
+  /* and removing the field label must leave the author's name alone */
+  ctl.removeAttribute("label");
+  assert.equal(inner.getAttribute("aria-label"), "Author label");
+});
+
+await test("a field wraps a textarea and a search just as well", () => {
+  for (const tag of ["mono-textarea", "mono-search"]) {
+    const { inner } = makeField(`Label for ${tag}`, tag);
+    assert.equal(inner.getAttribute("aria-label"), `Label for ${tag}`, tag);
+  }
+});
+
+await test("clicking a field label focuses the control it names", () => {
+  const { field, ctl } = makeField("Focus me");
+  let focused = 0;
+  ctl.focus = () => { focused++; };
+  field.shadowRoot.querySelector("label").click();
+  assert.equal(focused, 1, "a label click must move focus to its control");
+});
+
+await test("a field with no control does not throw", () => {
+  const field = document.createElement("mono-field");
+  field.setAttribute("label", "Nothing here");
+  document.body.appendChild(field);
+  assert.equal(field.shadowRoot.querySelector(".hint").hidden, true);
+});
+
+await test("a text control mirrors aria-labelledby as well as aria-label", () => {
+  const ctl = document.createElement("mono-input");
+  ctl.setAttribute("aria-labelledby", "external-label");
+  document.body.appendChild(ctl);
+  const inner = ctl.shadowRoot.querySelector("input");
+  assert.equal(inner.getAttribute("aria-labelledby"), "external-label");
+});
+
 mark("ALL TESTS DONE");
 for (const [state, name] of results) console.log(`  ${state}  ${name}`);
 const failures = results.filter(([s]) => s === "FAIL").length;

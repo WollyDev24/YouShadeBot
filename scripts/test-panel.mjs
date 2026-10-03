@@ -202,6 +202,58 @@ test("the palette is light blue and violet over a dark base", () => {
 });
 
 
+
+test("every control in the dashboard ends up with an accessible name", () => {
+  /* The inner element is what assistive tech reports, and it cannot see the
+   * light DOM, so this is the only place the whole chain -- field label or
+   * author aria-label down to the shadow control -- can be checked at once. */
+  const inner = (ctl) => {
+    const root = ctl.shadowRoot;
+    if (!root) return null;
+    return root.querySelector("input, textarea, .ctl") ?? root.querySelector("button");
+  };
+  /* No host-level fallback: the host is a custom element, not the thing
+   * assistive tech reports, so a label sitting there names nothing. */
+  const accessibleName = (ctl) => {
+    const el = inner(ctl);
+    if (!el) return null;
+    if ((el.getAttribute("aria-label") ?? "").trim()) return "aria-label";
+    if (el.getAttribute("aria-labelledby")) return "aria-labelledby";
+    /* Name from content does work through a slot, but the text lives in the
+     * light DOM -- the shadow element's own textContent is empty. */
+    if ((ctl.textContent ?? "").replace(/\s+/g, " ").trim()) return "contents";
+    return null;
+  };
+
+  const controls = $$("mono-input, mono-textarea, mono-search, mono-select, mono-checkbox, mono-switch, mono-button");
+  const unnamed = controls
+    .filter((ctl) => !accessibleName(ctl))
+    .map((ctl) => `${ctl.tagName.toLowerCase()}${ctl.id ? "#" + ctl.id : ""}`);
+  assert.deepEqual(unnamed, [], "controls with no accessible name");
+  assert.ok(controls.length > 80, `expected the real dashboard, found ${controls.length}`);
+});
+
+test("a fielded control takes its name from the field label", () => {
+  /* selects name their trigger <button>, not a .ctl like checkbox and switch */
+  const innerOf = (ctl) =>
+    ctl.shadowRoot.querySelector("input, textarea, .ctl") ?? ctl.shadowRoot.querySelector("button");
+  let checked = 0;
+  for (const field of $$("mono-field[label]")) {
+    const ctl = field.querySelector("mono-input, mono-textarea, mono-search, mono-select");
+    if (!ctl) continue;
+    const expected = field.getAttribute("label").trim();
+    /* an author label on the control wins, exactly as mono-field intends */
+    const wanted = (ctl.getAttribute("aria-label") ?? expected).trim();
+    assert.equal(
+      (innerOf(ctl)?.getAttribute("aria-label") ?? "").trim(),
+      wanted,
+      `${ctl.tagName.toLowerCase()} inside field "${expected}"`
+    );
+    checked++;
+  }
+  assert.ok(checked >= 80, `expected the real field count, checked ${checked}`);
+});
+
 test("filled controls meet WCAG AA contrast against their ink", () => {
   const hex = (name) => rootBlock.match(new RegExp(`${name}:\\s*(#[0-9a-fA-F]{6})`))?.[1];
   const channel = (v) => {

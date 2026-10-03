@@ -127,6 +127,21 @@ class MonoElement extends HTMLElement {
     return this._internals ?? null;
   }
 
+  /* A control can be labelled from the light DOM -- by an author, or by the
+   * <mono-field> that wraps it -- but the element assistive tech actually
+   * reports lives in the shadow root and cannot see the host's attributes. A
+   * <label for> cannot cross the boundary either, so the name is pushed down
+   * here instead. Removal is symmetric so a renamed field does not leave a stale
+   * name behind. */
+  _mirrorName(inner) {
+    if (!inner) return;
+    for (const attr of ["aria-label", "aria-labelledby"]) {
+      const v = this.getAttribute(attr);
+      if (v) inner.setAttribute(attr, v);
+      else inner.removeAttribute(attr);
+    }
+  }
+
   get form() {
     return this._internals?.form ?? null;
   }
@@ -201,7 +216,8 @@ class MonoInput extends MonoElement {
   static formAssociated = true;
   static observedAttributes = [
     "type", "value", "placeholder", "maxlength", "min", "max", "step",
-    "disabled", "readonly", "required", "name", "autocomplete", "spellcheck", "width"
+    "disabled", "readonly", "required", "name", "autocomplete", "spellcheck", "width",
+    "aria-label", "aria-labelledby"
   ];
 
   constructor() {
@@ -255,6 +271,7 @@ class MonoInput extends MonoElement {
       const attrValue = this.getAttribute("value");
       if (attrValue !== null && el.value !== attrValue) el.value = attrValue;
     }
+    this._mirrorName(el);
   }
 
   _onInput() {
@@ -369,7 +386,7 @@ class MonoTextarea extends MonoElement {
   static formAssociated = true;
   static observedAttributes = [
     "placeholder", "maxlength", "rows", "disabled", "readonly",
-    "required", "name", "spellcheck", "value"
+    "required", "name", "spellcheck", "value", "aria-label", "aria-labelledby"
   ];
 
   constructor() {
@@ -399,6 +416,7 @@ class MonoTextarea extends MonoElement {
     el.spellcheck = this.getAttribute("spellcheck") !== "false";
     const v = this.getAttribute("value");
     if (v !== null && el.value !== v) el.value = v;
+    this._mirrorName(el);
   }
 
   _onInput() {
@@ -523,7 +541,10 @@ ${OPTION_CSS}
 
 class MonoSelect extends MonoElement {
   static formAssociated = true;
-  static observedAttributes = ["multiple", "size", "disabled", "required", "name", "width", "rows"];
+  static observedAttributes = [
+    "multiple", "size", "disabled", "required", "name", "width", "rows",
+    "aria-label", "aria-labelledby"
+  ];
 
   constructor() {
     super();
@@ -773,6 +794,20 @@ _render() {
     }
     if (this.disabled) btn.setAttribute("aria-disabled", "true");
     else btn.removeAttribute("aria-disabled");
+    /* Named like every other control here: a host aria-label, written by an
+     * author or handed over by <mono-field>, wins. Without one the trigger is
+     * named by the selected option it displays, which is not the same thing as
+     * the field label -- "general" rather than "Trigger channel". In list mode
+     * the trigger is presentation-only, so the listbox is the widget that needs
+     * the name. */
+    const host = this.getAttribute("aria-label");
+    if (host) {
+      btn.setAttribute("aria-label", host);
+      if (listMode) this._listEl.setAttribute("aria-label", host);
+    } else {
+      btn.removeAttribute("aria-label");
+      if (listMode) this._listEl.removeAttribute("aria-label");
+    }
   }
 
   /* ---------- popup ---------- */
@@ -1226,10 +1261,17 @@ class MonoCheckbox extends MonoElement {
     if (this.disabled) this._ctl.setAttribute("aria-disabled", "true");
     else this._ctl.removeAttribute("aria-disabled");
     /* The slotted caption sits outside the control, so the accessible name has
-     * to be supplied explicitly. An author-supplied aria-label wins. */
-    if (!this.hasAttribute("aria-label")) {
+     * to be supplied explicitly. */
+    /* A host aria-label -- written by an author, or handed over by
+     * <mono-field> -- wins. Without one the slotted caption names it, which is
+     * how these controls were labelled before fields started handing names
+     * down. */
+    const host = this.getAttribute("aria-label");
+    if (host) this._ctl.setAttribute("aria-label", host);
+    else {
       const text = (this.textContent ?? "").replace(/\s+/g, " ").trim();
       if (text) this._ctl.setAttribute("aria-label", text);
+      else this._ctl.removeAttribute("aria-label");
     }
     this._syncForm();
   }
@@ -1433,16 +1475,7 @@ class MonoButton extends MonoElement {
    * dashboard puts aria-label there. The inner <button> is what assistive tech
    * actually reports, and a slotted aria-hidden icon gives it no name at all, so
    * the host's label has to be pushed down onto it. */
-  _syncName() {
-    const el = this._el;
-    if (!el) return;
-    const label = this.getAttribute("aria-label");
-    if (label) el.setAttribute("aria-label", label);
-    else el.removeAttribute("aria-label");
-    const labelledBy = this.getAttribute("aria-labelledby");
-    if (labelledBy) el.setAttribute("aria-labelledby", labelledBy);
-    else el.removeAttribute("aria-labelledby");
-  }
+  _syncName() { this._mirrorName(this._el); }
 
   get disabled() { return boolAttr(this, "disabled"); }
   set disabled(v) { v ? this.setAttribute("disabled", "") : this.removeAttribute("disabled"); }
@@ -1498,6 +1531,10 @@ class MonoField extends MonoElement {
   constructor() {
     super();
     this._root.appendChild(fieldTmpl.content.cloneNode(true));
+    /* The <label> and the control it names live in different shadow roots, so
+     * there is no native label/for association and no implicit wrapping to fall
+     * back on. Both halves of that have to be wired up by hand. */
+    this._root.querySelector("label").addEventListener("click", () => this._focusControl());
   }
   connectedCallback() {
     const l = this._root.querySelector("label");
@@ -1508,8 +1545,48 @@ class MonoField extends MonoElement {
     const hv = this.getAttribute("hint");
     if (hv !== null) h.textContent = hv;
     h.hidden = hv === null;
+    this._syncName();
+    /* A field's control is usually not there yet when the field connects: the
+     * parser inserts <mono-field> before it has parsed the child, and app.js
+     * builds most fields at runtime by appending a control afterwards. Without
+     * watching for children, the label would never reach the control. */
+    if (!this._watch) {
+      this._watch = new MutationObserver(() => this._syncName());
+      this._watch.observe(this, { childList: true });
+    }
+  }
+  disconnectedCallback() {
+    this._watch?.disconnect();
+    this._watch = null;
   }
   attributeChangedCallback() { this.connectedCallback(); }
+
+  _control() {
+    return this.querySelector(
+      "mono-input, mono-textarea, mono-search, mono-select, mono-checkbox, mono-switch"
+    );
+  }
+
+  /* Hand the visible label to the control as its accessible name. Only a label
+   * this field set itself is ever taken back off again, so an aria-label the
+   * author wrote directly on the control survives both a rename and a removal. */
+  _syncName() {
+    const label = this.getAttribute("label");
+    if (this._labelled && this._labelled.getAttribute("aria-label") === this._setLabel) {
+      this._labelled.removeAttribute("aria-label");
+      this._labelled = null;
+    }
+    const ctl = this._control();
+    if (!label || !ctl || ctl.hasAttribute("aria-label")) return;
+    ctl.setAttribute("aria-label", label);
+    this._labelled = ctl;
+    this._setLabel = label;
+  }
+
+  _focusControl() {
+    this._control()?.focus();
+  }
+
   get label() { return this.getAttribute("label") || ""; }
   set label(v) { this.setAttribute("label", v); }
   get hint() { return this.getAttribute("hint") || ""; }
@@ -1566,7 +1643,9 @@ searchTmpl.innerHTML = `
 
 class MonoSearch extends MonoElement {
   static formAssociated = true;
-  static observedAttributes = ["placeholder", "value", "disabled", "name"];
+  static observedAttributes = [
+    "placeholder", "value", "disabled", "name", "aria-label", "aria-labelledby"
+  ];
 
   constructor() {
     super();
@@ -1587,11 +1666,13 @@ class MonoSearch extends MonoElement {
     if (v !== null) this._el.value = v;
     const n = this.getAttribute("name");
     if (n) this._el.name = n;
+    this._mirrorName(this._el);
   }
   attributeChangedCallback(name) {
     if (name === "placeholder" && this._el) this._el.placeholder = this.getAttribute("placeholder") ?? "";
     if (name === "value" && this._el && this._el.value !== this.getAttribute("value"))
       this._el.value = this.getAttribute("value") ?? "";
+    this._mirrorName(this._el);
   }
 
   get value() { return this._el.value; }
@@ -1646,7 +1727,9 @@ switchTmpl.innerHTML = `
 
 class MonoSwitch extends MonoElement {
   static formAssociated = true;
-  static observedAttributes = ["checked", "disabled", "name", "value"];
+  static observedAttributes = [
+    "checked", "disabled", "name", "value", "aria-label", "aria-labelledby"
+  ];
 
   constructor() {
     super();
@@ -1678,9 +1761,16 @@ class MonoSwitch extends MonoElement {
     if (this.disabled) this._ctl.setAttribute("aria-disabled", "true");
     else this._ctl.removeAttribute("aria-disabled");
     /* The caption is slotted outside the control, so name it explicitly. */
-    if (!this.hasAttribute("aria-label")) {
+    /* A host aria-label -- written by an author, or handed over by
+     * <mono-field> -- wins. Without one the slotted caption names it, which is
+     * how these controls were labelled before fields started handing names
+     * down. */
+    const host = this.getAttribute("aria-label");
+    if (host) this._ctl.setAttribute("aria-label", host);
+    else {
       const text = (this.textContent ?? "").replace(/\s+/g, " ").trim();
       if (text) this._ctl.setAttribute("aria-label", text);
+      else this._ctl.removeAttribute("aria-label");
     }
     this._syncForm();
   }

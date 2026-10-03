@@ -43,7 +43,7 @@
         Sign in with Discord
       </a>
       <div id="pw-fields">
-        <mono-input type="password" id="password" placeholder="Panel password" autocomplete="current-password" required/>
+        <mono-input type="password" id="password" aria-label="Panel password" placeholder="Panel password" autocomplete="current-password" required/>
         <mono-button type="submit" variant="primary">Sign in</mono-button>
       </div>
       <p id="login-error" class="error hidden"></p>
@@ -114,7 +114,7 @@
       </nav>
 
         <div class="toolbar">
-          <mono-search id="search" placeholder="Search anything…  (press /)"></mono-search>
+          <mono-search id="search" aria-label="Search the dashboard" placeholder="Search anything…  (press /)"></mono-search>
         </div>
 
         <section class="card" data-tab="overview" id="sec-health">
@@ -268,8 +268,8 @@
           </div>
 
           <div class="field-row" id="wc-embed-row">
-            <mono-input id="wc-title" placeholder="Embed title (optional)" maxlength="256"/>
-            <mono-input type="color" id="wc-color" value="#5865f2" title="Embed color"/>
+            <mono-input id="wc-title" aria-label="Embed title (optional)" placeholder="Embed title (optional)" maxlength="256"/>
+            <mono-input type="color" id="wc-color" value="#5865f2" title="Embed color" aria-label="Embed color"/>
           </div>
 
           <div class="field-row">
@@ -358,7 +358,7 @@
                 <mono-input id="es-footer" maxlength="2048"/>
               </mono-field>
             </div>
-            <mono-input type="color" id="es-color" value="#5865f2" title="Embed color"/>
+            <mono-input type="color" id="es-color" value="#5865f2" title="Embed color" aria-label="Embed color"/>
           </div>
 
           <div class="field-row">
