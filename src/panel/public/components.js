@@ -14,20 +14,25 @@
 
 const TOKENS = `
   :host {
-    --mono-font: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
-    --mono-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    --mono-radius: 12px;
-    --mono-radius-sm: 9px;
-    --mono-bg: var(--card-2, #252525);
-    --mono-bg-hover: var(--card-3, #2b2b2e);
-    --mono-border: var(--border-strong, #3a3a3d);
-    --mono-text: var(--text, #fff);
-    --mono-muted: var(--muted, #98989d);
-    --mono-accent: var(--accent, #00e5ff);
-    --mono-danger: var(--coral, #ff453a);
-    --mono-green: var(--green, #32d74b);
-    --mono-ring: 0 0 0 4px var(--glow, rgba(0, 229, 255, 0.28));
-    --mono-transition: 140ms cubic-bezier(0.4, 0, 0.2, 1);
+    /* Everything resolves against the page palette, so the controls and the
+     * dashboard cannot drift apart. Fallbacks keep an element readable if it is
+     * ever rendered without style.css loaded. */
+    --mono-font: var(--font, "Inter", system-ui, sans-serif);
+    --mono-mono: var(--font-mono, ui-monospace, monospace);
+    --mono-radius: var(--radius, 16px);
+    --mono-radius-sm: var(--radius-sm, 10px);
+    --mono-bg: var(--card-2, #1e1a45);
+    --mono-bg-hover: var(--card-3, #262157);
+    --mono-border: var(--border-strong, #3b3382);
+    --mono-text: var(--text, #f3f1ff);
+    --mono-muted: var(--muted, #a49dd6);
+    --mono-accent: var(--accent, #7cd4fd);
+    --mono-violet: var(--violet, #a78bfa);
+    --mono-accent-soft: var(--accent-soft, rgb(124 212 253 / 14%));
+    --mono-danger: var(--red, #fb7185);
+    --mono-green: var(--green, #4ade80);
+    --mono-ring: var(--shadow-focus, 0 0 0 4px rgb(124 212 253 / 22%));
+    --mono-transition: var(--fast, 130ms) var(--ease, cubic-bezier(0.4, 0, 0.2, 1));
     font-family: var(--mono-font);
     box-sizing: border-box;
   }
@@ -1162,7 +1167,7 @@ checkTmpl.innerHTML = `
     <span class="ctl" part="control" role="checkbox" tabindex="0">
       <span class="box">
         <svg class="tick" viewBox="0 0 24 24" aria-hidden="true">
-          <path fill="none" stroke="#06181c" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" d="M4 12.5l5.5 5.5L20 6.5"/>
+          <path fill="none" stroke="var(--on-accent, #0b1030)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" d="M4 12.5l5.5 5.5L20 6.5"/>
         </svg>
         <span class="dash" aria-hidden="true"></span>
       </span>
