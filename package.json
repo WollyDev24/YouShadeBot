@@ -8,7 +8,7 @@
     "start": "bash scripts/start.sh",
     "dev": "node --watch src/index.js",
     "setup": "node scripts/setup.mjs",
-    "test": "node scripts/test-db.mjs && node scripts/test-components.mjs && node scripts/test-panel.mjs && node scripts/test-boot.mjs && bash scripts/test-aichat.sh"
+    "test": "node scripts/test-db.mjs && node scripts/test-components.mjs && node scripts/test-ui.mjs && node scripts/test-panel.mjs && node scripts/test-boot.mjs && bash scripts/test-aichat.sh"
   },
   "license": "MIT",
   "dependencies": {

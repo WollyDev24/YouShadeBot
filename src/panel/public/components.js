@@ -46,6 +46,51 @@ const define = (name, cls) => {
 };
 
 const boolAttr = (el, name) => el.hasAttribute(name);
+
+/* app.js sometimes sets option.value as a property and sometimes as markup, and
+ * an empty value="" must stay empty rather than falling back to the label. */
+const optValue = (o) => {
+  const attr = o.getAttribute("value");
+  if (attr !== null) return attr;
+  const prop = o.value;
+  if (prop !== undefined && prop !== "") return prop;
+  return o.textContent ?? "";
+};
+
+/* Every control that pops out of its shadow root teleports it here and
+ * positions it in viewport coordinates. A popup cannot escape its host's
+ * stacking context, so a select inside an overflow:hidden card would otherwise
+ * be clipped. */
+let __layer = null;
+function popupLayer() {
+  if (__layer?.isConnected) return __layer;
+  __layer = document.createElement("div");
+  __layer.id = "mono-popup-layer";
+  __layer.style.cssText = [
+    "position:fixed",
+    "inset:0",
+    "z-index:2147483000",
+    "pointer-events:none"
+  ].join(";");
+  __layer.attachShadow({ mode: "open" });
+  const mount = document.createElement("div");
+  mount.style.cssText = "position:absolute;inset:0;pointer-events:none;";
+  __layer.shadowRoot.append(mount);
+  document.body.append(__layer);
+  return __layer;
+}
+
+function popupOutside(handler) {
+  const listener = (event) => {
+    const path = event.composedPath?.() ?? [];
+    if (path.includes(handler.anchor)) return;
+    handler.close?.();
+  };
+  document.addEventListener("pointerdown", listener, true);
+  return () => document.removeEventListener("pointerdown", listener, true);
+}
+
+let selectUid = 0;
 const numAttr = (el, name, fallback) => {
   const v = el.getAttribute(name);
   if (v === null) return fallback;
@@ -391,50 +436,77 @@ define("mono-textarea", MonoTextarea);
  * native <select> kept in shadow DOM.
  * ============================================================ */
 
+/* The popup lives in the shared layer, outside this shadow root, so these rules
+ * are needed in both places. One source, injected twice. */
+const OPTION_CSS = `
+  .mono-opt {
+    display: flex; align-items: center; gap: 9px; padding: 7px 9px;
+    border-radius: 7px; cursor: pointer; color: var(--mono-text);
+    font: 500 14px/1.35 var(--mono-font);
+  }
+  .mono-opt:hover { background: var(--mono-bg-hover); }
+  .mono-opt[data-active] { background: color-mix(in srgb, var(--mono-accent) 16%, transparent); }
+  .mono-opt[aria-selected="true"] { color: var(--mono-accent); }
+  .mono-opt[aria-disabled="true"] { opacity: 0.45; cursor: not-allowed; }
+  .mono-tick {
+    width: 15px; height: 15px; flex: none; border-radius: 4px; display: none;
+    place-items: center; border: 1.5px solid var(--mono-border);
+    font: 700 11px/1 var(--mono-font);
+  }
+  [data-multiple] .mono-tick { display: grid; }
+  .mono-opt[aria-selected="true"] .mono-tick {
+    background: var(--mono-accent); border-color: var(--mono-accent); color: var(--bg, #0d0b1a);
+  }
+  .mono-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+`;
+
 const selectTmpl = document.createElement("template");
 selectTmpl.innerHTML = `
   <style>
     ${TOKENS}
-    :host { display: inline-flex; position: relative; width: 100%; min-width: 0; }
+    :host { display: block; width: 100%; position: relative; }
     :host([width]) { width: var(--mono-w, auto); }
-    .wrap { position: relative; display: flex; align-items: center; width: 100%; min-width: 0; }
-    select {
-      appearance: none; -webkit-appearance: none;
-      width: 100%; min-width: 0;
-      background: var(--mono-bg);
-      border: 1px solid var(--mono-border);
-      border-radius: var(--mono-radius-sm);
-      color: var(--mono-text);
+    :host([size]) { width: 100%; }
+
+    button {
+      all: unset; box-sizing: border-box;
+      display: flex; align-items: center; gap: 8px; width: 100%;
+      min-height: 38px; padding: 0 12px; cursor: pointer;
+      border: 1px solid var(--mono-border); border-radius: var(--mono-radius-sm);
+      background: var(--mono-bg); color: var(--mono-text);
       font: 500 14px/1.4 var(--mono-font);
-      padding: 10px 36px 10px 12px;
-      cursor: pointer; outline: none;
       transition: border-color var(--mono-transition), box-shadow var(--mono-transition);
     }
-    select:hover { border-color: color-mix(in srgb, var(--mono-accent) 45%, var(--mono-border)); }
-    :host(:focus-within) select { border-color: var(--mono-accent); box-shadow: var(--mono-ring); }
-    :host([invalid]) select { border-color: var(--mono-danger); }
-    select:disabled { cursor: not-allowed; opacity: 0.6; }
-    select[multiple] {
-      padding: 6px; min-height: calc(var(--mono-rows, 6) * 1.4em + 12px);
-      background-image: none;
-    }
-    select[multiple] option { padding: 6px 8px; border-radius: 6px; }
+    button:hover { border-color: color-mix(in srgb, var(--mono-accent) 45%, var(--mono-border)); }
+    button:focus-visible { box-shadow: var(--mono-ring); }
+    :host([disabled]) button { cursor: not-allowed; }
+    .value { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .value.placeholder { color: var(--mono-muted); opacity: 0.65; font-weight: 400; }
     .arrow {
-      position: absolute; right: 11px; pointer-events: none;
-      color: var(--mono-muted); font-size: 12px;
-      display: grid; place-items: center;
-      transition: transform var(--mono-transition), color var(--mono-transition);
+      margin-left: auto; flex: none; color: var(--mono-muted);
+      font-size: 10px; transition: transform var(--mono-transition);
     }
-    :host(:focus-within) .arrow { color: var(--mono-accent); }
-    :host([open]) .arrow { transform: rotate(180deg); }
-    :host([multiple]) .arrow { display: none; }
-    /* light-DOM options are configuration only, never rendered directly */
-    ::slotted(option) { display: none; }
+    button[aria-expanded="true"] .arrow { transform: rotate(180deg); }
+
+    /* size mode replaces the popup with a permanently visible listbox, which is
+       what a native <select size> is. Only one select in the panel uses it. */
+    .list { display: none; }
+    :host([size]) button { display: none; }
+    :host([size]) .list {
+      display: block; overflow-y: auto; overscroll-behavior: contain;
+      padding: 6px; border: 1px solid var(--mono-border);
+      border-radius: var(--mono-radius-sm); background: var(--mono-bg);
+      min-height: calc(var(--mono-rows, 6) * 36px);
+    }
+    .list:focus-visible { box-shadow: var(--mono-ring); }
+
+${OPTION_CSS}
   </style>
-  <div class="wrap">
-    <select part="select"></select>
+  <button part="select" type="button">
+    <span class="value"></span>
     <span class="arrow" aria-hidden="true">▾</span>
-  </div>
+  </button>
+  <div class="list" part="list" role="listbox" tabindex="0"></div>
 `;
 
 class MonoSelect extends MonoElement {
@@ -444,142 +516,599 @@ class MonoSelect extends MonoElement {
   constructor() {
     super();
     this._root.appendChild(selectTmpl.content.cloneNode(true));
-    this._el = this._root.querySelector("select");
-    this._el.addEventListener("change", () => this._onChange());
-    this._el.addEventListener("input", () => this._onChange());
+    this._button = this._root.querySelector("button");
+    this._listEl = this._root.querySelector(".list");
+    this._valueEl = this._root.querySelector(".value");
+    this._listId = `mono-listbox-${++selectUid}`;
+    this._popup = null;
+    this._activeIndex = -1;
+    this._open = false;
+    this._typeahead = "";
+    this._typeaheadTimer = null;
     this._pendingValue = null;
+
+    this._button.addEventListener("click", () => this._toggle());
+    this._button.addEventListener("keydown", (e) => this._onKeyDown(e));
+    this._listEl.addEventListener("click", (e) => this._onListClick(e));
+    this._listEl.addEventListener("keydown", (e) => this._onListKeyDown(e));
+    this._listEl.addEventListener("mousemove", (e) => this._onListHover(e));
   }
 
   connectedCallback() {
     this._sync();
     this._observer = new MutationObserver(() => this._syncOptions());
-    this._observer.observe(this, { childList: true, subtree: true, characterData: true });
+    this._observer.observe(this, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ["value", "selected", "disabled"] });
     this._syncOptions();
   }
 
   disconnectedCallback() {
     this._observer?.disconnect();
+    if (this._open) this._close({ focus: false });
   }
 
-  attributeChangedCallback() { this._sync(); }
+  attributeChangedCallback() {
+    this._sync();
+  }
 
   _sync() {
-    const el = this._el;
-    if (!el) return;
-    const multiple = boolAttr(this, "multiple");
-    if (el.multiple !== multiple) el.multiple = multiple;
-    if (this.hasAttribute("size")) el.size = numAttr(this, "size", 6);
-    if (this.hasAttribute("rows")) this.style.setProperty("--mono-rows", numAttr(this, "rows", 6));
-    el.disabled = boolAttr(this, "disabled");
-    el.required = boolAttr(this, "required");
-    const name = this.getAttribute("name");
-    if (name) el.name = name;
+    const rows = this.hasAttribute("rows") ? numAttr(this, "rows", 6) : numAttr(this, "size", 6);
+    this.style.setProperty("--mono-rows", String(rows));
     const w = this.getAttribute("width");
     if (w) this.style.setProperty("--mono-w", /^\d+$/.test(w) ? `${w}px` : w);
+    this._listEl.setAttribute("data-multiple", String(this.multiple));
+    this._listEl.toggleAttribute("aria-multiselectable", this.multiple);
+    this._syncAria();
+    if (this.hasAttribute("size")) this._render();
   }
 
-  /* Rebuild the native <option> list from the light-DOM declarations. */
+  /* app.js builds <option> children and marks them with the `selected` and
+   * `disabled` *properties*, so those are the source of truth here. The
+   * signature check keeps us from rebuilding the popup on every mutation. */
   _syncOptions() {
-    const el = this._el;
-    if (!el) return;
     const declared = [...this.querySelectorAll(":scope > option")];
-    /* app.js marks options with the `selected` *property*, not the attribute,
-     * so the property is the source of truth here */
     const sig = declared
-      .map((d) => `${d.getAttribute("value") ?? d.textContent}\u0000${d.selected ? 1 : 0}\u0000${d.disabled ? 1 : 0}`)
+      .map((d) => `${optValue(d)}\u0000${d.selected ? 1 : 0}\u0000${d.disabled ? 1 : 0}`)
       .join("\u0001");
     if (sig === this._sig) return;
     this._sig = sig;
 
-    const prevValue = this._pendingValue;
-    el.replaceChildren();
-    for (const d of declared) {
-      const o = document.createElement("option");
-      o.value = d.getAttribute("value") ?? d.textContent;
-      o.textContent = d.textContent;
-      o.disabled = d.hasAttribute("disabled");
-      o.selected = d.selected;
-      el.appendChild(o);
+    const prev = this._pendingValue;
+    if (this._activeIndex >= declared.length) this._activeIndex = -1;
+
+    if (this.hasAttribute("size")) {
+      this._renderList(this._listEl);
+      this._paint();
     }
-    if (prevValue !== null && prevValue !== undefined) this._applyValue(prevValue);
-    else if (!el.multiple && el.options.length) el.selectedIndex = 0;
+    if (prev !== null && prev !== undefined) this._applyValue(prev);
+    else if (!this.multiple && declared.length) this._applyValue(declared[0]);
+    this._syncForm();
+    this._render();
+  }
+
+  /* Mirrors the native fallback the old implementation relied on: assigning a
+   * value that does not exist selects the first option rather than clearing,
+   * and a single select with options defaults to the first one. */
+  _applyValue(v) {
+    const declared = this._declared();
+    if (this.multiple) {
+      const wanted = Array.isArray(v) ? v.map(String) : [String(v ?? "")];
+      for (const o of declared) o.selected = wanted.includes(optValue(o));
+      return;
+    }
+    const target = v == null ? "" : String(v);
+    const hit = declared.find((o) => optValue(o) === target && !o.disabled);
+    if (hit) {
+      for (const o of declared) o.selected = o === hit;
+    } else if (target === "") {
+      for (const o of declared) o.selected = false;
+    } else if (declared.length) {
+      for (const o of declared) o.selected = o === declared[0];
+    }
+  }
+
+  _declared() {
+    return [...this.querySelectorAll(":scope > option")];
+  }
+
+  get options() {
+    return this._declared();
+  }
+
+  get selectedOptions() {
+    const picked = this._declared().filter((o) => o.selected);
+    /* Native single selects are exclusive, so callers that assign
+     * option.selected directly expect the previous pick to disappear. The
+     * light DOM is normalised on the next render; this reports the observable
+     * state straight away. */
+    return this.multiple ? picked : picked.slice(-1);
+  }
+
+  get selectedIndex() {
+    return this._declared().findIndex((o) => o.selected);
+  }
+
+  set selectedIndex(v) {
+    const declared = this._declared();
+    const n = Number(v);
+    if (!declared.length) return;
+    const pick = declared[n < 0 ? declared.length + n : n];
+    if (pick) this._applyValue(optValue(pick));
     this._syncForm();
   }
 
-  _applyValue(v) {
-    const el = this._el;
-    if (!el) return;
-    if (el.multiple) {
-      const wanted = Array.isArray(v) ? v.map(String) : [String(v)];
-      for (const o of el.options) o.selected = wanted.includes(o.value);
-      /* a <select multiple> starts with nothing selected when the option list
-       * is rebuilt, so re-apply even when the value looks unchanged */
-      if (!el.options.length) return;
-    } else {
-      el.value = v ?? "";
-      if (el.selectedIndex < 0 && el.options.length) el.selectedIndex = 0;
-    }
-  }
-
   _syncForm() {
-    const el = this._el;
-    if (!el) return;
-    if (!el.multiple) {
-      this.internals?.setFormValue(el.value);
+    if (!this.internals) return;
+    /* A disabled control must not submit, exactly like a native one. */
+    if (this.disabled) {
+      this.internals.setFormValue(null);
       return;
     }
-    const picked = [];
-    for (const o of el.options) if (o.selected) picked.push(o.value);
-    this.internals?.setFormValue(picked);
+    if (this.multiple) {
+      this.internals.setFormValue(this._declared().filter((o) => o.selected).map(optValue));
+      return;
+    }
+    this.internals.setFormValue(this.value);
+  }
+
+  /* ---------- rendering ---------- */
+
+  /* A native single select never holds two selected options: setting selected on
+ * one deselects the rest. The light-DOM options are now the source of truth
+ * rather than a mirror of a native <select>, so that rule has to be enforced
+ * here or callers that assign option.selected directly break exclusivity. */
+_normalize() {
+  if (this.multiple) return;
+  const selected = this._declared().filter((o) => o.selected);
+  if (selected.length < 2) return;
+  const keep = selected[selected.length - 1];
+  for (const o of selected) o.selected = o === keep;
+}
+
+_render() {
+    this._normalize();
+    const sel = this.selectedOptions;
+    const placeholder = this.getAttribute("placeholder") ?? "";
+    let text;
+    if (!sel.length) text = placeholder;
+    else if (this.multiple) text = sel.map((o) => o.textContent ?? "").join(", ");
+    else text = sel[0].textContent ?? "";
+    this._valueEl.textContent = text;
+    this._valueEl.classList.toggle("placeholder", !sel.length);
+    if (this.hasAttribute("size")) this._renderList(this._listEl);
+    if (this._popup) {
+      this._renderList(this._popup);
+      this._paint();
+    } else if (this.hasAttribute("size")) {
+      this._paint();
+    } else {
+      this._syncAria();
+    }
+    this._syncForm();
+  }
+
+  _renderList(target) {
+    if (!target) return;
+    target.textContent = "";
+    const frag = document.createDocumentFragment();
+    this._declared().forEach((o, i) => {
+      frag.append(this._makeOption(o, i, target));
+    });
+    target.append(frag);
+  }
+
+  _makeOption(o, i, list) {
+    const el = document.createElement("div");
+    el.id = `${this._listId}-${i}`;
+    el.className = "mono-opt";
+    el.dataset.index = String(i);
+    el.setAttribute("role", "option");
+    const tick = document.createElement("span");
+    tick.className = "mono-tick";
+    tick.setAttribute("aria-hidden", "true");
+    el.append(tick);
+    const label = document.createElement("span");
+    label.className = "mono-label";
+    label.textContent = o.textContent ?? "";
+    el.append(label);
+    el.__index = i;
+    el.__source = o;
+    return el;
+  }
+
+  _paint() {
+    const list = this._popup ?? (this.hasAttribute("size") ? this._listEl : null);
+    if (!list) return;
+    for (const el of list.children) {
+      const o = el.__source;
+      if (!o) continue;
+      const active = el.__index === this._activeIndex;
+      el.setAttribute("aria-selected", String(Boolean(o.selected)));
+      if (o.disabled) el.setAttribute("aria-disabled", "true");
+      else el.removeAttribute("aria-disabled");
+      if (active) el.setAttribute("data-active", "");
+      else el.removeAttribute("data-active");
+      const tick = el.firstElementChild;
+      if (tick) tick.textContent = o.selected ? "✓" : "";
+    }
+    this._syncAria();
+    const active = list.children[this._activeIndex];
+    active?.scrollIntoView?.({ block: "nearest" });
+  }
+
+  _syncAria() {
+    const btn = this._button;
+    const required = this.hasAttribute("required");
+    const listMode = this.hasAttribute("size");
+    if (listMode) {
+      btn.setAttribute("role", "presentation");
+      this.removeAttribute("aria-expanded");
+      this._listEl.setAttribute("aria-required", String(required));
+    } else {
+      /* ARIA 1.2 combobox pattern: the role and every state live on the
+       * focused element, not on the host, or the two are announced twice. */
+      btn.setAttribute("role", "combobox");
+      btn.setAttribute("aria-haspopup", "listbox");
+      btn.setAttribute("aria-expanded", String(this._open));
+      btn.setAttribute("aria-controls", this._listId);
+      btn.setAttribute("aria-required", String(required));
+      const target = this._popup ?? this._listEl;
+      const index = this._activeIndex;
+      if (index >= 0 && target?.children[index]) {
+        btn.setAttribute("aria-activedescendant", `${this._listId}-${index}`);
+      } else {
+        btn.removeAttribute("aria-activedescendant");
+      }
+    }
+    if (this.disabled) btn.setAttribute("aria-disabled", "true");
+    else btn.removeAttribute("aria-disabled");
+  }
+
+  /* ---------- popup ---------- */
+
+  get open() {
+    return this._open;
+  }
+
+  _toggle() {
+    return this._open ? this._close() : this._openPopup();
+  }
+
+  _openPopup() {
+    if (this._open || this.disabled || this.hasAttribute("size")) return;
+    const declared = this._declared();
+    if (!declared.length) return;
+    this._open = true;
+
+    const list = document.createElement("div");
+    list.id = this._listId;
+    list.setAttribute("part", "list");
+    list.setAttribute("role", "listbox");
+    if (this.multiple) list.setAttribute("aria-multiselectable", "true");
+    list.setAttribute("data-multiple", String(this.multiple));
+    this._popup = list;
+    list.style.cssText = [
+      "position:absolute",
+      "box-sizing:border-box",
+      "overflow-y:auto",
+      "overscroll-behavior:contain",
+      "padding:6px",
+      "border:1px solid var(--mono-border,#3a3a3d)",
+      "border-radius:var(--mono-radius-sm,9px)",
+      "background:var(--card-2,#252525)",
+      "box-shadow:var(--shadow,0 12px 32px rgba(0,0,0,.5))",
+      "font:500 14px/1.35 var(--mono-font,Inter,sans-serif)",
+      "pointer-events:auto"
+    ].join(";");
+    this._renderList(list);
+    /* The popup has to carry the same click/hover wiring as the size-mode
+     * listbox, otherwise its options render but cannot be chosen. */
+    list.addEventListener("click", (e) => {
+      const el = e.target.closest?.("[data-index]");
+      if (el) this._commit(Number(el.dataset.index));
+    });
+    list.addEventListener("mousemove", (e) => {
+      const el = e.target.closest?.("[data-index]");
+      if (!el) return;
+      const index = Number(el.dataset.index);
+      if (index === this._activeIndex) return;
+      this._activeIndex = index;
+      this._paint();
+    });
+    popupLayer().shadowRoot.firstElementChild.append(list);
+    this._place();
+
+    const at = declared.findIndex((o) => o.selected && !o.disabled);
+    this._activeIndex = at >= 0 ? at : declared.findIndex((o) => !o.disabled);
+    this._paint();
+
+    this._offOutside = popupOutside({
+      anchor: this,
+      close: () => this._close()
+    });
+    this._onScroll = () => this._place();
+    window.addEventListener("scroll", this._onScroll, true);
+    window.addEventListener("resize", this._onScroll);
+  }
+
+  _place() {
+    if (!this._popup) return;
+    const a = this.getBoundingClientRect();
+    const vw = document.documentElement.clientWidth;
+    const vh = document.documentElement.clientHeight;
+    const width = a.width || this._popup.offsetWidth || 180;
+    this._popup.style.width = `${Math.round(width)}px`;
+    this._popup.style.maxHeight = "320px";
+    const height = Math.min(this._popup.offsetHeight || 0, 320);
+    let top = a.bottom + 6;
+    if (height && top + height > vh - 8 && a.top - 6 - height > 8) top = a.top - 6 - height;
+    let left = a.left;
+    if (left + width > vw - 8) left = Math.max(8, vw - width - 8);
+    this._popup.style.top = `${Math.round(top)}px`;
+    this._popup.style.left = `${Math.round(left)}px`;
+  }
+
+  _close({ focus = true } = {}) {
+    if (!this._open) return;
+    this._open = false;
+    this._offOutside?.();
+    this._offOutside = null;
+    window.removeEventListener("scroll", this._onScroll, true);
+    window.removeEventListener("resize", this._onScroll);
+    clearTimeout(this._typeaheadTimer);
+    this._popup?.remove();
+    this._popup = null;
+    this._paint();
+    if (focus) this._button.focus();
+  }
+
+  /* ---------- committing ---------- */
+
+  _commit(index) {
+    const declared = this._declared();
+    const o = declared[index];
+    if (!o || o.disabled) return;
+    if (this.multiple) {
+      o.selected = !o.selected;
+      this._render();
+      this._emit();
+      this._paint();
+      return;
+    }
+    for (const other of declared) other.selected = other === o;
+    this._pendingValue = null;
+    this._render();
+    this._emit();
+    this._close();
+  }
+
+  _emit() {
+    this._syncForm();
+    this._onChange();
   }
 
   _onChange() {
     this._pendingValue = null;
     this._syncForm();
-    this.internals?.setValidity(
-      el_validity(this._el) ? {} : { valueMissing: true },
-      this._el.validationMessage,
-      this._el
-    );
+    this.checkValidity();
     this.dispatchEvent(new Event("change", { bubbles: true, composed: true }));
     this.dispatchEvent(new Event("input", { bubbles: true, composed: true }));
   }
 
-  /* --- API --- */
-  get value() { return this._el.value; }
+  _enabled() {
+    return this._declared()
+      .map((o, i) => ({ o, i }))
+      .filter(({ o }) => !o.disabled);
+  }
+
+  _move(step) {
+    const enabled = this._enabled();
+    if (!enabled.length) return;
+    const current = enabled.findIndex(({ i }) => i === this._activeIndex);
+    const next = current === -1
+      ? (step > 0 ? 0 : enabled.length - 1)
+      : (current + step + enabled.length) % enabled.length;
+    this._activeIndex = enabled[next].i;
+    this._paint();
+  }
+
+  _jump(edge) {
+    const enabled = this._enabled();
+    if (!enabled.length) return;
+    this._activeIndex = (edge === "home" ? enabled[0] : enabled[enabled.length - 1]).i;
+    this._paint();
+  }
+
+  _typeaheadMatch(char) {
+    this._typeahead += char.toLowerCase();
+    clearTimeout(this._typeaheadTimer);
+    this._typeaheadTimer = setTimeout(() => {
+      this._typeahead = "";
+    }, 600);
+    const enabled = this._enabled();
+    const from = enabled.findIndex(({ i }) => i === this._activeIndex);
+    for (let n = 1; n <= enabled.length; n++) {
+      const { o, i } = enabled[(from + n + enabled.length) % enabled.length];
+      if ((o.textContent ?? "").toLowerCase().startsWith(this._typeahead)) {
+        this._activeIndex = i;
+        this._paint();
+        return;
+      }
+    }
+  }
+
+  _onKeyDown(e) {
+    const { key } = e;
+    if (!this._open) {
+      if (key === "Enter" || key === " " || key === "ArrowDown" || key === "ArrowUp") {
+        e.preventDefault();
+        this._openPopup();
+        if (key === "ArrowUp") this._jump("end");
+        return;
+      }
+      if (key === "Home" || key === "End") {
+        e.preventDefault();
+        this._jump(key === "Home" ? "home" : "end");
+        return;
+      }
+      if (key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        this._typeaheadMatch(key);
+      }
+      return;
+    }
+    switch (key) {
+      case "Escape":
+        e.preventDefault();
+        e.stopPropagation();
+        this._close();
+        break;
+      case "Tab":
+        this._close({ focus: false });
+        break;
+      case "ArrowDown":
+        e.preventDefault();
+        this._move(1);
+        if (this.multiple) this._commit(this._activeIndex);
+        break;
+      case "ArrowUp":
+        e.preventDefault();
+        this._move(-1);
+        if (this.multiple) this._commit(this._activeIndex);
+        break;
+      case "Home":
+        e.preventDefault();
+        this._jump("home");
+        break;
+      case "End":
+        e.preventDefault();
+        this._jump("end");
+        break;
+      case "Enter":
+      case " ":
+        e.preventDefault();
+        this._commit(this._activeIndex);
+        break;
+      default:
+        if (key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+          e.preventDefault();
+          this._typeaheadMatch(key);
+        }
+    }
+  }
+
+  /* size mode: a permanently visible listbox driven by the same navigation. */
+  _onListClick(e) {
+    const el = e.target.closest?.("[data-index]");
+    if (!el) return;
+    this._commit(Number(el.dataset.index));
+  }
+
+  _onListHover(e) {
+    const el = e.target.closest?.("[data-index]");
+    if (!el) return;
+    const index = Number(el.dataset.index);
+    if (index === this._activeIndex) return;
+    this._activeIndex = index;
+    this._paint();
+  }
+
+  _onListKeyDown(e) {
+    const { key } = e;
+    if (key === "ArrowDown") {
+      e.preventDefault();
+      this._move(1);
+    } else if (key === "ArrowUp") {
+      e.preventDefault();
+      this._move(-1);
+    } else if (key === "Home") {
+      e.preventDefault();
+      this._jump("home");
+    } else if (key === "End") {
+      e.preventDefault();
+      this._jump("end");
+    } else if (key === "Enter" || key === " ") {
+      e.preventDefault();
+      this._commit(this._activeIndex);
+    } else if (key === "Escape") {
+      this._button.focus();
+    }
+  }
+
+  /* ---------- API ---------- */
+  get value() {
+    const sel = this.selectedOptions;
+    if (!sel.length) return "";
+    return optValue(sel[0]);
+  }
   set value(v) {
     this._pendingValue = v;
-    /* values may be applied before the matching <option> exists */
+    /* the value may be assigned before the matching <option> exists */
     this._applyValue(v);
+    this._render();
     this._syncForm();
   }
   get values() {
-    const picked = [];
-    for (const o of this._el.options) if (o.selected) picked.push(o.value);
-    return picked;
+    return this._declared().filter((o) => o.selected).map(optValue);
   }
   set values(v) {
     this._pendingValue = Array.isArray(v) ? v.map(String) : [String(v)];
     this._applyValue(this._pendingValue);
+    this._render();
     this._syncForm();
   }
-  get selectedOptions() { return this._el.selectedOptions; }
-  get options() { return this._el.options; }
-  get selectedIndex() { return this._el.selectedIndex; }
-  set selectedIndex(v) { this._el.selectedIndex = v; this._syncForm(); }
-  get multiple() { return this._el.multiple; }
+  get multiple() { return boolAttr(this, "multiple"); }
   set multiple(v) { v ? this.setAttribute("multiple", "") : this.removeAttribute("multiple"); }
   get name() { return this.getAttribute("name") || ""; }
   set name(v) { this.setAttribute("name", v); }
-  get disabled() { return this._el.disabled; }
+  get disabled() { return boolAttr(this, "disabled"); }
   set disabled(v) { v ? this.setAttribute("disabled", "") : this.removeAttribute("disabled"); }
-  get required() { return this._el.required; }
+  get required() { return boolAttr(this, "required"); }
   set required(v) { v ? this.setAttribute("required", "") : this.removeAttribute("required"); }
-  get validity() { return this._el.validity; }
-  checkValidity() { return this._el.checkValidity(); }
-  reportValidity() { return this._el.reportValidity(); }
-  focus(opts) { this._el.focus(opts); }
-  blur() { this._el.blur(); }
+  get validity() {
+    const ok = !this.hasAttribute("required") || this.selectedOptions.length > 0;
+    return {
+      valid: ok,
+      valueMissing: !ok,
+      customError: Boolean(this._customMessage)
+    };
+  }
+  checkValidity() {
+    /* Validity has to reach the internals, not just the ARIA attribute, or a
+     * real <form> never learns that the control is invalid. */
+    const missing = this.hasAttribute("required") && this.selectedOptions.length === 0;
+    const ok = !missing && !this._customMessage;
+    if (ok) {
+      this._button.removeAttribute("aria-invalid");
+      this.internals?.setValidity?.({});
+    } else {
+      this._button.setAttribute("aria-invalid", "true");
+      this.internals?.setValidity?.(
+        missing ? { valueMissing: true } : { customError: true },
+        this._customMessage ?? "",
+        this._button
+      );
+    }
+    return ok;
+  }
+  setCustomValidity(msg) {
+    this._customMessage = msg || "";
+    this.checkValidity();
+  }
+  formDisabledCallback(disabled) {
+    this.toggleAttribute("disabled", disabled);
+    this._syncForm();
+  }
+  formResetCallback() {
+    const declared = this._declared();
+    for (const o of declared) o.selected = o.defaultSelected;
+    this._activeIndex = -1;
+    this._render();
+  }
+  formStateRestoreCallback(state) {
+    if (state) this.value = state;
+  }
+  focus(opts) { this._button.focus(opts); }
+  blur() { this._button.blur(); }
 }
 
 const el_validity = (el) => !el.required || (el.multiple ? el.selectedOptions.length > 0 : el.value !== "");

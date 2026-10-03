@@ -266,18 +266,20 @@ await test("mono-field renders a hint", () => {
   assert.equal(plain.shadowRoot.querySelector(".hint").hidden, true, "no hint attribute means no hint");
 });
 
-await test("a value set before its options exist is applied once they do", () => {
+await test("a value set before its options exist is applied once they do", async () => {
   const sel = document.createElement("mono-select");
-  document.body.appendChild(sel);
-  sel.innerHTML = "";
+  document.body.append(sel);
+  sel.value = "c2";
+  assert.equal(sel.value, "", "no options exist yet, so nothing can be selected");
   for (const [v, t] of [["", "(none)"], ["c1", "general"], ["c2", "alerts"]]) {
     const o = document.createElement("option");
     o.value = v;
     o.textContent = t;
     sel.appendChild(o);
   }
-  sel.value = "c2";
-  assert.equal(sel.value, "", "nothing to select yet, same as a native select");
+  await tick();
+  assert.equal(sel.value, "c2", "the pending value applies once its option arrives");
+  assert.deepEqual(sel.options.map((o) => o.value), ["", "c1", "c2"]);
   sel.remove();
 });
 

@@ -90,10 +90,16 @@ test("elements that app.js touches as controls are custom elements", () => {
   }
 });
 
-test("every mono-select has a shadow select ready", () => {
-  for (const sel of $$("mono-select")) {
+test("every mono-select is hand-rolled, with no native select inside", () => {
+  const selects = $$("mono-select");
+  assert.ok(selects.length > 0, "the panel should have selects");
+  for (const sel of selects) {
     assert.ok(sel.shadowRoot, "no shadow root");
-    assert.ok(sel.shadowRoot.querySelector("select"), "no inner select");
+    /* A native <select> renders a popup that cannot be styled, so the rebuild
+     * replaced it with our own listbox. This assertion is the guard against a
+     * native select creeping back in. */
+    assert.equal(sel.shadowRoot.querySelector("select"), null, "native select found in the shadow root");
+    assert.ok(sel.shadowRoot.querySelector('[role="combobox"], .list'), "no combobox trigger or listbox");
   }
 });
 

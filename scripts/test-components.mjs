@@ -156,16 +156,23 @@ await test("mono-select multiple exposes selectedOptions values", async () => {
   assert.deepEqual(picked, ["2"]);
 });
 
-await test("mono-select dispatches change when the inner select changes", async () => {
+await test("mono-select dispatches change once when an option is committed", async () => {
   const sel = document.createElement("mono-select");
   document.body.append(sel);
   sel.innerHTML = `<option value="x">x</option><option value="y">y</option>`;
   await flush();
   let changed = 0;
+  let inputs = 0;
   sel.addEventListener("change", () => changed++);
-  sel._el.value = "y";
-  sel._el.dispatchEvent(new window.Event("change"));
-  assert.equal(changed, 1);
+  sel.addEventListener("input", () => inputs++);
+  /* There is no inner native <select> to poke any more, so drive the control
+   * the way a user does: open it, then commit an option. */
+  assert.equal(sel.shadowRoot.querySelector("select"), null, "no native select in the shadow root");
+  sel._openPopup();
+  sel._commit(1);
+  assert.equal(changed, 1, "one commit is one change event");
+  assert.equal(inputs, 1);
+  assert.equal(sel.value, "y");
 });
 
 /* ------------------------------------------------------------- checkboxes */
