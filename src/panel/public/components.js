@@ -1124,10 +1124,15 @@ checkTmpl.innerHTML = `
   <style>
     ${TOKENS}
     :host { display: inline-flex; }
+    /* No native <label for> association and no labelable descendant inside the
+     * label, so a click here produces exactly one event for the host to act
+     * on. The old version needed stopPropagation to avoid a double toggle. */
     label {
       display: inline-flex; align-items: center; gap: 9px;
       cursor: pointer; user-select: none;
     }
+    .ctl { display: inline-flex; align-items: center; outline: none; }
+    .ctl:focus-visible .box { box-shadow: var(--mono-ring); }
     .box {
       position: relative; flex: none;
       width: 19px; height: 19px; border-radius: 6px;
@@ -1143,19 +1148,24 @@ checkTmpl.innerHTML = `
     .tick { width: 11px; height: 11px; opacity: 0; transform: scale(0.4);
             transition: opacity var(--mono-transition), transform var(--mono-transition); }
     :host([checked]) .tick { opacity: 1; transform: scale(1); }
+    :host([indeterminate]) .tick { opacity: 1; transform: scale(1); }
+    .dash { width: 10px; height: 2px; border-radius: 1px; background: var(--mono-accent); display: none; }
+    :host([indeterminate]) .dash { display: block; }
+    :host([indeterminate]) .tick { display: none; }
     .txt { color: inherit; font: inherit; line-height: 1.4; }
-    input { position: absolute; opacity: 0; width: 0; height: 0; pointer-events: none; }
     /* the slotted caption is light-DOM content, so it picks up the page's
      * .check / .check.off styling; mirror that for the strikethrough state
      * because text-decoration cannot be inherited in from the host */
     :host(.off) ::slotted(*) { text-decoration: line-through; }
   </style>
   <label>
-    <input type="checkbox" />
-    <span class="box">
-      <svg class="tick" viewBox="0 0 24 24" aria-hidden="true">
-        <path fill="none" stroke="#06181c" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" d="M4 12.5l5.5 5.5L20 6.5"/>
-      </svg>
+    <span class="ctl" part="control" role="checkbox" tabindex="0">
+      <span class="box">
+        <svg class="tick" viewBox="0 0 24 24" aria-hidden="true">
+          <path fill="none" stroke="#06181c" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" d="M4 12.5l5.5 5.5L20 6.5"/>
+        </svg>
+        <span class="dash" aria-hidden="true"></span>
+      </span>
     </span>
     <span class="txt"><slot></slot></span>
   </label>
@@ -1163,75 +1173,111 @@ checkTmpl.innerHTML = `
 
 class MonoCheckbox extends MonoElement {
   static formAssociated = true;
-  static observedAttributes = ["checked", "disabled", "name", "value", "required"];
+  static observedAttributes = ["checked", "disabled", "name", "value", "required", "indeterminate"];
 
   constructor() {
     super();
     this._root.appendChild(checkTmpl.content.cloneNode(true));
-    this._el = this._root.querySelector("input");
-    this._el.addEventListener("change", () => this._onChange());
-    // The native <label> handles real pointer clicks; stop them bubbling so the
-    // host handler below does not toggle a second time.
-    this._root.querySelector("label").addEventListener("click", (e) => e.stopPropagation());
-    this.addEventListener("click", (e) => {
-      if (e.target !== this || this.disabled) return;
-      this._el.checked = !this._el.checked;
-      this._onChange();
+    this._ctl = this._root.querySelector(".ctl");
+
+    /* One delegated handler for the whole control. A click on the box, on the
+     * caption, or on the host itself all arrive here exactly once, so a toggle
+     * can never happen twice. */
+    this.addEventListener("click", () => {
+      if (this.disabled) return;
+      this._activate();
     });
+
+    this._ctl.addEventListener("keydown", (e) => {
+      if (e.key !== " " && e.key !== "Enter") return;
+      e.preventDefault();
+      if (this.disabled) return;
+      this._activate();
+    });
+  }
+
+  /* Any deliberate interaction settles the mixed state first, the way clicking
+   * a native checkbox in its indeterminate state clears the dash. */
+  _activate() {
+    this.indeterminate = false;
+    this.checked = !this.checked;
+    this._onChange();
   }
 
   connectedCallback() { this._sync(); }
   attributeChangedCallback(name) { this._sync(name); }
 
   _sync() {
-    const el = this._el;
-    if (!el) return;
-    el.disabled = boolAttr(this, "disabled");
-    el.required = boolAttr(this, "required");
-    const nm = this.getAttribute("name");
-    if (nm) el.name = nm;
-    const v = this.getAttribute("value");
-    if (v !== null) el.value = v;
-    el.checked = boolAttr(this, "checked");
+    this._ctl.setAttribute("aria-checked", this._indeterminate ? "mixed" : String(this.checked));
+    if (this.hasAttribute("required")) this._ctl.setAttribute("aria-required", "true");
+    else this._ctl.removeAttribute("aria-required");
+    if (this.disabled) this._ctl.setAttribute("aria-disabled", "true");
+    else this._ctl.removeAttribute("aria-disabled");
+    /* The slotted caption sits outside the control, so the accessible name has
+     * to be supplied explicitly. An author-supplied aria-label wins. */
+    if (!this.hasAttribute("aria-label")) {
+      const text = (this.textContent ?? "").replace(/\s+/g, " ").trim();
+      if (text) this._ctl.setAttribute("aria-label", text);
+    }
     this._syncForm();
   }
 
   _onChange() {
-    this._reflect();
-    this._syncForm();
+    this._sync();
     this.dispatchEvent(new Event("change", { bubbles: true, composed: true }));
     this.dispatchEvent(new Event("input", { bubbles: true, composed: true }));
   }
 
-  _reflect() {
-    if (this._el.checked) this.setAttribute("checked", "");
-    else this.removeAttribute("checked");
-  }
-
   _syncForm() {
-    this.internals?.setFormValue(this._el.checked ? (this.getAttribute("value") ?? "on") : null);
+    const value = this.getAttribute("value") ?? "on";
+    this.internals?.setFormValue(
+      this.disabled || !this.checked ? null : value
+    );
+    const missing = this.hasAttribute("required") && !this.checked;
+    this.internals?.setValidity?.(
+      missing ? { valueMissing: true } : {},
+      missing ? "Please tick this box" : "",
+      this._ctl
+    );
   }
 
-  get checked() { return this._el.checked; }
+  get checked() { return this.hasAttribute("checked"); }
   set checked(v) {
     v ? this.setAttribute("checked", "") : this.removeAttribute("checked");
-    this._el.checked = Boolean(v);
-    this._syncForm();
   }
   get value() { return this.getAttribute("value") ?? "on"; }
   set value(v) { this.setAttribute("value", v); }
-  get indeterminate() { return this._el.indeterminate; }
-  set indeterminate(v) { this._el.indeterminate = Boolean(v); }
+  get indeterminate() { return this._indeterminate === true; }
+  set indeterminate(v) {
+    this._indeterminate = Boolean(v);
+    v ? this.setAttribute("indeterminate", "") : this.removeAttribute("indeterminate");
+  }
   get name() { return this.getAttribute("name") || ""; }
   set name(v) { this.setAttribute("name", v); }
-  get disabled() { return this._el.disabled; }
+  get disabled() { return boolAttr(this, "disabled"); }
   set disabled(v) { v ? this.setAttribute("disabled", "") : this.removeAttribute("disabled"); }
-  get required() { return this._el.required; }
+  get required() { return boolAttr(this, "required"); }
   set required(v) { v ? this.setAttribute("required", "") : this.removeAttribute("required"); }
-  get validity() { return this._el.validity; }
-  checkValidity() { return this._el.checkValidity(); }
-  focus(opts) { this._el.focus(opts); }
-  blur() { this._el.blur(); }
+  get validity() {
+    const missing = this.hasAttribute("required") && !this.checked;
+    return { valid: !missing, valueMissing: missing, customError: false };
+  }
+  checkValidity() {
+    this._syncForm();
+    const ok = !this.validity.valueMissing;
+    /* The invalid state has to be visible to assistive tech, not just held in
+     * the form internals. */
+    if (ok) this._ctl.removeAttribute("aria-invalid");
+    else this._ctl.setAttribute("aria-invalid", "true");
+    return ok;
+  }
+  reportValidity() {
+    const ok = this.checkValidity();
+    if (!ok) this._ctl.focus();
+    return ok;
+  }
+  focus(opts) { this._ctl.focus(opts); }
+  blur() { this._ctl.blur(); }
 }
 
 define("mono-checkbox", MonoCheckbox);
@@ -1546,47 +1592,83 @@ switchTmpl.innerHTML = `
     :host([checked]) .knob { transform: translateX(18px); background: var(--mono-accent); }
     :host(:focus-within) .track { box-shadow: var(--mono-ring); }
     label { font: 500 14px/1.4 var(--mono-font); cursor: pointer; }
-    input { position: absolute; opacity: 0; pointer-events: none; }
+    /* Nothing inside the label is labelable, so a click on it produces a single
+     * event and the host handler below does the one toggle. */
+    .ctl { display: inline-flex; align-items: center; outline: none; flex: none; }
   </style>
-  <input type="checkbox" role="switch" />
-  <span class="track"><span class="knob"></span></span>
-  <label><slot></slot></label>
+  <label>
+    <span class="ctl" part="control" role="switch" tabindex="0">
+      <span class="track"><span class="knob"></span></span>
+    </span>
+    <span><slot></slot></span>
+  </label>
 `;
 
 class MonoSwitch extends MonoElement {
   static formAssociated = true;
   static observedAttributes = ["checked", "disabled", "name", "value"];
+
   constructor() {
     super();
     this._root.appendChild(switchTmpl.content.cloneNode(true));
-    this._el = this._root.querySelector("input");
-    this._el.addEventListener("change", () => this._onChange());
+    this._ctl = this._root.querySelector(".ctl");
+
+    /* Single delegated handler: a click anywhere on the control arrives here
+     * once, so the toggle cannot run twice. */
+    this.addEventListener("click", () => {
+      if (this.disabled) return;
+      this.checked = !this.checked;
+      this._onChange();
+    });
+
+    this._ctl.addEventListener("keydown", (e) => {
+      if (e.key !== " " && e.key !== "Enter") return;
+      e.preventDefault();
+      if (this.disabled) return;
+      this.checked = !this.checked;
+      this._onChange();
+    });
   }
+
   connectedCallback() { this._sync(); }
   attributeChangedCallback() { this._sync(); }
+
   _sync() {
-    const el = this._el;
-    if (!el) return;
-    el.disabled = boolAttr(this, "disabled");
-    el.checked = boolAttr(this, "checked");
-    const n = this.getAttribute("name"); if (n) el.name = n;
-    const v = this.getAttribute("value"); if (v !== null) el.value = v;
-    this.internals?.setFormValue(el.checked ? (this.getAttribute("value") ?? "on") : null);
+    this._ctl.setAttribute("aria-checked", String(this.checked));
+    if (this.disabled) this._ctl.setAttribute("aria-disabled", "true");
+    else this._ctl.removeAttribute("aria-disabled");
+    /* The caption is slotted outside the control, so name it explicitly. */
+    if (!this.hasAttribute("aria-label")) {
+      const text = (this.textContent ?? "").replace(/\s+/g, " ").trim();
+      if (text) this._ctl.setAttribute("aria-label", text);
+    }
+    this._syncForm();
   }
+
+  _syncForm() {
+    const value = this.getAttribute("value") ?? "on";
+    this.internals?.setFormValue(this.disabled || !this.checked ? null : value);
+  }
+
   _onChange() {
-    this._el.checked ? this.setAttribute("checked", "") : this.removeAttribute("checked");
-    this.internals?.setFormValue(this._el.checked ? (this.getAttribute("value") ?? "on") : null);
+    this._sync();
     this.dispatchEvent(new Event("change", { bubbles: true, composed: true }));
     this.dispatchEvent(new Event("input", { bubbles: true, composed: true }));
   }
-  get checked() { return this._el.checked; }
+
+  get checked() { return boolAttr(this, "checked"); }
   set checked(v) {
     v ? this.setAttribute("checked", "") : this.removeAttribute("checked");
-    this._el.checked = Boolean(v);
   }
-  get disabled() { return this._el.disabled; }
+  get name() { return this.getAttribute("name") || ""; }
+  set name(v) { this.setAttribute("name", v); }
+  get value() { return this.getAttribute("value") ?? "on"; }
+  set value(v) { this.setAttribute("value", v); }
+  get disabled() { return boolAttr(this, "disabled"); }
   set disabled(v) { v ? this.setAttribute("disabled", "") : this.removeAttribute("disabled"); }
-  focus(opts) { this._el.focus(opts); }
+  checkValidity() { return true; }
+  focus(opts) { this._ctl.focus(opts); }
+  blur() { this._ctl.blur(); }
 }
 define("mono-switch", MonoSwitch);
 

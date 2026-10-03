@@ -370,6 +370,135 @@ await test("reset restores defaultSelected", () => {
   assert.equal(el.hasAttribute("aria-invalid"), false);
 });
 
+
+/* --- checkbox and switch: hand-rolled, no native input --- */
+
+function makeCheckbox({ label = "Enabled", attrs = {} } = {}) {
+  const el = document.createElement("mono-checkbox");
+  el.textContent = label;
+  for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
+  document.body.append(el);
+  return el;
+}
+
+const makeSwitch = ({ label = "Enabled", attrs = {} } = {}) => {
+  const el = document.createElement("mono-switch");
+  el.textContent = label;
+  for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
+  document.body.append(el);
+  return el;
+};
+
+await test("checkbox carries no native input and exposes role=checkbox", () => {
+  const el = makeCheckbox();
+  assert.equal(el.shadowRoot.querySelector("input"), null, "no native checkbox in the shadow root");
+  const ctl = el.shadowRoot.querySelector(".ctl");
+  assert.equal(ctl.getAttribute("role"), "checkbox");
+  assert.equal(ctl.getAttribute("aria-checked"), "false");
+  assert.equal(ctl.getAttribute("tabindex"), "0", "must be reachable by keyboard");
+});
+
+await test("checkbox caption becomes its accessible name", () => {
+  const el = makeCheckbox({ label: "  Log   deletions " });
+  const name = el.shadowRoot.querySelector(".ctl").getAttribute("aria-label");
+  assert.equal(name, "Log deletions", "whitespace is collapsed");
+});
+
+await test("checkbox Space toggles and fires change exactly once", () => {
+  const el = makeCheckbox();
+  let changes = 0;
+  el.addEventListener("change", () => changes++);
+  key(el.shadowRoot.querySelector(".ctl"), " ");
+  assert.equal(el.checked, true);
+  assert.equal(changes, 1, "Space is one change");
+  key(el.shadowRoot.querySelector(".ctl"), " ");
+  assert.equal(el.checked, false);
+  assert.equal(changes, 2);
+});
+
+await test("checkbox indeterminate reports mixed and settles on interaction", () => {
+  const ctlOf = (el) => el.shadowRoot.querySelector(".ctl");
+  const viaClick = makeCheckbox();
+  viaClick.indeterminate = true;
+  assert.equal(ctlOf(viaClick).getAttribute("aria-checked"), "mixed");
+  viaClick.click();
+  assert.equal(viaClick.indeterminate, false, "a click settles the mixed state");
+  assert.equal(viaClick.checked, true);
+  assert.equal(ctlOf(viaClick).getAttribute("aria-checked"), "true");
+
+  /* The keyboard path has to settle it too, not just the pointer path. */
+  const viaKey = makeCheckbox();
+  viaKey.indeterminate = true;
+  key(ctlOf(viaKey), " ");
+  assert.equal(viaKey.indeterminate, false, "Space settles the mixed state too");
+  assert.equal(viaKey.checked, true);
+});
+
+await test("checkbox required is invalid until it is ticked", () => {
+  const el = makeCheckbox({ attrs: { required: "" } });
+  assert.equal(el.checkValidity(), false);
+  assert.equal(el._validity.valueMissing, true);
+  assert.equal(el.shadowRoot.querySelector(".ctl").getAttribute("aria-invalid"), "true");
+  el.click();
+  assert.equal(el.checkValidity(), true);
+});
+
+await test("a disabled checkbox ignores clicks and the keyboard", () => {
+  const el = makeCheckbox({ attrs: { disabled: "" } });
+  let changes = 0;
+  el.addEventListener("change", () => changes++);
+  el.click();
+  key(el.shadowRoot.querySelector(".ctl"), " ");
+  assert.equal(el.checked, false, "a disabled checkbox stays unchecked");
+  assert.equal(changes, 0, "and fires nothing");
+});
+
+await test("a checked checkbox submits its value, unchecked submits nothing", () => {
+  const el = makeCheckbox({ attrs: { name: "mod" } });
+  el.value = "/ban";
+  el._syncForm();
+  assert.equal(el._formValue, null);
+  el.click();
+  assert.equal(el._formValue, "/ban");
+  el.click();
+  assert.equal(el._formValue, null);
+});
+
+await test("switch has role=switch, no native input, and toggles once", () => {
+  const el = makeSwitch();
+  assert.equal(el.shadowRoot.querySelector("input"), null, "no native checkbox in the shadow root");
+  const ctl = el.shadowRoot.querySelector(".ctl");
+  assert.equal(ctl.getAttribute("role"), "switch");
+  assert.equal(ctl.getAttribute("aria-checked"), "false");
+  let changes = 0;
+  el.addEventListener("change", () => changes++);
+  el.click();
+  assert.equal(el.checked, true);
+  assert.equal(ctl.getAttribute("aria-checked"), "true");
+  assert.equal(changes, 1, "one click is one change");
+  key(ctl, " ");
+  assert.equal(el.checked, false);
+  assert.equal(changes, 2);
+});
+
+await test("switch label click does not double-toggle", () => {
+  const el = makeSwitch();
+  let changes = 0;
+  el.addEventListener("change", () => changes++);
+  el.shadowRoot.querySelector("label").click();
+  assert.equal(changes, 1, "label activation must not toggle twice");
+  assert.equal(el.checked, true);
+});
+
+await test("a disabled switch ignores clicks", () => {
+  const el = makeSwitch({ attrs: { disabled: "" } });
+  let changes = 0;
+  el.addEventListener("change", () => changes++);
+  el.click();
+  assert.equal(el.checked, false);
+  assert.equal(changes, 0);
+});
+
 mark("ALL TESTS DONE");
 for (const [state, name] of results) console.log(`  ${state}  ${name}`);
 const failures = results.filter(([s]) => s === "FAIL").length;

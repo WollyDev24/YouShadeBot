@@ -195,8 +195,9 @@ await test("mono-checkbox keeps its value and fires change", () => {
   assert.equal(cb.value, "/ban");
   let changes = 0;
   cb.addEventListener("change", () => changes++);
-  cb._el.checked = true;
-  cb._el.dispatchEvent(new window.Event("change"));
+  /* There is no inner native checkbox to poke any more, so drive the control
+   * the way a user does. */
+  cb.click();
   assert.equal(changes, 1);
   assert.equal(cb.checked, true);
 });
