@@ -201,6 +201,42 @@ test("the palette is light blue and violet over a dark base", () => {
   );
 });
 
+
+test("filled controls meet WCAG AA contrast against their ink", () => {
+  const hex = (name) => rootBlock.match(new RegExp(`${name}:\\s*(#[0-9a-fA-F]{6})`))?.[1];
+  const channel = (v) => {
+    const c = v / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  };
+  const luminance = (h) => {
+    const [r, g, b] = [1, 3, 5].map((i) => channel(parseInt(h.slice(i, i + 2), 16)));
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  const contrast = (a, b) => {
+    const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+    return (hi + 0.05) / (lo + 0.05);
+  };
+
+  /* Filled surfaces and the ink that sits on them. Light blue, green and red are
+     all pale in this palette, which is exactly why white text on them fails. */
+  const pairs = [
+    ["--accent", "--on-accent", "primary button"],
+    ["--red", "--on-danger", "danger button"],
+    ["--green", "--on-success", "success button"],
+    ["--discord", "--on-discord", "discord button"],
+    ["--text", "--card", "body text on a card"],
+    ["--text", "--bg", "body text on the page"],
+    ["--muted", "--card", "muted text on a card"],
+    ["--accent", "--card", "accent text on a card"]
+  ];
+  for (const [fgName, bgName, what] of pairs) {
+    const fg = hex(fgName), bg = hex(bgName);
+    assert.ok(fg && bg, `${what}: missing ${!fg ? fgName : bgName}`);
+    const ratio = contrast(fg, bg);
+    assert.ok(ratio >= 4.5, `${what}: ${fgName} on ${bgName} is ${ratio.toFixed(2)}:1, needs 4.5`);
+  }
+});
+
 test("density is unchanged from the previous palette", () => {
   assert.match(rootBlock, /--radius:\s*16px/, "radius stays 16px");
   assert.match(rootBlock, /--control-h:\s*38px/, "controls stay 38px tall");

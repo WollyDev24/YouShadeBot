@@ -499,6 +499,79 @@ await test("a disabled switch ignores clicks", () => {
   assert.equal(changes, 0);
 });
 
+
+/* ------------------------------------------------------- mono-button ---- */
+
+/* A bare button carries its label on the host -- every nav tab and icon trigger
+ * in the dashboard does this. The inner <button> is what assistive tech reports,
+ * so the name has to reach it. */
+await test("a bare button takes its accessible name from the host", () => {
+  const btn = document.createElement("mono-button");
+  btn.setAttribute("bare", "");
+  btn.setAttribute("aria-label", "Pick emoji");
+  btn.innerHTML = '<span class="mat-icon" aria-hidden="true">mood</span>';
+  document.body.appendChild(btn);
+  const inner = btn.shadowRoot.querySelector("button");
+  assert.equal(inner.getAttribute("aria-label"), "Pick emoji");
+});
+
+await test("removing the host label removes it from the button too", () => {
+  const btn = document.createElement("mono-button");
+  btn.setAttribute("aria-label", "Account");
+  document.body.appendChild(btn);
+  const inner = btn.shadowRoot.querySelector("button");
+  btn.removeAttribute("aria-label");
+  assert.equal(inner.getAttribute("aria-label"), null);
+});
+
+/* The page's only :focus-visible rule is a document-level selector, so it cannot
+ * reach a shadow root. Bare mode holds every nav tab and icon trigger in the
+ * dashboard, so it has to bring its own indicator rather than switching the
+ * platform one off. Checked against the source: happy-dom parses almost none of
+ * the adopted stylesheet, so the shadow CSS is only inspectable as text. */
+await test("a bare button keeps a visible focus indicator", () => {
+  const source = fs.readFileSync(new URL("../src/panel/public/components.js", import.meta.url), "utf8");
+  const bareFocus = source.match(/:host\(\[bare\]\)[^{]*:focus-visible[^{]*\{([^}]*)\}/);
+  assert.ok(bareFocus, "bare mode must style its own focus state");
+  const body = bareFocus[1];
+  assert.ok(!/outline:\s*none/.test(body), `bare focus rule kills the indicator: ${body}`);
+  assert.match(body, /outline:\s*2px solid/, `bare focus rule sets no visible outline: ${body}`);
+});
+
+await test("no component focus rule removes the indicator without replacing it", () => {
+  const source = fs.readFileSync(new URL("../src/panel/public/components.js", import.meta.url), "utf8");
+  const focusRules = [...source.matchAll(/([^{}]*:focus-visible[^{]*)\{([^}]*)\}/g)];
+  assert.ok(focusRules.length > 1, "expected several focus rules to police");
+  for (const [, selector, body] of focusRules) {
+    const removes = /outline:\s*none/.test(body);
+    const restores = /outline:\s*(?!none)/.test(body) || /box-shadow:\s*(?!none)/.test(body);
+    assert.ok(
+      !removes || restores,
+      `${selector.trim()} removes the focus indicator and puts nothing back: ${body.trim()}`
+    );
+  }
+});
+
+await test("a loading button will not submit its form", () => {
+  const form = document.createElement("form");
+  const btn = document.createElement("mono-button");
+  btn.setAttribute("type", "submit");
+  btn.setAttribute("loading", "");
+  form.appendChild(btn);
+  document.body.appendChild(form);
+  let submits = 0;
+  form.addEventListener("submit", (e) => { submits++; e.preventDefault(); });
+  btn.shadowRoot.querySelector("button").dispatchEvent(
+    new window.MouseEvent("click", { bubbles: true, composed: true })
+  );
+  assert.equal(submits, 0, "a loading button must not submit");
+  btn.removeAttribute("loading");
+  btn.shadowRoot.querySelector("button").dispatchEvent(
+    new window.MouseEvent("click", { bubbles: true, composed: true })
+  );
+  assert.equal(submits, 1, "clearing loading restores submission");
+});
+
 mark("ALL TESTS DONE");
 for (const [state, name] of results) console.log(`  ${state}  ${name}`);
 const failures = results.filter(([s]) => s === "FAIL").length;

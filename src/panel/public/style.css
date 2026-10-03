@@ -42,6 +42,17 @@
   --red: #fb7185;
   --red-deep: #3a1230;
   --on-accent: #0b1030;
+  /* Filled light-blue, green and red are all pale, so white text on them fails
+     contrast. These are the inks that go on top instead. */
+  --on-danger: #2b0512;
+  --on-success: #04240f;
+  --on-discord: #ffffff;
+
+  /* Discord's brand blurple. Kept as the brand colour rather than folded into
+     the palette -- an OAuth button that is not recognisably Discord is a worse
+     outcome than one that is a slightly different indigo. */
+  --discord: #5865f2;
+  --discord-hover: #4752c4;
 
   /* Historic names kept so nothing that referenced them breaks. --gold was
      cyan in the old palette, so it stays the primary accent. */

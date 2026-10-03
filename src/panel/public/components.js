@@ -32,6 +32,13 @@ const TOKENS = `
     --mono-danger: var(--red, #fb7185);
     --mono-green: var(--green, #4ade80);
     --mono-ring: var(--shadow-focus, 0 0 0 4px rgb(124 212 253 / 22%));
+    /* Ink for text sitting on a filled accent. Light blue and violet are pale
+     * enough that white on them fails contrast, so filled variants use these. */
+    --mono-on-accent: var(--on-accent, #0b1030);
+    --mono-on-danger: var(--on-danger, #2b0512);
+    --mono-on-success: var(--on-success, #04240f);
+    --mono-on-discord: var(--on-discord, #ffffff);
+    --mono-glow-violet: var(--shadow-violet-glow, 0 0 24px rgb(167 139 250 / 30%));
     --mono-transition: var(--fast, 130ms) var(--ease, cubic-bezier(0.4, 0, 0.2, 1));
     font-family: var(--mono-font);
     box-sizing: border-box;
@@ -797,10 +804,10 @@ _render() {
       "overflow-y:auto",
       "overscroll-behavior:contain",
       "padding:6px",
-      "border:1px solid var(--mono-border,#3a3a3d)",
+      "border:1px solid var(--mono-border,#3b3382)",
       "border-radius:var(--mono-radius-sm,9px)",
-      "background:var(--card-2,#252525)",
-      "box-shadow:var(--shadow,0 12px 32px rgba(0,0,0,.5))",
+      "background:var(--card-2,#1e1a45)",
+      "box-shadow:var(--shadow,0 12px 32px rgb(4 3 14 / 55%))",
       "font:500 14px/1.35 var(--mono-font,Inter,sans-serif)",
       "pointer-events:auto"
     ].join(";");
@@ -1320,12 +1327,13 @@ btnTmpl.innerHTML = `
     :host([large]) button { padding: 13px 22px; font-size: 15px; }
 
     :host([variant="primary"]) button {
-      background: var(--mono-accent); border-color: var(--mono-accent); color: #04222a;
+      background: var(--mono-accent); border-color: var(--mono-accent); color: var(--mono-on-accent);
     }
     :host([variant="primary"]) button:hover {
-      background: var(--mono-accent-hover, color-mix(in srgb, var(--mono-accent) 82%, white));
+      background: var(--accent-hover, color-mix(in srgb, var(--mono-accent) 82%, white));
       border-color: var(--mono-accent);
-      box-shadow: 0 6px 20px var(--glow, rgba(0, 229, 255, 0.28));
+      /* the one place violet carries weight: the glow on the main action */
+      box-shadow: 0 6px 20px var(--mono-glow-violet);
     }
     :host([variant="danger"]) button {
       background: color-mix(in srgb, var(--mono-danger) 16%, transparent);
@@ -1333,20 +1341,23 @@ btnTmpl.innerHTML = `
       color: var(--mono-danger);
     }
     :host([variant="danger"]) button:hover {
-      background: var(--mono-danger); border-color: var(--mono-danger); color: #fff;
+      background: var(--mono-danger); border-color: var(--mono-danger); color: var(--mono-on-danger);
     }
     :host([variant="success"]) button {
       background: color-mix(in srgb, var(--mono-green) 16%, transparent);
       border-color: color-mix(in srgb, var(--mono-green) 45%, transparent);
       color: var(--mono-green);
     }
-    :host([variant="success"]) button:hover { background: var(--mono-green); color: #05210b; }
+    :host([variant="success"]) button:hover { background: var(--mono-green); color: var(--mono-on-success); }
     :host([variant="ghost"]) button { background: none; border-color: transparent; color: var(--mono-muted); }
     :host([variant="ghost"]) button:hover { background: var(--mono-bg); color: var(--mono-text); }
     :host([variant="discord"]) button {
-      background: #5865f2; border-color: #5865f2; color: #fff;
+      background: var(--discord, #5865f2); border-color: var(--discord, #5865f2);
+      color: var(--mono-on-discord);
     }
-    :host([variant="discord"]) button:hover { background: #4752c4; border-color: #4752c4; }
+    :host([variant="discord"]) button:hover {
+      background: var(--discord-hover, #4752c4); border-color: var(--discord-hover, #4752c4);
+    }
     :host([loading]) button { opacity: 0.6; pointer-events: none; }
     ::slotted([slot="icon"]) { display: inline-flex; }
 
@@ -1361,14 +1372,21 @@ btnTmpl.innerHTML = `
     }
     :host([bare]) button:hover { background: none; }
     :host([bare]) button:active { transform: none; }
-    :host([bare]) button:focus-visible { box-shadow: none; outline: none; }
+    /* Deliberately NOT outline:none here. The page's own :focus-visible rule is
+     * a document-level selector, so it cannot reach into this shadow root, and
+     * these buttons hold every nav tab and icon trigger in the dashboard --
+     * killing the indicator left keyboard users tabbing blind. Matches the page
+     * treatment (2px accent, 2px offset) instead. */
+    :host([bare]) button:focus-visible {
+      outline: 2px solid var(--mono-accent); outline-offset: 2px;
+    }
   </style>
   <button part="button"><slot name="icon"></slot><slot></slot></button>
 `;
 
 class MonoButton extends MonoElement {
   static formAssociated = true;
-  static observedAttributes = ["variant", "disabled", "type", "loading"];
+  static observedAttributes = ["variant", "disabled", "type", "loading", "bare", "aria-label"];
 
   constructor() {
     super();
@@ -1385,7 +1403,7 @@ class MonoButton extends MonoElement {
   attributeChangedCallback() { this._sync(); }
 
   _onClick(e) {
-    if (boolAttr(this, "disabled")) {
+    if (boolAttr(this, "disabled") || boolAttr(this, "loading")) {
       e.preventDefault();
       e.stopPropagation();
       return;
@@ -1407,6 +1425,23 @@ class MonoButton extends MonoElement {
     el.disabled = boolAttr(this, "disabled");
     if (boolAttr(this, "loading")) el.setAttribute("aria-busy", "true");
     else el.removeAttribute("aria-busy");
+    this._syncName();
+  }
+
+  /* A bare button draws itself from the host's own styling, which means its
+   * label usually lives on the host too: every nav tab and icon trigger in the
+   * dashboard puts aria-label there. The inner <button> is what assistive tech
+   * actually reports, and a slotted aria-hidden icon gives it no name at all, so
+   * the host's label has to be pushed down onto it. */
+  _syncName() {
+    const el = this._el;
+    if (!el) return;
+    const label = this.getAttribute("aria-label");
+    if (label) el.setAttribute("aria-label", label);
+    else el.removeAttribute("aria-label");
+    const labelledBy = this.getAttribute("aria-labelledby");
+    if (labelledBy) el.setAttribute("aria-labelledby", labelledBy);
+    else el.removeAttribute("aria-labelledby");
   }
 
   get disabled() { return boolAttr(this, "disabled"); }
@@ -1583,7 +1618,7 @@ switchTmpl.innerHTML = `
     .track {
       position: relative; flex: none;
       width: 42px; height: 24px; border-radius: 20px;
-      background: var(--card-3, #2b2b2e);
+      background: var(--card-3, #262157);
       border: 1px solid var(--mono-border);
       transition: background var(--mono-transition), border-color var(--mono-transition);
     }
@@ -1835,17 +1870,17 @@ toastTmpl.innerHTML = `
     .box {
       display: flex; align-items: center; gap: 10px;
       padding: 12px 20px; border-radius: 12px;
-      background: var(--card-3, #2b2b2e);
-      border: 1px solid var(--border-strong, #3a3a3d);
-      box-shadow: var(--shadow, 0 8px 24px rgba(0, 0, 0, 0.5));
-      color: var(--text, #fff);
+      background: var(--card-3, #262157);
+      border: 1px solid var(--border-strong, #3b3382);
+      box-shadow: var(--shadow, 0 8px 24px rgb(4 3 14 / 55%));
+      color: var(--text, #ffffff);
       font: 600 14px/1.3 "Inter", system-ui, sans-serif;
       max-width: min(92vw, 460px);
     }
-    :host([tone="error"]) .box { border-color: var(--coral, #ff453a); }
-    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent, #00e5ff); flex: none;
-           box-shadow: 0 0 10px var(--accent, #00e5ff); }
-    :host([tone="error"]) .dot { background: var(--coral, #ff453a); box-shadow: 0 0 10px var(--coral, #ff453a); }
+    :host([tone="error"]) .box { border-color: var(--coral, #fb7185); }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent, #7cd4fd); flex: none;
+           box-shadow: 0 0 10px var(--accent, #7cd4fd); }
+    :host([tone="error"]) .dot { background: var(--coral, #fb7185); box-shadow: 0 0 10px var(--coral, #fb7185); }
   </style>
   <div class="box"><span class="dot"></span><span id="msg"></span></div>
 `;
@@ -1889,7 +1924,7 @@ modalTmpl.innerHTML = `
     :host {
       position: fixed; inset: 0; z-index: 9000;
       display: grid; place-items: center; padding: 20px;
-      background: rgba(0, 0, 0, 0.72);
+      background: rgb(4 3 14 / 72%);
       backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
       animation: fade 180ms ease;
     }
@@ -1898,10 +1933,10 @@ modalTmpl.innerHTML = `
     @keyframes rise { from { opacity: 0; transform: translateY(18px) scale(0.97); } to { opacity: 1; transform: none; } }
     .panel {
       width: 100%; max-width: var(--max, 460px); max-height: 88vh; overflow: auto;
-      background: var(--card, #1e1e1e);
-      border: 1px solid var(--border-strong, #3a3a3d);
+      background: var(--card, #171434);
+      border: 1px solid var(--border-strong, #3b3382);
       border-radius: 18px;
-      box-shadow: var(--shadow, 0 8px 24px rgba(0, 0, 0, 0.5));
+      box-shadow: var(--shadow, 0 8px 24px rgb(4 3 14 / 55%));
       animation: rise 220ms cubic-bezier(0.2, 0.9, 0.3, 1.1);
     }
     .head {
@@ -1910,15 +1945,15 @@ modalTmpl.innerHTML = `
     }
     .head h2, .head h3 { margin: 0; font: 800 18px/1.3 "Inter", system-ui, sans-serif; flex: 1; }
     .x {
-      all: unset; cursor: pointer; color: var(--muted, #98989d);
+      all: unset; cursor: pointer; color: var(--muted, #a49dd6);
       width: 30px; height: 30px; display: grid; place-items: center; border-radius: 8px;
       transition: background 140ms, color 140ms;
     }
-    .x:hover { background: var(--card-3, #2b2b2e); color: var(--text, #fff); }
+    .x:hover { background: var(--card-3, #262157); color: var(--text, #ffffff); }
     .body { padding: 0 20px 18px; display: grid; gap: 12px; }
     .foot {
       display: flex; gap: 10px; justify-content: flex-end;
-      padding: 14px 20px 18px; border-top: 1px solid var(--border, #2c2c2e);
+      padding: 14px 20px 18px; border-top: 1px solid var(--border, #2a2460);
     }
   </style>
   <div class="panel" part="panel" role="dialog" aria-modal="true">
@@ -1978,17 +2013,17 @@ cardTmpl.innerHTML = `
     ${TOKENS}
     :host {
       display: block;
-      background: var(--card, #1e1e1e);
-      border: 1px solid var(--border, #2c2c2e);
+      background: var(--card, #171434);
+      border: 1px solid var(--border, #2a2460);
       border-radius: var(--radius, 16px);
       padding: 20px;
       transition: border-color var(--mono-transition), box-shadow var(--mono-transition);
     }
     :host([interactive]:hover) {
       border-color: color-mix(in srgb, var(--mono-accent) 40%, var(--border));
-      box-shadow: 0 6px 26px rgba(0, 0, 0, 0.35);
+      box-shadow: 0 6px 26px rgb(4 3 14 / 35%);
     }
-    :host([flat]) { background: var(--card-2, #252525); }
+    :host([flat]) { background: var(--card-2, #1e1a45); }
     :host([ghost]) { background: none; border-style: dashed; }
     :host([pad0]) { padding: 0; }
     ::slotted(h3:first-child), ::slotted(h2:first-child) { margin-top: 0; }
@@ -2013,7 +2048,7 @@ listTmpl.innerHTML = `
   <style>
     ${TOKENS}
     :host { display: grid; gap: 8px; }
-    :host([divider]) { border-top: 1px solid var(--border, #2c2c2e); padding-top: 10px; }
+    :host([divider]) { border-top: 1px solid var(--border, #2a2460); padding-top: 10px; }
   </style>
   <slot></slot>
 `;
