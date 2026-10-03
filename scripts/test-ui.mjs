@@ -646,6 +646,47 @@ await test("a text control mirrors aria-labelledby as well as aria-label", () =>
   assert.equal(inner.getAttribute("aria-labelledby"), "external-label");
 });
 
+
+/* ------------------------------------------------------------ mono-toast ---- */
+
+/* A toast is a transient status message; without a live region it is silent. */
+await test("a toast announces itself politely", () => {
+  const el = document.createElement("mono-toast");
+  document.body.appendChild(el);
+  const box = el.shadowRoot.querySelector(".box");
+  assert.equal(box.getAttribute("role"), "status");
+  assert.equal(box.getAttribute("aria-live"), "polite");
+  assert.equal(box.getAttribute("aria-atomic"), "true", "the whole message should be read");
+  assert.equal(el.shadowRoot.querySelector(".dot").getAttribute("aria-hidden"), "true");
+});
+
+/* opacity:0 keeps an element in the accessibility tree, so a dismissed toast
+ * would still be readable and still turn up in find-in-page. */
+await test("a hidden toast leaves the accessibility tree", () => {
+  const el = document.createElement("mono-toast");
+  document.body.appendChild(el);
+  el.show("gone in a moment");
+  assert.equal(el.hidden, false);
+  const src = fs.readFileSync(new URL("../src/panel/public/components.js", import.meta.url), "utf8");
+  /* Scoped to the toast: TOKENS carries its own :host([hidden]) rule, and a
+   * bare search across the file finds that one first. */
+  const toastSrc = src.slice(src.indexOf("const toastTmpl"), src.indexOf("class MonoToast"));
+  const hidden = toastSrc.match(/:host\(\[hidden\]\)\s*\{([^}]*)\}/);
+  assert.ok(hidden, "hidden state must be styled");
+  assert.match(hidden[1], /visibility:\s*hidden/, "opacity alone leaves the toast exposed");
+  /* and the hide has to be delayed, or the exit animation is cut off */
+  assert.match(hidden[1], /visibility 0s linear 220ms/);
+});
+
+await test("showing a toast twice keeps only the latest message", () => {
+  const el = document.createElement("mono-toast");
+  document.body.appendChild(el);
+  el.show("first");
+  el.show("second", "error", 10);
+  assert.equal(el.shadowRoot.querySelector("#msg").textContent, "second");
+  assert.equal(el.getAttribute("tone"), "error");
+});
+
 mark("ALL TESTS DONE");
 for (const [state, name] of results) console.log(`  ${state}  ${name}`);
 const failures = results.filter(([s]) => s === "FAIL").length;

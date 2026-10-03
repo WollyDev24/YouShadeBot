@@ -1953,10 +1953,21 @@ toastTmpl.innerHTML = `
       position: fixed; left: 50%; bottom: 26px; z-index: 9999;
       transform: translate(-50%, 0);
       display: block; pointer-events: none;
-      transition: transform 220ms cubic-bezier(0.2, 0.9, 0.3, 1.2), opacity 220ms ease;
+      visibility: visible;
+      transition: transform 220ms cubic-bezier(0.2, 0.9, 0.3, 1.2), opacity 220ms ease,
+                  visibility 0s linear 0s;
       opacity: 1;
     }
-    :host([hidden]) { display: block !important; opacity: 0; transform: translate(-50%, 24px); }
+    :host([hidden]) {
+      display: block !important;
+      opacity: 0; transform: translate(-50%, 24px);
+      /* opacity alone is not enough: a dismissed toast would stay in the
+       * accessibility tree and still turn up in find-in-page. visibility is
+       * delayed until the fade finishes so the exit still animates. */
+      visibility: hidden;
+      transition: transform 220ms cubic-bezier(0.2, 0.9, 0.3, 1.2), opacity 220ms ease,
+                  visibility 0s linear 220ms;
+    }
     .box {
       display: flex; align-items: center; gap: 10px;
       padding: 12px 20px; border-radius: 12px;
@@ -1964,7 +1975,7 @@ toastTmpl.innerHTML = `
       border: 1px solid var(--border-strong, #3b3382);
       box-shadow: var(--shadow, 0 8px 24px rgb(4 3 14 / 55%));
       color: var(--text, #ffffff);
-      font: 600 14px/1.3 "Inter", system-ui, sans-serif;
+      font: 600 14px/1.3 var(--font, "Inter", system-ui, sans-serif);
       max-width: min(92vw, 460px);
     }
     :host([tone="error"]) .box { border-color: var(--coral, #fb7185); }
@@ -1972,7 +1983,9 @@ toastTmpl.innerHTML = `
            box-shadow: 0 0 10px var(--accent, #7cd4fd); }
     :host([tone="error"]) .dot { background: var(--coral, #fb7185); box-shadow: 0 0 10px var(--coral, #fb7185); }
   </style>
-  <div class="box"><span class="dot"></span><span id="msg"></span></div>
+  <div class="box" part="box" role="status" aria-live="polite" aria-atomic="true">
+    <span class="dot" aria-hidden="true"></span><span id="msg"></span>
+  </div>
 `;
 
 class MonoToast extends MonoElement {
