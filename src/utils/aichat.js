@@ -125,6 +125,50 @@ const SYSTEM_PROMPT =
   "not attached. Text-only messages and image messages use separate daily allowances, so keep image " +
   "answers just as concise as text ones.";
 
+/* The model has no clock, and it has no idea how old its own training data is.
+ * "Today", "what's current" and "how long ago" are therefore unanswerable for it
+ * unless we say outright what now is -- and without this it answers them from a
+ * stale training cutoff, so it confidently believes it is some earlier year.
+ *
+ * Built per request rather than folded into the SYSTEM_PROMPT const: a process
+ * left running across midnight, or one that is restarted days later, must not
+ * keep answering with the date it happened to boot on. `now` is injectable so
+ * tests can pin it instead of racing the wall clock. */
+export function timeContext(now = new Date()) {
+  const iso = now.toISOString();
+  const date = now.toLocaleDateString("en-GB", {
+    weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "UTC"
+  });
+  let local = "";
+  try {
+    const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (zone && zone !== "UTC") {
+      local = ` Server local time is ${now.toLocaleString("en-GB", {
+        dateStyle: "medium", timeStyle: "short"
+      })} (${zone}).`;
+    }
+  } catch {
+    /* A missing or odd tz must never be the reason a reply fails. */
+  }
+  return (
+    "\n\nDATE AND TIME: Today is " + date + ". The current time is " +
+    iso.slice(11, 16) + " UTC (" + iso.slice(0, 10) + ")." + local + "\n" +
+    "Treat that line as the only authority on what \"now\" means. Whenever an answer depends on " +
+    "the current date or time -- today, tonight, this week, how long ago something happened, " +
+    "what is current, what is coming up, how old is this, which year are we in -- derive it from " +
+    "that line instead of guessing, and state the date you used whenever the difference matters.\n" +
+    "Your own training ends before this date, so you cannot know from memory what happened since. " +
+    "Never invent recent people, events, versions, prices, releases or standings. If you need a " +
+    "fact from after your training and cannot verify it, say plainly that you do not know."
+  );
+}
+
+/* Assembled fresh for each request so the timestamp is correct even for a long
+ * lived process, and consistent across every round of a tool-calling turn. */
+export function buildSystemPrompt(now = new Date()) {
+  return SYSTEM_PROMPT + timeContext(now);
+}
+
 function clampInt(value, key) {
   const { min, max } = LIMIT_BOUNDS[key];
   const n = Math.round(Number(value));
@@ -540,8 +584,229 @@ const MEMORY_TOOLS = [
   }
 ];
 
-/* Bound the tool loop so a model that keeps calling cannot spin forever. */
-const MAX_TOOL_ROUNDS = 3;
+/* Bound the tool loop so a model that keeps calling cannot spin forever. The old
+ * ceiling of 3 was sized for memory alone, where one write per reply is the
+ * normal case. Four rounds of tool execution is exactly enough for the three
+ * searches plus one memory write, with the fifth model call left for the answer,
+ * so the ceiling this implies is five calls per reply. */
+const MAX_TOOL_ROUNDS = 4;
+
+/* ============================================================
+ * Web search -- DuckDuckGo, no API key
+ * ============================================================ */
+
+/* Asked for explicitly, so the tool is only *declared* on those turns. The rule
+ * is then enforced by what the model can see: on any other message it has no
+ * search tool to call, and the request costs and waits exactly as it did before.
+ * Prompting it to "only search when asked" instead would be a suggestion, and a
+ * suggestion is not a guarantee. */
+const MAX_SEARCH_CALLS = 3;
+
+const DDG_INSTANT_ANSWER = "https://api.duckduckgo.com/";
+const WIKIPEDIA_API = "https://en.wikipedia.org/w/api.php";
+const WIKIPEDIA_HOST = "https://en.wikipedia.org";
+const SEARCH_TIMEOUT_MS = 8_000;
+const SEARCH_TTL_MS = 5 * 60_000;
+const SEARCH_CACHE_MAX = 64;
+const SEARCH_UA = "MonolithBot/1.1 (https://github.com/WollyDev24/Monolith)";
+
+const searchCache = new Map();
+
+/* Only ever called from tests. */
+export function resetSearchState() {
+  searchCache.clear();
+}
+
+const SEARCH_ASK_PATTERNS = [
+  /\bsearch(?:ing)?\b/i,
+  /\bgoogle\b/i,
+  /\blook\s?up\b/i,
+  /\bwikipedia\b/i,
+  /\bnews\b/i,
+  /\bheadlines\b/i,
+  /\blatest\b/i,
+  /\brecent(?:ly)?\b/i,
+  /\bup\s+to\s+date\b/i,
+  /\bfind\s+out\b/i,
+  /\bsources?\b/i,
+  /\bcite\b/i,
+  /\bverify\b/i,
+  /\bcheck\s+(?:online|the\s+web|it)\b/i,
+  /\bwho\s+won\b/i,
+  /\bhow\s+much\s+(?:is|does|are)\b/i,
+  /\brelease\s+date\b/i,
+  /\bcurrent(?:ly)?\s+(?:is|are|status|version|price|champion|leader)\b/i
+];
+
+/* True when the message explicitly asks for a lookup. Deliberately cautious: a
+ * false positive costs a slow and possibly irrelevant answer, while a false
+ * negative means the bot answers from a training cutoff that may predate the
+ * fact entirely. Word boundaries matter -- \b keeps "research" from reading as a
+ * request to search. */
+export function wantsSearch(text) {
+  const s = String(text ?? "");
+  if (!s.trim()) return false;
+  return SEARCH_ASK_PATTERNS.some((re) => re.test(s));
+}
+
+function flattenTopics(topics, out = []) {
+  for (const topic of topics ?? []) {
+    if (Array.isArray(topic)) flattenTopics(topic, out);
+    else if (topic?.Text) out.push({ text: topic.Text, url: topic.FirstURL ?? "" });
+  }
+  return out;
+}
+
+/* The Instant Answer API answers from a fixed set of topics, so it is dependable
+ * but shallow. Everything is optional in the payload, and any of it can be an
+ * empty string, so every field is checked rather than assumed. */
+function formatInstantAnswer(data) {
+  const lines = [];
+  if (data?.AbstractText) {
+    lines.push(`${data.Heading || "Summary"}: ${data.AbstractText}`);
+    if (data.AbstractSource) {
+      lines.push(`Source: ${data.AbstractSource}${data.AbstractURL ? ` (${data.AbstractURL})` : ""}`);
+    }
+  }
+  if (data?.Definition) lines.push(`${data.DefinitionSource || "Definition"}: ${data.Definition}`);
+  for (const hit of flattenTopics(data?.RelatedTopics).slice(0, 6)) {
+    lines.push(`- ${hit.text}${hit.url ? ` (${hit.url})` : ""}`);
+  }
+  for (const hit of (data?.Results ?? []).slice(0, 5)) {
+    if (hit?.Text) lines.push(`- ${hit.Text}${hit.FirstURL ? ` (${hit.FirstURL})` : ""}`);
+  }
+  return lines.join("\n");
+}
+
+/* Nothing in this repo uses AbortController, but a search is the one outbound
+ * call a stranger can influence the timing of, so it gets a deadline rather than
+ * being able to hang a reply indefinitely. */
+async function fetchWithTimeout(url, options = {}, ms = SEARCH_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/* Wikipedia's search API returns titles and intro extracts for a query in one
+ * request. It is consulted only when DuckDuckGo comes back empty, because the two
+ * overlap heavily and a second call costs latency on every lookup. */
+function formatWikipedia(data) {
+  const pages = Object.values(data?.query?.pages ?? {})
+    .filter((page) => page?.title && page.extract)
+    .slice(0, 3);
+  if (!pages.length) return "";
+  return pages
+    .map((page) => {
+      const extract = String(page.extract).replace(/\s+/g, " ").trim().slice(0, 600);
+      const path = encodeURIComponent(String(page.title).replace(/ /g, "_"));
+      return `${page.title}: ${extract}\n   (${WIKIPEDIA_HOST}/wiki/${path})`;
+    })
+    .join("\n");
+}
+
+async function fetchWikipedia(query) {
+  try {
+    const url = `${WIKIPEDIA_API}?action=query&generator=search&gsrsearch=${encodeURIComponent(query)}` +
+      `&gsrlimit=3&prop=extracts&exintro=1&explaintext=1&redirects=1&format=json&origin=*`;
+    const res = await fetchWithTimeout(url, {
+      headers: { Accept: "application/json", "User-Agent": SEARCH_UA }
+    });
+    if (!res?.ok || typeof res.json !== "function") return "";
+    return formatWikipedia(await res.json());
+  } catch (err) {
+    console.warn(`[aichat] wikipedia search failed: ${err.message}`);
+    return "";
+  }
+}
+
+function cacheSearch(key, value) {
+  if (searchCache.size >= SEARCH_CACHE_MAX) {
+    const oldest = searchCache.keys().next().value;
+    if (oldest !== undefined) searchCache.delete(oldest);
+  }
+  searchCache.set(key, { value, expires: Date.now() + SEARCH_TTL_MS });
+}
+
+/* Runs one lookup and returns text for the model to read. A failed or empty
+ * search is reported back as text rather than thrown: a question that cannot be
+ * answered online should still get an honest reply, not an error message. */
+export async function runWebSearch(rawQuery) {
+  const query = String(rawQuery ?? "").replace(/\s+/g, " ").trim().slice(0, 200);
+  if (!query) return { result: "Rejected: the query was empty.", saved: false };
+  /* Never hand a credential to a search engine. */
+  if (looksLikeSecret(query)) {
+    return { result: "Rejected: that looks like a password, key or token, so I did not search for it.", saved: false };
+  }
+
+  const cacheKey = query.toLowerCase();
+  const cached = searchCache.get(cacheKey);
+  if (cached && Date.now() < cached.expires) {
+    return { result: `${cached.value}\n(cached result)`, saved: false };
+  } else if (cached) {
+    searchCache.delete(cacheKey);
+  }
+
+  let block = "";
+  try {
+    const res = await fetchWithTimeout(
+      `${DDG_INSTANT_ANSWER}?q=${encodeURIComponent(query)}&format=json&no_html=1&no_redirect=1&skip_disambig=1`,
+      { headers: { Accept: "application/json", "User-Agent": SEARCH_UA } }
+    );
+    if (res?.ok && typeof res.json === "function") {
+      block = formatInstantAnswer(await res.json());
+    }
+  } catch (err) {
+    console.warn(`[aichat] web search failed: ${err.message}`);
+  }
+
+  /* DuckDuckGo covers definitions and well-known topics; Wikipedia covers named
+   * people, places, works and events. This is a real second source, unlike the
+   * DuckDuckGo HTML scrape this replaced -- that endpoint answers bots with an
+   * anti-bot page and could never return a result. */
+  if (!block) block = await fetchWikipedia(query);
+
+  const trimmed = block.slice(0, 3000);
+  cacheSearch(cacheKey, trimmed);
+  return {
+    result: trimmed
+      || `Nothing found for "${query}" in DuckDuckGo or Wikipedia. Neither is a live news feed, ` +
+         `so expect nothing on breaking news, current prices or live scores. Say that you could ` +
+         `not find it rather than answering from memory.`,
+    saved: false
+  };
+}
+
+const WEB_SEARCH_TOOL = {
+  name: "web_search",
+  description:
+    "Look up a topic on DuckDuckGo, falling back to Wikipedia. This reliably answers definitional, " +
+    "encyclopedic and statistical questions, and covers named people, places, works and events. " +
+    "It returns nothing for breaking news, current prices or live scores, because neither source " +
+    "is a live web index. Only call it when the user explicitly asked for a lookup. Never call it " +
+    "for opinions, arithmetic, or anything about this server, and never to look up a credential.",
+  parameters: {
+    type: "object",
+    properties: {
+      query: { type: "string", description: "A focused query of a few words, not a whole question." }
+    },
+    required: ["query"]
+  }
+};
+
+function searchPromptSection() {
+  return (
+    "\n\nWEB SEARCH: For this message only, you have a web_search tool, because the user asked " +
+    "for a lookup. It queries DuckDuckGo's database of known topics and falls back to Wikipedia, " +
+    "which together are strong on definitions, statistics, and named people, places, works and " +
+    "events. Neither is a live news feed, so expect nothing on breaking news, prices or scores. " +
+    "Ask it one precise question rather than several vague ones, cite what you actually read, " +
+    "and if it finds nothing, say so plainly rather than filling the gap from memory."
+  );
+}
 
 /* Executes one requested memory mutation. Returns a short string for the model
  * to read back, and reports whether anything was actually written. */
@@ -804,17 +1069,19 @@ async function generateOnce(model, systemInstruction, contents, apiKeys, tools) 
 /* Ask the model, run whatever memory tools it asks for, and ask again so it
  * can reply in plain text with the results in hand. Returns the final text
  * plus how many memories actually changed. */
-async function askGeminiWithTools(model, prompt, apiKeys, imageParts, toolCtx, history = []) {
+async function askGeminiWithTools(model, prompt, apiKeys, imageParts, toolCtx, history = [], searchable = false) {
   const parts = imageParts.length ? [{ text: prompt }, ...imageParts] : [{ text: prompt }];
   /* History first, then the live turn. The API requires alternating-ish
    * roles and rejects a leading model turn, so a stray model message from
    * history is folded into a user turn by toContentPart. */
   let contents = [...history, { role: "user", parts }];
-  let tools = MEMORY_TOOLS;
+  let tools = searchable ? [...MEMORY_TOOLS, WEB_SEARCH_TOOL] : MEMORY_TOOLS;
   let saved = 0;
+  let searches = 0;
+  const system = buildSystemPrompt() + (searchable ? searchPromptSection() : "");
 
   for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
-    const res = await generateOnce(model, SYSTEM_PROMPT, contents, apiKeys, tools);
+    const res = await generateOnce(model, system, contents, apiKeys, tools);
     if (res.toolUnsupported) {
       tools = null;
       continue;
@@ -830,20 +1097,38 @@ async function askGeminiWithTools(model, prompt, apiKeys, imageParts, toolCtx, h
       return { text, saved };
     }
     if (round === MAX_TOOL_ROUNDS) {
-      console.warn(`[aichat] hit the tool call ceiling, replying without more memory writes`);
+      console.warn(`[aichat] hit the tool call ceiling, replying without further tool calls`);
       return { text, saved };
     }
 
     const functionResponses = [];
     for (const call of toolCalls) {
-      const known = MEMORY_TOOLS.some((t) => t.name === call.functionCall.name);
-      const out = known
-        ? runMemoryTool(call.functionCall.name, call.functionCall.args ?? {}, toolCtx)
-        : { result: `Unknown tool "${call.functionCall.name}".`, saved: false };
+      const name = call.functionCall.name;
+      const args = call.functionCall.args ?? {};
+      let out;
+      if (name === "web_search") {
+        /* The model can ask for more lookups than the budget allows and has no
+         * way to know that. Told plainly, it stops and answers instead of
+         * looping on the same query. */
+        if (searches >= MAX_SEARCH_CALLS) {
+          out = {
+            result: `Search budget spent: ${MAX_SEARCH_CALLS} searches already used for this reply. Answer with what you have.`,
+            saved: false
+          };
+        } else {
+          searches++;
+          out = await runWebSearch(args.query);
+        }
+        console.log(`[aichat] web_search(${JSON.stringify(args.query ?? "")}) -> ${out.result.slice(0, 120)}`);
+      } else if (MEMORY_TOOLS.some((t) => t.name === name)) {
+        out = runMemoryTool(name, args, toolCtx);
+        console.log(`[aichat] memory tool ${name}(${JSON.stringify(args)}) -> ${out.result}`);
+      } else {
+        out = { result: `Unknown tool "${name}".`, saved: false };
+      }
       if (out.saved) saved++;
-      console.log(`[aichat] memory tool ${call.functionCall.name}(${JSON.stringify(call.functionCall.args ?? {})}) -> ${out.result}`);
       functionResponses.push({
-        functionResponse: { name: call.functionCall.name, response: { result: out.result } }
+        functionResponse: { name, response: { result: out.result } }
       });
     }
 
@@ -955,7 +1240,11 @@ export async function handleAiMessage(client, message) {
       apiKeys,
       images.parts,
       { guildId: guild.id, authorId: message.author.id },
-      history
+      history,
+      /* Checked against the user's own words only, never the pasted channel
+       * history, so an old message that mentioned searching cannot arm the tool
+       * on a turn that never asked for it. */
+      wantsSearch(prompt)
     );
     if (saved > 0) console.log(`[aichat] stored ${saved} memory/memories for guild ${guild.id}`);
     if (text) {

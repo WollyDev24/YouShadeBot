@@ -58,7 +58,12 @@ import {
   getUsage,
   consumeUsage,
   discoverApiKeys,
-  resetApiKeyState
+  resetApiKeyState,
+  timeContext,
+  buildSystemPrompt,
+  wantsSearch,
+  runWebSearch,
+  resetSearchState
 } from "../src/utils/aichat.js";
 import { reportAiConfig } from "../src/events/clientReady.js";
 import { PermissionsBitField } from "../src/lib/discord.js";
@@ -365,6 +370,7 @@ function queueGemini(...responses) {
 
 let nextGeminiResponse = queueGemini();
 
+
 globalThis.fetch = async (url, opts) => {
   if (String(url).includes("generativelanguage")) {
     geminiCalls++;
@@ -383,6 +389,12 @@ globalThis.fetch = async (url, opts) => {
     arrayBuffer: async () => png.buffer.slice(png.byteOffset, png.byteOffset + png.byteLength)
   };
 };
+
+/* Several tests swap globalThis.fetch out for their own stub to script a
+ * specific failure, and most of them never put the shared one back. Anything
+ * registered after them would then silently run against the previous test's
+ * stub instead of the harness. Held here so the runner can reset it per test. */
+const sharedFetch = globalThis.fetch;
 
 function fakeMessage(
   authorId,
@@ -1385,8 +1397,294 @@ function keyMessage(authorId, content) {
   return m;
 }
 
+/* ---- web search ---- */
+/* The gate is the whole feature: the tool is only declared when the message asks
+ * for a lookup, so these assert what the model was actually offered, not what it
+ * was told to do. */
+
+await test("search is offered only when the message asks for a lookup", () => {
+  for (const yes of [
+    "search up the latest vulkan news", "can you google the current ceo of intel",
+    "what are the latest gpu drivers", "look up when the eclipse is",
+    "find out who won the match", "what's the news", "check online for the price"
+  ]) {
+    assert.ok(wantsSearch(yes) === true, `should search: ${yes}`);
+  }
+  for (const no of [
+    "hey", "what year is it?", "thanks!", "write me a poem about rain",
+    "explain how promises work", "what did we decide yesterday?",
+    "research the repo for bugs"
+  ]) {
+    assert.ok(wantsSearch(no) === false, `should NOT search: ${no}`);
+  }
+});
+
+await test("a search is never run for something that looks like a credential", async () => {
+  resetSearchState();
+  let called = 0;
+  const base = globalThis.fetch;
+  globalThis.fetch = async (url, opts) => {
+    if (!String(url).includes("duckduckgo.com")) return base(url, opts);
+    called++;
+    return { ok: true, json: async () => ({}) };
+  };
+  const out = await runWebSearch("is this token ghp_abcdefghijklmnopqrstuvwxyz0123 valid");
+  assert.equal(called, 0, "a credential must never leave the process");
+  assert.ok(/password, key or token/i.test(out.result), "it must refuse plainly");
+});
+
+await test("an instant answer becomes text the model can read", async () => {
+  resetSearchState();
+  const seen = [];
+  globalThis.fetch = async (url) => {
+    seen.push(String(url));
+    return {
+      ok: true, status: 200,
+      json: async () => ({
+        Heading: "Vulkan",
+        AbstractText: "Vulkan is a graphics API.",
+        AbstractSource: "Wikipedia",
+        AbstractURL: "https://en.wikipedia.org/wiki/Vulkan",
+        RelatedTopics: [{ Text: "Vulkan: a cross-platform API", FirstURL: "https://a.test/1" }]
+      })
+    };
+  };
+  const out = await runWebSearch("what is vulkan");
+  assert.equal(seen.length, 1, "the instant answer API should answer on its own");
+  assert.ok(seen[0].startsWith("https://api.duckduckgo.com/"), "must use the structured endpoint first");
+  assert.ok(out.result.includes("Vulkan is a graphics API."));
+  assert.ok(out.result.includes("https://en.wikipedia.org/wiki/Vulkan"), "sources must survive for citation");
+});
+
+await test("duckduckgo answering means wikipedia is never consulted", async () => {
+  resetSearchState();
+  const hosts = [];
+  const base = globalThis.fetch;
+  globalThis.fetch = async (url, opts) => {
+    const u = String(url);
+    if (!/duckduckgo\.com|en\.wikipedia\.org/.test(u)) return base(url, opts);
+    hosts.push(new URL(u).hostname);
+    return { ok: true, status: 200, json: async () => ({ AbstractText: "a definition" }) };
+  };
+  const out = await runWebSearch("what is vulkan");
+  assert.deepEqual(hosts, ["api.duckduckgo.com"], "a hit must not cost a second request");
+  assert.ok(out.result.includes("a definition"));
+});
+
+await test("wikipedia answers what duckduckgo cannot", async () => {
+  resetSearchState();
+  const hosts = [];
+  const base = globalThis.fetch;
+  globalThis.fetch = async (url, opts) => {
+    const u = String(url);
+    if (!/duckduckgo\.com|en\.wikipedia\.org/.test(u)) return base(url, opts);
+    const host = new URL(u).hostname;
+    hosts.push(host);
+    if (host === "api.duckduckgo.com") return { ok: true, status: 200, json: async () => ({}) };
+    return {
+      ok: true, status: 200,
+      json: async () => ({
+        query: {
+          pages: {
+            a: { title: "2026 FIFA World Cup final", extract: "The final match was held in July 2026." }
+          }
+        }
+      })
+    };
+  };
+  const out = await runWebSearch("who won the 2026 world cup final");
+  assert.deepEqual(hosts, ["api.duckduckgo.com", "en.wikipedia.org"],
+    "an empty duckduckgo must fall through to wikipedia");
+  assert.ok(out.result.includes("2026 FIFA World Cup final"), "the title must survive");
+  assert.ok(out.result.includes("held in July 2026"), "the extract must survive");
+  assert.ok(out.result.includes("https://en.wikipedia.org/wiki/2026_FIFA_World_Cup_final"),
+    "a citable link must be included");
+});
+
+await test("when both sources come up empty the model is told the limits", async () => {
+  resetSearchState();
+  let calls = 0;
+  const base = globalThis.fetch;
+  globalThis.fetch = async (url, opts) => {
+    if (!/duckduckgo\.com|en\.wikipedia\.org/.test(String(url))) return base(url, opts);
+    calls++;
+    return { ok: true, status: 200, json: async () => ({}) };
+  };
+  const out = await runWebSearch("today sports news");
+  assert.equal(calls, 2, "both sources should have been asked, once each");
+  assert.ok(/Nothing found/i.test(out.result));
+  assert.ok(/DuckDuckGo or Wikipedia/i.test(out.result));
+  assert.ok(/neither is a live news feed/i.test(out.result),
+    "the model must not be left thinking it searched the open web");
+});
+
+await test("a dead wikipedia does not break the reply", async () => {
+  resetSearchState();
+  const base = globalThis.fetch;
+  globalThis.fetch = async (url, opts) => {
+    if (!/duckduckgo\.com|en\.wikipedia\.org/.test(String(url))) return base(url, opts);
+    throw new Error("connection reset");
+  };
+  const out = await runWebSearch("some query");
+  assert.ok(/Nothing found/i.test(out.result), "it must degrade, not throw");
+});
+
+await test("a dead search engine is reported, not thrown", async () => {
+  resetSearchState();
+  globalThis.fetch = async () => { throw new Error("network down"); };
+  const out = await runWebSearch("anything");
+  assert.ok(/Nothing found/i.test(out.result), "the model must get an honest empty result");
+});
+
+await test("repeated searches are served from cache", async () => {
+  resetSearchState();
+  let calls = 0;
+  globalThis.fetch = async () => {
+    calls++;
+    return { ok: true, status: 200, json: async () => ({ AbstractText: "cached thing" }) };
+  };
+  await runWebSearch("cache me");
+  await runWebSearch("cache me");
+  await runWebSearch("CACHE ME");
+  assert.equal(calls, 1, "the same query should not hammer duckduckgo");
+});
+
+await test("a normal reply offers no search tool at all", async () => {
+  setAiLimits(GUILD_ID, { daily: 50, boost: 50, cooldownSeconds: 0 });
+  setAiEnabled(GUILD_ID, true);
+  setAiChannel(GUILD_ID, "chan-1");
+  const msg = fakeMessage("search-user-off", { content: "just say hi" });
+  nextGeminiResponse = queueGemini(textResponse("hi"));
+  geminiCalls = 0;
+  await handleAiMessage(client, msg);
+  const names = (lastGeminiBody?.tools ?? [])[0]?.functionDeclarations?.map((t) => t.name) ?? [];
+  assert.ok(!names.includes("web_search"), "no search tool unless it was asked for");
+  assert.ok(names.includes("save_memory"), "memory tools must be unaffected");
+});
+
+await test("asking for a lookup offers the search tool and it works", async () => {
+  resetSearchState();
+  setAiLimits(GUILD_ID, { daily: 50, boost: 50, cooldownSeconds: 0 });
+  setAiEnabled(GUILD_ID, true);
+  setAiChannel(GUILD_ID, "chan-1");
+  const msg = fakeMessage("search-user-on", { content: "search up the latest vulkan news" });
+  /* turn 1 asks for the tool, turn 2 answers with the result in hand */
+  nextGeminiResponse = queueGemini(
+    toolResponse("web_search", { query: "vulkan latest news" }),
+    toolReply("Vulkan 1.4 shipped yesterday.")
+  );
+  /* Only DuckDuckGo is intercepted. Replacing fetch wholesale would also swallow
+   * the model call, and the test would pass for the wrong reason. */
+  const base = globalThis.fetch;
+  globalThis.fetch = async (url, opts) => {
+    if (!String(url).includes("duckduckgo.com")) return base(url, opts);
+    return {
+      ok: true, status: 200,
+      json: async () => ({ AbstractText: "Vulkan 1.4 shipped yesterday.", AbstractSource: "Khronos" })
+    };
+  };
+  geminiCalls = 0;
+  await handleAiMessage(client, msg);
+  const names = (lastGeminiBody?.tools ?? [])[0]?.functionDeclarations?.map((t) => t.name) ?? [];
+  assert.ok(names.includes("web_search"),
+    `an explicit request must arm the tool; offered: ${JSON.stringify(names)}`);
+  assert.ok(geminiCalls >= 2, "the tool round and the reply round should both happen");
+  assert.ok(msg.replies.at(-1).includes("Vulkan 1.4"), "the answer must use the search result");
+});
+
+await test("the search budget is three per reply", async () => {
+  resetSearchState();
+  setAiLimits(GUILD_ID, { daily: 50, boost: 50, cooldownSeconds: 0 });
+  setAiEnabled(GUILD_ID, true);
+  setAiChannel(GUILD_ID, "chan-1");
+  const msg = fakeMessage("search-user-budget", { content: "search the web for things" });
+  /* Distinct queries, because a repeated one would be served from the cache and
+   * the count would then measure caching rather than the budget. Four tool
+   * rounds are offered against a budget of three, so the fourth must be refused
+   * and the fifth turn must still produce an answer. */
+  nextGeminiResponse = queueGemini(
+    toolResponse("web_search", { query: "alpha thing" }),
+    toolResponse("web_search", { query: "bravo thing" }),
+    toolResponse("web_search", { query: "charlie thing" }),
+    toolResponse("web_search", { query: "delta thing" }),
+    toolReply("done")
+  );
+  let fetches = 0;
+  const base = globalThis.fetch;
+  globalThis.fetch = async (url, opts) => {
+    if (!String(url).includes("duckduckgo.com")) return base(url, opts);
+    fetches++;
+    return { ok: true, status: 200, json: async () => ({ AbstractText: "a thing" }) };
+  };
+  geminiCalls = 0;
+  await handleAiMessage(client, msg);
+  assert.equal(fetches, 3, `ran ${fetches} searches, the budget is 3`);
+  assert.ok(geminiCalls <= 5, `stayed within the tool ceiling, made ${geminiCalls}`);
+  /* the fourth call must be told the budget is gone, not silently dropped */
+  assert.match(JSON.stringify(lastGeminiBody?.contents ?? []), /Search budget spent/,
+    "the model must be told why its fourth search did not run");
+  assert.ok(msg.replies.length >= 1, "it must still answer rather than hang");
+});
+
 const results = [];
+/* ---- date and time awareness ---- */
+/* The bot has no clock and no idea how old its training is, so it used to answer
+ * "today" and "which year is it" from a stale cutoff. timeContext takes an
+ * injectable clock so these cases are deterministic rather than racing midnight. */
+
+await test("the system prompt tells the model what today is", () => {
+  const out = buildSystemPrompt(new Date("2026-10-04T17:42:31Z"));
+  assert.ok(out.includes("Sunday"), "the weekday must be spelled out");
+  assert.ok(out.includes("4 October 2026"), "the full date must be spelled out");
+  assert.ok(out.includes("17:42 UTC"), "the current time must be included");
+  assert.ok(out.includes("2026-10-04"), "an unambiguous ISO date must be included");
+});
+
+await test("the prompt never hardcodes a year of its own", () => {
+  /* A literal year baked into the prompt would quietly rot into a second,
+   * wrong "today" the next time the calendar turned over. */
+  const built = buildSystemPrompt(new Date("2027-01-02T00:05:00Z"));
+  assert.ok(built.includes("2 January 2027"), "the date comes from the clock");
+  assert.ok(!built.includes("2026"), "no hardcoded year may survive in the prompt");
+  assert.ok(!built.includes("2025"), "no stale year may survive in the prompt");
+});
+
+await test("the date is rebuilt per request, not frozen at import", () => {
+  /* A long lived process must not keep answering with the day it booted on. */
+  const monday = buildSystemPrompt(new Date("2026-10-05T08:00:00Z"));
+  const sunday = buildSystemPrompt(new Date("2026-10-11T23:59:00Z"));
+  assert.ok(monday.includes("Monday") && !monday.includes("Sunday"));
+  assert.ok(sunday.includes("Sunday") && !sunday.includes("Monday"));
+  assert.notEqual(monday, sunday);
+});
+
+await test("time context warns against inventing post-cutoff facts", () => {
+  const out = timeContext(new Date("2026-10-04T12:00:00Z"));
+  assert.ok(out.includes("do not know"), "it must admit ignorance instead of guessing");
+});
+
+await test("a real reply request carries today's date to the model", async () => {
+  setAiLimits(GUILD_ID, { daily: 50, boost: 50, cooldownSeconds: 0 });
+  setAiEnabled(GUILD_ID, true);
+  setAiChannel(GUILD_ID, "chan-1"); /* must match fakeMessage's default channel */
+  const msg = fakeMessage("time-user-1", { content: "what year is it?" });
+  nextGeminiResponse = queueGemini(textResponse("It is this year."));
+  geminiCalls = 0;
+  await handleAiMessage(client, msg);
+  assert.equal(geminiCalls, 1,
+    `the model must have been called; replies: ${JSON.stringify(msg.replies)}`);
+  assert.ok(geminiCalls > 0, "the model must have been called");
+  const sys = lastGeminiBody?.systemInstruction?.parts?.[0]?.text ?? "";
+  assert.ok(sys.includes("DATE AND TIME"), "the request must include the date block");
+  const year = String(new Date().getUTCFullYear());
+  assert.ok(sys.includes(year), `the request must name the current year ${year}`);
+  assert.ok(/\d{2}:\d{2} UTC/.test(sys), "the request must include a current clock time");
+});
+
 for (const [name, fn] of tests) {
+  /* Reset before every test: a stub installed by an earlier test must not
+   * decide what this one sees. */
+  globalThis.fetch = sharedFetch;
   try {
     await fn();
     results.push(["ok", name]);
