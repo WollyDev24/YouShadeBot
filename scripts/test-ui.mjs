@@ -220,7 +220,7 @@ await test("Escape closes and returns focus to the button", () => {
   const button = el.shadowRoot.querySelector("button");
   key(button, "Escape");
   assert.equal(el.open, false);
-  assert.equal(el.shadowRoot.activeElement, button, "focus should return to the trigger");
+  assert.ok(el.shadowRoot.activeElement === button, "focus should return to the trigger");
 });
 
 await test("disabled options are skipped and marked", () => {
@@ -685,6 +685,259 @@ await test("showing a toast twice keeps only the latest message", () => {
   el.show("second", "error", 10);
   assert.equal(el.shadowRoot.querySelector("#msg").textContent, "second");
   assert.equal(el.getAttribute("tone"), "error");
+});
+
+
+/* ------------------------------------------------- presentational set ---- */
+
+/* ---- mono-progress: a bar is invisible without these ---- */
+await test("a progress bar reports its value", () => {
+  const el = document.createElement("mono-progress");
+  el.setAttribute("value", "42");
+  el.setAttribute("max", "84");
+  document.body.appendChild(el);
+  assert.equal(el.getAttribute("role"), "progressbar");
+  assert.equal(el.getAttribute("aria-valuemin"), "0");
+  assert.equal(el.getAttribute("aria-valuemax"), "84");
+  assert.equal(el.getAttribute("aria-valuenow"), "42");
+  assert.equal(el.getAttribute("aria-valuetext"), "50%");
+  assert.equal(el.style.getPropertyValue("--pct"), "50%");
+});
+
+await test("an indeterminate progress bar reports no value", () => {
+  const el = document.createElement("mono-progress");
+  el.setAttribute("value", "42");
+  document.body.appendChild(el);
+  el.setAttribute("indeterminate", "");
+  /* reporting a stale number would be a lie about work in flight */
+  assert.equal(el.hasAttribute("aria-valuenow"), false);
+  el.removeAttribute("indeterminate");
+  assert.equal(el.getAttribute("aria-valuenow"), "42", "value returns when known again");
+});
+
+await test("a progress value is clamped to its own range", () => {
+  const el = document.createElement("mono-progress");
+  el.setAttribute("max", "10");
+  document.body.appendChild(el);
+  el.setAttribute("value", "999");
+  assert.equal(el.getAttribute("aria-valuenow"), "10");
+  assert.equal(el.style.getPropertyValue("--pct"), "100%");
+  el.setAttribute("value", "-5");
+  assert.equal(el.getAttribute("aria-valuenow"), "0");
+});
+
+/* ---- mono-avatar ---- */
+await test("an avatar image is named after the user it shows", () => {
+  const el = document.createElement("mono-avatar");
+  el.setAttribute("src", "/avatars/1.png");
+  el.setAttribute("name", "Wolly Dev");
+  document.body.appendChild(el);
+  const img = el.shadowRoot.querySelector("img");
+  assert.equal(img.getAttribute("alt"), "Wolly Dev", "alt=\"\" threw the name away");
+  assert.equal(img.hidden, false);
+});
+
+await test("an avatar with no name stays unlabelled rather than lying", () => {
+  const el = document.createElement("mono-avatar");
+  el.setAttribute("src", "/avatars/1.png");
+  document.body.appendChild(el);
+  assert.equal(el.shadowRoot.querySelector("img").getAttribute("alt"), "");
+});
+
+await test("an avatar with no image falls back to initials", () => {
+  const el = document.createElement("mono-avatar");
+  el.setAttribute("name", "wolly dev");
+  document.body.appendChild(el);
+  assert.equal(el.shadowRoot.querySelector("span").textContent, "WD");
+  assert.equal(el.shadowRoot.querySelector("img").hidden, true);
+});
+
+/* ---- mono-list-item: cursor:pointer has to answer the keyboard ---- */
+function makeRow(clickable = true) {
+  const row = document.createElement("mono-list-item");
+  if (clickable) row.setAttribute("clickable", "");
+  document.body.appendChild(row);
+  return row;
+}
+
+await test("a clickable row is a real button to assistive tech", () => {
+  const row = makeRow();
+  assert.equal(row.getAttribute("role"), "button");
+  assert.equal(row.getAttribute("tabindex"), "0");
+  const plain = makeRow(false);
+  assert.equal(plain.hasAttribute("role"), false, "a plain row is not a button");
+  assert.equal(plain.hasAttribute("tabindex"), false);
+});
+
+await test("a clickable row activates once per press", () => {
+  const row = makeRow();
+  let clicks = 0;
+  row.addEventListener("click", () => clicks++);
+  row.dispatchEvent(new window.MouseEvent("click", { bubbles: true, composed: true }));
+  assert.equal(clicks, 1, "a pointer click must not be synthesised twice");
+  row.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Enter", bubbles: true, composed: true }));
+  assert.equal(clicks, 2, "Enter adds exactly one activation");
+});
+
+await test("a clickable row answers Enter and Space", () => {
+  for (const key of ["Enter", " "]) {
+    const row = makeRow();
+    let clicks = 0;
+    row.addEventListener("click", () => clicks++);
+    row.dispatchEvent(new window.KeyboardEvent("keydown", { key, bubbles: true, composed: true }));
+    assert.equal(clicks, 1, `key ${JSON.stringify(key)} should activate`);
+  }
+  /* and nothing else should */
+  const row = makeRow();
+  let clicks = 0;
+  row.addEventListener("click", () => clicks++);
+  for (const key of ["a", "Tab", "ArrowDown", "Escape"]) {
+    row.dispatchEvent(new window.KeyboardEvent("keydown", { key, bubbles: true, composed: true }));
+  }
+  assert.equal(clicks, 0);
+});
+
+await test("Space on a clickable row does not scroll the page", () => {
+  const row = makeRow();
+  const ev = new window.KeyboardEvent("keydown", { key: " ", bubbles: true, composed: true, cancelable: true });
+  row.dispatchEvent(ev);
+  assert.equal(ev.defaultPrevented, true);
+});
+
+await test("a slotted action does not also activate the row", () => {
+  const row = makeRow();
+  const btn = document.createElement("mono-button");
+  row.appendChild(btn);
+  let rowClicks = 0, btnClicks = 0;
+  row.addEventListener("click", () => rowClicks++);
+  btn.addEventListener("click", () => btnClicks++);
+  const inner = btn.shadowRoot.querySelector("button");
+  inner.dispatchEvent(new window.MouseEvent("click", { bubbles: true, composed: true }));
+  assert.equal(btnClicks, 1);
+  /* the button's click bubbles to the row, which is normal DOM behaviour; what
+   * must not happen is the row manufacturing a second one on top of it */
+  assert.equal(rowClicks, 1, "the row must not synthesise an extra activation");
+});
+
+await test("a disabled row does not activate", () => {
+  const row = makeRow();
+  row.setAttribute("disabled", "");
+  assert.equal(row.getAttribute("aria-disabled"), "true");
+  let clicks = 0;
+  row.addEventListener("click", () => clicks++);
+  row.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Enter", bubbles: true, composed: true }));
+  assert.equal(clicks, 0);
+});
+
+
+/* ---- mono-modal ---- */
+function makeModal() {
+  const modal = document.createElement("mono-modal");
+  modal.hidden = true;
+  document.body.appendChild(modal);
+  return modal;
+}
+
+await test("a modal is a named modal dialog", () => {
+  const modal = makeModal();
+  modal.setAttribute("aria-label", "Confirm purge");
+  const panel = modal.shadowRoot.querySelector(".panel");
+  assert.equal(panel.getAttribute("role"), "dialog");
+  assert.equal(panel.getAttribute("aria-modal"), "true");
+  assert.equal(panel.getAttribute("aria-label"), "Confirm purge",
+    "an unnamed dialog is announced as just \"dialog\"");
+  modal.removeAttribute("aria-label");
+  assert.equal(panel.getAttribute("aria-label"), null);
+  modal.remove();
+});
+
+/* connectedCallback fires again every time the element is re-inserted. Anything
+ * registered there stacks up, so close() used to fire once per past visit. */
+await test("reconnecting a modal does not multiply its close handler", () => {
+  const modal = makeModal();
+  const parent = modal.parentNode;
+  let closes = 0;
+  modal.addEventListener("close", () => closes++);
+  for (let i = 0; i < 3; i++) {
+    parent.removeChild(modal);
+    parent.appendChild(modal);
+  }
+  modal.shadowRoot.querySelector(".x").click();
+  assert.equal(closes, 1, "close must fire exactly once per click");
+  modal.remove();
+});
+
+await test("Escape closes a modal and the backdrop does too", () => {
+  const modal = makeModal();
+  let closes = 0;
+  modal.addEventListener("close", () => closes++);
+  modal.open();
+  document.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+  assert.equal(closes, 1);
+  modal.open();
+  modal.shadowRoot.querySelector(".panel");
+  modal.shadowRoot.dispatchEvent(new window.MouseEvent("click", { bubbles: true, composed: true }));
+  assert.equal(closes, 2, "clicking the backdrop closes");
+  modal.remove();
+});
+
+await test("a closed modal ignores Escape", () => {
+  const modal = makeModal();
+  let closes = 0;
+  modal.addEventListener("close", () => closes++);
+  document.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+  assert.equal(closes, 0);
+  modal.remove();
+});
+
+/* The old code set body overflow to "" on close, discarding whatever the page
+ * had set for itself. */
+await test("closing a modal restores the page's own overflow", () => {
+  document.body.style.overflow = "scroll";
+  const modal = makeModal();
+  modal.open();
+  assert.equal(document.body.style.overflow, "hidden");
+  modal.close();
+  assert.equal(document.body.style.overflow, "scroll", "must restore, not blank");
+  document.body.style.overflow = "";
+  modal.remove();
+});
+
+await test("focus returns to where it came from when a modal closes", () => {
+  const opener = document.createElement("mono-button");
+  document.body.appendChild(opener);
+  opener.focus();
+  const modal = makeModal();
+  modal.open();
+  /* assert.ok, never assert.equal, on anything that is a node: a failing
+   * assert.equal builds its message by inspecting both operands, and
+   * inspecting a happy-dom element walks ownerDocument -> window -> document
+   * and never comes back. A boolean test can only report true/false. */
+  assert.ok(document.activeElement !== opener, "focus should move into the dialog");
+  modal.close();
+  assert.ok(document.activeElement === opener, "focus must not be dumped at the top of the page");
+  opener.remove();
+  modal.remove();
+});
+
+await test("Tab is kept inside an open modal", () => {
+  const modal = makeModal();
+  const panel = modal.shadowRoot.querySelector(".panel");
+  assert.ok(modal.shadowRoot.querySelector(".x"), "the close button is focusable");
+  modal.open();
+  /* with focus already on the last focusable, Tab must wrap to the first
+   * rather than walking out into the page behind the dialog */
+  const items = modal._focusables();
+  assert.ok(items.length >= 1, "a modal with only a close button is still focusable");
+  items[items.length - 1].focus();
+  const ev = new window.KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true });
+  document.dispatchEvent(ev);
+  assert.ok(ev.defaultPrevented === true, "Tab must not escape the dialog");
+  /* the wrapper is what the browser moves focus to, so assert containment
+   * rather than identity of a specific node */
+  assert.ok(modal._inside() === items[0], "focus wrapped back inside the dialog");
+  assert.ok(panel.getAttribute("role") === "dialog");
+  modal.remove();
 });
 
 mark("ALL TESTS DONE");

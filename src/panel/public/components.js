@@ -1881,8 +1881,13 @@ class MonoAvatar extends MonoElement {
       this._img.src = src;
       this._img.hidden = false;
       this._ini.textContent = "";
+      /* alt="" tells assistive tech to ignore the image entirely, which threw
+       * away the one thing an avatar has to say. Name it from `name`, and stay
+       * empty only when there is genuinely nothing to call it. */
+      this._img.alt = name;
     } else {
       this._img.hidden = true;
+      this._img.alt = "";
       this._ini.textContent = name
         ? name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase()
         : "?";
@@ -1922,7 +1927,7 @@ progressTmpl.innerHTML = `
 `;
 
 class MonoProgress extends MonoElement {
-  static observedAttributes = ["value", "max", "tone", "indeterminate"];
+  static observedAttributes = ["value", "max", "tone", "indeterminate", "aria-label", "aria-labelledby"];
   constructor() {
     super();
     this._root.appendChild(progressTmpl.content.cloneNode(true));
@@ -1930,15 +1935,30 @@ class MonoProgress extends MonoElement {
   connectedCallback() { this._sync(); }
   attributeChangedCallback() { this._sync(); }
   _sync() {
-    if (boolAttr(this, "indeterminate")) return;
     const max = numAttr(this, "max", 100) || 100;
-    const pct = Math.max(0, Math.min(100, (numAttr(this, "value", 0) / max) * 100));
+    const value = numAttr(this, "value", 0);
+    const pct = Math.max(0, Math.min(100, (value / max) * 100));
     this.style.setProperty("--pct", `${pct}%`);
+    /* A bar is invisible to a screen reader without these. valuenow is omitted
+     * when indeterminate, which is how ARIA says "working, amount unknown" --
+     * reporting a stale number would be a lie. */
+    this.setAttribute("role", "progressbar");
+    this.setAttribute("aria-valuemin", "0");
+    this.setAttribute("aria-valuemax", String(max));
+    if (boolAttr(this, "indeterminate")) {
+      this.removeAttribute("aria-valuenow");
+    } else {
+      this.setAttribute("aria-valuenow", String(Math.max(0, Math.min(max, value))));
+      this.setAttribute("aria-valuetext", `${Math.round(pct)}%`);
+    }
+    this._mirrorName(this);
   }
   get value() { return numAttr(this, "value", 0); }
   set value(v) { this.setAttribute("value", v); }
   get max() { return numAttr(this, "max", 100); }
   set max(v) { this.setAttribute("max", v); }
+  get indeterminate() { return boolAttr(this, "indeterminate"); }
+  set indeterminate(v) { v ? this.setAttribute("indeterminate", "") : this.removeAttribute("indeterminate"); }
 }
 define("mono-progress", MonoProgress);
 
@@ -2046,13 +2066,16 @@ modalTmpl.innerHTML = `
       display: flex; align-items: center; gap: 12px;
       padding: 18px 20px 12px;
     }
-    .head h2, .head h3 { margin: 0; font: 800 18px/1.3 "Inter", system-ui, sans-serif; flex: 1; }
+    .head h2, .head h3 { margin: 0; font: 800 18px/1.3 var(--font, "Inter", system-ui, sans-serif); flex: 1; }
     .x {
       all: unset; cursor: pointer; color: var(--muted, #a49dd6);
       width: 30px; height: 30px; display: grid; place-items: center; border-radius: 8px;
       transition: background 140ms, color 140ms;
     }
     .x:hover { background: var(--card-3, #262157); color: var(--text, #ffffff); }
+    /* "all: unset" also drops the platform focus ring, and this is the only
+     * way out of the dialog for anyone not using Escape. */
+    .x:focus-visible { outline: 2px solid var(--accent, #7cd4fd); outline-offset: 2px; }
     .body { padding: 0 20px 18px; display: grid; gap: 12px; }
     .foot {
       display: flex; gap: 10px; justify-content: flex-end;
@@ -2069,35 +2092,119 @@ modalTmpl.innerHTML = `
   </div>
 `;
 
+/* Everything reachable inside a dialog, in both trees: the close button lives in
+ * the shadow root, everything an author slots in lives in the light DOM. */
+const FOCUSABLE = [
+  "a[href]", "button", "input", "select", "textarea",
+  "mono-button", "mono-input", "mono-textarea", "mono-search", "mono-select",
+  "mono-checkbox", "mono-switch",
+  "[tabindex]:not([tabindex='-1'])"
+].join(",");
+
 class MonoModal extends MonoElement {
+  static observedAttributes = ["hidden", "aria-label", "aria-labelledby"];
+
   constructor() {
     super();
     this._root.appendChild(modalTmpl.content.cloneNode(true));
+    this._panel = this._root.querySelector(".panel");
     this._x = this._root.querySelector(".x");
-    this._onKey = (e) => { if (e.key === "Escape" && !this.hidden) this.close(); };
-  }
-  connectedCallback() {
-    if (!this.hasAttribute("hidden")) {
-      document.addEventListener("keydown", this._onKey);
-      document.body.style.overflow = "hidden";
-    }
+    this._returnTo = null;
+    this._prevOverflow = null;
+    /* Bound once, in the constructor. connectedCallback can fire many times for
+     * the same element, so anything registered there would stack up and fire
+     * close() once per past visit. */
+    this._onKey = (e) => {
+      if (this.hidden) return;
+      if (e.key === "Escape") { this.close(); return; }
+      if (e.key === "Tab") this._trapTab(e);
+    };
+    this._onBackdrop = (e) => { if (e.target === this._root) this.close(); };
     this._x.addEventListener("click", () => this.close());
-    this._root.addEventListener("click", (e) => { if (e.target === this._root) this.close(); });
+    this._root.addEventListener("click", this._onBackdrop);
+  }
+
+  connectedCallback() {
+    this._syncName();
+    document.addEventListener("keydown", this._onKey);
+    if (!this.hidden) this._enter();
   }
   disconnectedCallback() {
     document.removeEventListener("keydown", this._onKey);
-    document.body.style.overflow = "";
+    this._releaseScroll();
   }
   attributeChangedCallback(name, oldV, newV) {
-    if (name !== "hidden" || oldV === newV) return;
-    if (newV === null) {
-      document.addEventListener("keydown", this._onKey);
-      document.body.style.overflow = "hidden";
-    } else {
-      document.removeEventListener("keydown", this._onKey);
-      document.body.style.overflow = "";
+    if (oldV === newV) return;
+    if (name === "hidden") {
+      if (newV === null) this._enter();
+      else this._leave();
+      return;
+    }
+    this._syncName();
+  }
+
+  /* aria-modal makes assistive tech treat the rest of the page as inert, but the
+   * tab order is still the document's: without this, Tab walks straight out of
+   * the dialog and into the page behind it. */
+  _trapTab(e) {
+    const items = this._focusables();
+    if (!items.length) return;
+    const first = items[0];
+    const last = items[items.length - 1];
+    const active = this._inside();
+    if (e.shiftKey) {
+      if (active === first || !active) { last.focus(); e.preventDefault(); }
+    } else if (active === last) {
+      first.focus();
+      e.preventDefault();
     }
   }
+
+  _focusables() {
+    const all = [...this._root.querySelectorAll(FOCUSABLE), ...this.querySelectorAll(FOCUSABLE)];
+    return all.filter((el) => !el.disabled && !el.hasAttribute("disabled")
+      && el.getAttribute("aria-hidden") !== "true");
+  }
+
+  _inside() {
+    return this._root.activeElement
+      ?? (this.contains(document.activeElement) ? document.activeElement : null);
+  }
+
+  _syncName() {
+    const label = this.getAttribute("aria-label");
+    if (label) this._panel.setAttribute("aria-label", label);
+    else this._panel.removeAttribute("aria-label");
+    const by = this.getAttribute("aria-labelledby");
+    if (by) this._panel.setAttribute("aria-labelledby", by);
+    else this._panel.removeAttribute("aria-labelledby");
+  }
+
+  _enter() {
+    this._returnTo = document.activeElement;
+    if (this._prevOverflow === null) this._prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const items = this._focusables();
+    (items[0] ?? this._panel).focus();
+  }
+
+  _leave() {
+    this._releaseScroll();
+    const back = this._returnTo;
+    this._returnTo = null;
+    /* Send focus back where it came from, or a keyboard user is dropped at the
+     * top of the document every time a dialog closes. */
+    if (back && typeof back.focus === "function" && back.isConnected !== false) back.focus();
+  }
+
+  _releaseScroll() {
+    if (this._prevOverflow === null) return;
+    document.body.style.overflow = this._prevOverflow;
+    this._prevOverflow = null;
+  }
+
+  /* Setting hidden is what triggers the enter/leave work; calling them again
+   * here would be redundant, and _leave is idempotent anyway. */
   open() { this.hidden = false; }
   close() {
     this.hidden = true;
@@ -2202,10 +2309,60 @@ itemTmpl.innerHTML = `
 `;
 
 class MonoListItem extends MonoElement {
+  static observedAttributes = ["clickable", "disabled", "aria-label", "aria-labelledby"];
+
   constructor() {
     super();
     this._root.appendChild(itemTmpl.content.cloneNode(true));
+    /* cursor:pointer promises the row can be activated, so it has to answer the
+     * keyboard too. A pointer click needs no help -- that click event already
+     * exists and bubbles. Only the keyboard has to be handed one, because a
+     * role="button" div gets no click from the platform the way a real button
+     * does. Synthesising one on pointer clicks as well is what turned a single
+     * press into an unbounded loop. */
+    this.addEventListener("keydown", (e) => {
+      if (!this.clickable || this.disabled) return;
+      if (e.key !== "Enter" && e.key !== " " && e.key !== "Spacebar") return;
+      /* A slotted action in the actions slot is already operable; Enter there
+       * belongs to that control, not to the row. */
+      if (this._fromInnerControl(e)) return;
+      /* Space would otherwise scroll the page. */
+      e.preventDefault();
+      this.dispatchEvent(new MouseEvent("click", { bubbles: true, composed: true }));
+    });
   }
+
+  connectedCallback() { this._sync(); }
+  attributeChangedCallback() { this._sync(); }
+
+  _sync() {
+    /* The row is the focusable thing, so it carries the role and the name.
+     * Without a name it would be announced as a bare "button". */
+    if (this.clickable) {
+      this.setAttribute("role", "button");
+      if (!this.hasAttribute("tabindex")) this.setAttribute("tabindex", "0");
+    } else {
+      this.removeAttribute("role");
+      this.removeAttribute("tabindex");
+    }
+    if (this.hasAttribute("disabled")) this.setAttribute("aria-disabled", "true");
+    else this.removeAttribute("aria-disabled");
+    this._mirrorName(this);
+  }
+
+  /* A slotted button in the actions slot is already operable. Letting its
+   * activation also fire the row would double-handle every action click. */
+  _fromInnerControl(e) {
+    const path = e.composedPath ? e.composedPath() : [];
+    return path.some((node) =>
+      node !== this && node?.nodeType === 1
+      && node.matches?.("button, a, input, select, textarea, mono-button, mono-input, mono-select, mono-checkbox, mono-switch"));
+  }
+
+  get clickable() { return boolAttr(this, "clickable"); }
+  set clickable(v) { v ? this.setAttribute("clickable", "") : this.removeAttribute("clickable"); }
+  get disabled() { return boolAttr(this, "disabled"); }
+  set disabled(v) { v ? this.setAttribute("disabled", "") : this.removeAttribute("disabled"); }
 }
 define("mono-list-item", MonoListItem);
 
