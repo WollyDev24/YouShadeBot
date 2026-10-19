@@ -1021,7 +1021,14 @@ async function generateOnce(model, systemInstruction, contents, apiKeys, tools) 
 
         if (!res.ok) {
           const body = await res.text().catch(() => "");
-          lastError = new Error(`Gemini API ${res.status}: ${body.slice(0, 200)}`);
+          /* When the key itself is rejected at Google's edge the answer is an
+           * HTML error page, not JSON. Markup in a Discord reply helps nobody,
+           * so keep only a plain description of what was refused. */
+          const htmlBody = /^\s*<(!doctype|html)/i.test(body);
+          const detail = htmlBody
+            ? (res.status === 401 || res.status === 403 ? "the API key was rejected" : "the request was blocked")
+            : body.replace(/\s+/g, " ").slice(0, 200);
+          lastError = new Error(`Gemini API ${res.status}: ${detail}`);
           /* 400 here usually means this model rejected the tool schema. Retry
            * without tools so the conversation still works on a fallback. */
           if (res.status === 400 && tools) {
