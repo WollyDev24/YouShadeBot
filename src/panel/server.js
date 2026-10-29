@@ -485,16 +485,14 @@ export function startPanel(client) {
   app.use(express.json());
   app.use(cookieParser());
 
-  // Request logging for diagnosing hangs behind proxies/routers: logs every
-  // incoming request with method, path and a completion marker.
+  // Request logging for diagnosing hangs behind proxies/routers: only log
+  // slow requests (≥ 500 ms) and errors to avoid flooding stdout on a busy panel.
   app.use((req, res, next) => {
     const start = Date.now();
     res.on("finish", () => {
       const ms = Date.now() - start;
-      if (ms >= 500) {
-        console.log(`[panel] SLOW ${req.method} ${req.originalUrl} -> ${res.statusCode} (${ms}ms)`);
-      } else {
-        console.log(`[panel] ${req.method} ${req.originalUrl} -> ${res.statusCode} (${ms}ms)`);
+      if (ms >= 500 || res.statusCode >= 400) {
+        console.log(`[panel] ${ms >= 500 ? "SLOW " : ""}${req.method} ${req.originalUrl} -> ${res.statusCode} (${ms}ms)`);
       }
     });
     next();

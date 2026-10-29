@@ -5,6 +5,16 @@ const XP_PER_MESSAGE = 10;
 const XP_COOLDOWN_MS = 60_000;
 const xpCooldowns = new Map();
 
+/* Prune stale entries from the XP cooldown map every 5 minutes so it does not
+ * grow unbounded on a busy server. Any entry older than the cooldown window is
+ * safe to drop — the next message from that user will simply re-create it. */
+setInterval(() => {
+  const cutoff = Date.now() - XP_COOLDOWN_MS;
+  for (const [userId, ts] of xpCooldowns) {
+    if (ts < cutoff) xpCooldowns.delete(userId);
+  }
+}, 5 * 60_000);
+
 export function getLeveling(guildId) {
   const data = getData();
   if (!data.leveling[guildId]) {

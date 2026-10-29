@@ -58,6 +58,20 @@ const BASE_URL = "https://generativelanguage.googleapis.com/v1beta";
 const cooldowns = new Map();
 const notifiedToday = new Map();
 
+/* Prune the per-user cooldown and daily-notification maps every 30 minutes so
+ * they do not grow unbounded on active AI channels. Cooldowns older than 1 hour
+ * are stale; notifiedToday entries from a previous calendar day are also stale. */
+setInterval(() => {
+  const hourAgo = Date.now() - 60 * 60_000;
+  for (const [k, ts] of cooldowns) {
+    if (ts < hourAgo) cooldowns.delete(k);
+  }
+  const todayPrefix = today();
+  for (const key of notifiedToday.keys()) {
+    if (!key.includes(todayPrefix)) notifiedToday.delete(key);
+  }
+}, 30 * 60_000);
+
 const OWNER_ID = process.env.OWNER_ID?.trim() || null;
 
 function getFallbackModels(model) {

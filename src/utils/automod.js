@@ -6,7 +6,7 @@ const spamTracker = new Map();
 setInterval(() => {
   const now = Date.now();
   for (const [key, data] of spamTracker.entries()) {
-    const windowMs = data.windowSeconds * 2000;
+    const windowMs = data.windowSeconds * 1000; // was incorrectly * 2000
     const filtered = data.timestamps.filter(t => now - t < windowMs);
     if (filtered.length === 0) {
       spamTracker.delete(key);

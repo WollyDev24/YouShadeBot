@@ -59,13 +59,13 @@ export default {
           if (guild) await refreshStats(guild);
         })
       );
-    }, 5 * 60_000);
+    }, 10 * 60_000); // 10 min — was 5 min; halves the rate of expensive member fetches
 
     setInterval(() => {
       runDue(client).catch((err) => console.error("[announcements] scheduler:", err));
       runDueGiveaways(client).catch((err) => console.error("[giveaways] scheduler:", err));
       runDueReminders(client).catch((err) => console.error("[reminders] scheduler:", err));
-    }, 30_000);
+    }, 60_000); // 60 s — was 30 s; these events are infrequent so 1-min resolution is fine
 
     startAutoUpdate(client);
   }

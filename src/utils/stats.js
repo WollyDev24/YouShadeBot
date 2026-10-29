@@ -14,10 +14,15 @@ export async function refreshStats(guild) {
   const cfg = statsConfig(guild.id);
   if (!cfg.enabled) return;
 
-  try {
-    await guild.members.fetch();
-  } catch (err) {
-    console.error("[stats] member fetch failed:", err.message);
+  /* Only fetch all members (expensive REST call) when the "online" stat
+   * channel is actually configured — presence data is only needed for that
+   * one counter. If it is absent we can compute everything from cache. */
+  if (cfg.channels.online) {
+    try {
+      await guild.members.fetch();
+    } catch (err) {
+      console.error("[stats] member fetch failed:", err.message);
+    }
   }
 
   const online = guild.members.cache.filter((m) => !!m.presence && m.presence.status !== "offline").size;

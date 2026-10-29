@@ -8,6 +8,15 @@ const MILESTONES = new Set([69, 100, 200, 300, 400, 500, 1000, 1500, 2000]);
 const replyCooldowns = new Map();
 const COOLDOWN_MS = 15_000;
 
+/* Prune stale auto-response cooldown entries every 5 minutes so the map does
+ * not grow unbounded on servers with many channels and filter rules. */
+setInterval(() => {
+  const cutoff = Date.now() - COOLDOWN_MS;
+  for (const [key, ts] of replyCooldowns) {
+    if (ts < cutoff) replyCooldowns.delete(key);
+  }
+}, 5 * 60_000);
+
 function extractNumber(content) {
   const m = content.trim().match(/^(\d{1,9})/);
   return m ? parseInt(m[1], 10) : null;
